@@ -932,6 +932,11 @@ static bool build_sky_atlas(const FzeroSourceFrame *f, int rows) {
   return true;
 }
 
+static bool preview_triple_vehicles(uint32_t *output, size_t capacity,
+                                    const FzeroTripleRig *rig,
+                                    int logical_width, bool center_only,
+                                    unsigned *written_pixels);
+
 static bool draw_triple_sides(uint32_t *output, size_t capacity,
                               const FzeroTripleRig *rig, int logical_width,
                               bool direct_sky) {
@@ -1167,6 +1172,15 @@ static bool draw_triple_sides(uint32_t *output, size_t capacity,
     }
   }
   RendererTimingEnd(FZERO_DIAG_TRIPLE_GROUND, phase_start);
+  /* Opponents on the side panels: each live car's guest sprite drawn as a
+   * billboard at its world anchor, the projection checked offline by the
+   * vehicle preview. Drawn before the cache is marked valid so a new source
+   * frame redraws and re-uploads it. FZERO_TRIPLE_DISABLE_VEHICLES turns it off. */
+  if (!getenv("FZERO_TRIPLE_DISABLE_VEHICLES")) {
+    unsigned vehicle_pixels = 0;
+    preview_triple_vehicles(output, capacity, rig, logical_width, false,
+                            &vehicle_pixels);
+  }
   triple_cache.output = output;
   triple_cache.rig = *rig;
   triple_cache.logical_width = logical_width;
