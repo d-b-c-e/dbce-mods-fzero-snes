@@ -42,6 +42,11 @@ You bring your own legally dumped *F-Zero (USA)* ROM. No ROM is included.
 
 ## Download And Play
 
+For the current public distribution plan and Deluxe-specific requirements, see
+[public packaging](docs/PUBLIC-PACKAGING.md). The source is now merged on main;
+the dated checkpoint below records earlier acceptance, not the latest source identity.
+
+
 As verified on 2026-10-02, the default `main` branch and the retained unified lane
 [`codex/unified-product-20261001`](https://github.com/d-b-c-e/dbce-mods-fzero-snes/tree/codex/unified-product-20261001)
 both contain reviewed source `14ea520bf97700f6bd5bb832b1daf1fdb6483f50`.
