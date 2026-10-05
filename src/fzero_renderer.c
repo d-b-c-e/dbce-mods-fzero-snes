@@ -3,6 +3,17 @@
 #include "fzero_triple_ground.h"
 #include "snes/mode7_hd.h"
 
+/* Only the instrumented desktop host links SDL diagnostics. Offline render
+ * tools, headless replay and renderer tests retain their existing linkage. */
+#ifdef FZERO_RENDER_TIMINGS
+#include "fzero_diagnostics.h"
+#define RendererTimingBegin() FzeroDiagnosticsBegin()
+#define RendererTimingEnd(stage, start) FzeroDiagnosticsEnd(stage, start)
+#else
+#define RendererTimingBegin() UINT64_C(0)
+#define RendererTimingEnd(stage, start) ((void)(start))
+#endif
+
 #include <math.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -503,6 +514,26 @@ static uint32_t colour(const Ppu *p, const uint16_t *palette, uint16_t main,
   return result;
 }
 
+/* Ground side panels only. Registers/palette are fixed for one output row;
+ * validity is separate because zero is a legitimate computed colour. */
+typedef struct GroundColourCache {
+  uint32_t colours[256];
+  uint32_t valid[8];
+} GroundColourCache;
+
+static uint32_t ground_colour(GroundColourCache *cache, const Ppu *p,
+                              const uint16_t *palette, unsigned index) {
+  uint32_t mask = UINT32_C(1) << (index & 31);
+  if (!(cache->valid[index >> 5] & mask)) {
+    uint16_t layer = index ? (uint16_t)(0x5000 | index) : 0x500;
+    uint16_t main = p->screenEnabled[0] & 1 ? layer : 0x500;
+    uint16_t sub = p->screenEnabled[1] & 1 ? layer : 0x500;
+    cache->colours[index] = colour(p, palette, main, sub, false);
+    cache->valid[index >> 5] |= mask;
+  }
+  return cache->colours[index];
+}
+
 static FzeroMode7Line hd_transform(const FzeroSourceFrame *frame, int y) {
   const uint8_t *registers = frame->lines[y].registers;
   int16_t matrix[8];
@@ -970,6 +1001,7 @@ static bool draw_triple_sides(uint32_t *output, size_t capacity,
     cached_ground_rays = rays;
   }
 
+  uint64_t phase_start = RendererTimingBegin();
   FzeroCourse course = course_open(f, true);
   /* The race switches to BG mode 1 for the skyline, then Mode 7 for the
    * track. Map a panel's horizontal eye ray onto the existing panoramic BG1/
@@ -1008,6 +1040,8 @@ static bool draw_triple_sides(uint32_t *output, size_t capacity,
   uint32_t *sky_pixels = sky_count ?
       malloc((size_t)sky_count * 2 * pw * sizeof(uint32_t)) : NULL;
   if (sky_count && !sky_pixels) return false;
+  RendererTimingEnd(FZERO_DIAG_TRIPLE_SKY_PREPARE, phase_start);
+  phase_start = RendererTimingBegin();
   static const int periods[2] = {896, 768};
   for (int source_y = 0; source_y < sky_count; ++source_y) {
     const FzeroRasterLine *raster = &f->lines[source_y];
@@ -1038,6 +1072,8 @@ static bool draw_triple_sides(uint32_t *output, size_t capacity,
             colour(&scanout, raster->palette, screens[0], screens[1], false);
       }
   }
+  RendererTimingEnd(FZERO_DIAG_TRIPLE_SKY_SAMPLE, phase_start);
+  phase_start = RendererTimingBegin();
   if (sky_count) {
     int sky_shift[2 * 4096];
     bool exact_horizon = !getenv("FZERO_TRIPLE_DISABLE_EXACT_HORIZON");
@@ -1078,6 +1114,8 @@ static bool draw_triple_sides(uint32_t *output, size_t capacity,
   }
   /* Flat-ground projection is rational in panel X. The direct ray path stays
    * available for pixel-exact offline A/B checks of new camera fixtures. */
+  RendererTimingEnd(FZERO_DIAG_TRIPLE_SKY_FILL, phase_start);
+  phase_start = RendererTimingBegin();
   for (int y = 0; y < ph; ++y) {
     int source_y = (int)((y + 0.5) * 224 / ph);
     if (source_y > 223) source_y = 223;
@@ -1098,6 +1136,8 @@ static bool draw_triple_sides(uint32_t *output, size_t capacity,
     FzeroTripleLineAlignment alignment;
     align = align && FzeroTripleGroundBuildLineAlignment(line, align_left,
         align_right, logical_width, pw, &alignment);
+    GroundColourCache colours;
+    memset(colours.valid, 0, sizeof(colours.valid));
     for (int side = 0; side < 2; ++side) {
       FzeroTripleGroundRow row;
       if (use_row_projection &&
@@ -1121,14 +1161,12 @@ static bool draw_triple_sides(uint32_t *output, size_t capacity,
         texel.y = floor(texel.y);
         int tile = course_sample(&course, &reference, &cache, texel);
         unsigned index = FzeroMode7Fetch(&line, f->vram, texel, tile);
-        uint16_t layer = index ? (uint16_t)(0x5000 | index) : 0x500;
-        uint16_t main = scanout.screenEnabled[0] & 1 ? layer : 0x500;
-        uint16_t sub = scanout.screenEnabled[1] & 1 ? layer : 0x500;
         output[(size_t)side * pw * ph + (size_t)y * pw + x] =
-            colour(&scanout, raster->palette, main, sub, false);
+            ground_colour(&colours, &scanout, raster->palette, index);
       }
     }
   }
+  RendererTimingEnd(FZERO_DIAG_TRIPLE_GROUND, phase_start);
   triple_cache.output = output;
   triple_cache.rig = *rig;
   triple_cache.logical_width = logical_width;

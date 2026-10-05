@@ -1,6 +1,17 @@
-# FZeroSNESRecomp
+# DBCE F-Zero SNES Unified Preview
 
 A native PC build of *F-Zero* for SNES.
+
+Based on upstream [FZeroSNESRecomp](https://github.com/mstan/FZeroSNESRecomp)
+1.8.3. The public fork is now named `d-b-c-e/dbce-mods-fzero-snes`, retaining
+the upstream fork relationship, attribution and history. The DBCE preview
+identity distinguishes this combined product from upstream and historical releases.
+
+This fork keeps wheel, force feedback, telemetry, recording/replay and
+experimental triples inside this one native app and launcher. See
+[unified product](docs/UNIFIED-PRODUCT.md), [setup](docs/SETUP.md) and
+[product/version identity](docs/PRODUCT-IDENTITY.md)
+for the stock-only candidate package contract and current validation limits.
 
 You bring your own legally dumped *F-Zero (USA)* ROM. No ROM is included.
 
@@ -30,6 +41,30 @@ You bring your own legally dumped *F-Zero (USA)* ROM. No ROM is included.
 - Optional MSU-1 music packs for stock F-Zero and BS Deluxe (bring your own patch and audio).
 
 ## Download And Play
+
+As verified on 2026-10-02, the default `main` branch and the retained unified lane
+[`codex/unified-product-20261001`](https://github.com/d-b-c-e/dbce-mods-fzero-snes/tree/codex/unified-product-20261001)
+both contain reviewed source `14ea520bf97700f6bd5bb832b1daf1fdb6483f50`.
+Source publication does not imply a binary promotion. No DBCE unified binary
+release is currently published; historical packages remain historical.
+Use the reviewed source/receipt, the DBCE preview ZIP identity and
+[one setup flow](docs/SETUP.md); do not substitute an upstream 1.8.3 ZIP.
+`VERSION=1.8.3` is the numeric upstream base. The full preview identity adds
+its exact source revision, as described in [identity policy](docs/PRODUCT-IDENTITY.md).
+
+The approved stock replay at `21f2605` rendered the original CRT preset across
+three separate monitors with FFB disabled and the staged wheel DLL excluded.
+Center keyboard/foreground focus failed acceptance, so full rig acceptance
+remains pending. The optional softer CRT preset added in `14ea520` has only
+simulated CPU comparison evidence; GPU compilation and visual acceptance remain
+pending. The original preset and default are unchanged. See
+[validation boundaries](docs/UNIFIED-PRODUCT.md#validation-boundaries).
+
+### Historical upstream/legacy packages
+
+The instructions below describe retained historical packages; they do not
+identify a DBCE unified preview release. Existing versions/tags/assets are
+preserved, and a working installation is not automatically migrated.
 
 On Windows:
 
@@ -310,10 +345,12 @@ the title bar says so and nothing is disturbed.
 BS F-Zero Deluxe is included with permission from its authors:
 GuyPerfect, Porthor, and PowerPanda.
 
-The release includes two BS Deluxe files:
-
-- `mods/bs-deluxe.dat` is used by this app.
-- `patches/bs-deluxe-usa.ips` is the upstream v1.1 USA SNES patch for your own ROM.
+Historical BS-equipped releases embed the imported payload and retain credits
+and provenance under `mods/`; a loose `bs-deluxe.dat` is a development override.
+The upstream v1.1 USA patch is `patches/bs-deluxe-usa.ips` for your own ROM.
+The unified stock-only candidate excludes the private module and payload;
+its launcher reports BS Deluxe as unavailable. Do not copy an old payload
+beside a candidate to bypass its build identity.
 
 No patched ROM is included.
 
@@ -327,12 +364,18 @@ Send these files from the game folder:
 
 ## Build From Source
 
-Clone with submodules:
+Clone the renamed fork with submodules (the upstream project remains
+[mstan/FZeroSNESRecomp](https://github.com/mstan/FZeroSNESRecomp)):
 
 ```bash
-git clone --recurse-submodules git@github.com:mstan/FZeroSNESRecomp.git
-cd FZeroSNESRecomp
+git clone --recurse-submodules https://github.com/d-b-c-e/dbce-mods-fzero-snes.git
+cd dbce-mods-fzero-snes
 ```
+
+For a unified candidate, use its reviewed source commit/branch and initialize
+that revision's submodule pins before generating or building. The fork's default
+branch is not evidence that a candidate has been promoted. The package manifest
+records the exact source and dependency identities.
 
 Put your own USA ROM at `fzero.sfc`, then generate and build:
 
@@ -370,6 +413,17 @@ It requires `zenity` and `xdotool`; use a fresh output directory for each run.
 
 ## License
 
-MIT License, Copyright (c) 2026 Matthew Stanley. See `LICENSE`. Bundled dependencies keep their own licenses under `licenses/` in each release; BS F-Zero Deluxe content is included with its authors' permission and is not covered by this license.
+The top-level game source uses the MIT License, Copyright (c) 2026 Matthew
+Stanley; see `LICENSE`. The assembled product is not MIT-only: the pinned
+snesrecomp engine uses PolyForm Noncommercial 1.0.0 with an additional
+profit-derived-use restriction, and UI/fonts/runtime components retain their
+own terms and notices. See [distribution audit](docs/DISTRIBUTION-AUDIT.md).
+
+The stock-only preview ZIP omits the original cover, gameplay screenshots and
+BS payload/patches. Historical source still contains those assets. The earlier
+README asserted BS authors' permission, but no patch-specific redistribution
+terms were located in the tracked source during this audit; that permission
+claim and actual distribution scope need review before including the patch.
+No blanket asset clearance or whole-product MIT license is implied.
 
 *F-Zero* belongs to Nintendo. The game ROM is not included.

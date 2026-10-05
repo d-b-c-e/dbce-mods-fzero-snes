@@ -51,6 +51,17 @@ if(BUILD_TESTING)
     add_test(NAME fzero_triple_geometry COMMAND fzero_triple_geometry_tests)
 endif()
 if(NOT FZERO_BUILD_GAME)
+    if(BUILD_TESTING)
+        add_executable(fzero_analog_tests tests/test_analog.c src/fzero_analog.c)
+        target_include_directories(fzero_analog_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+        if(NOT MSVC)
+            target_link_libraries(fzero_analog_tests PRIVATE m)
+        endif()
+        add_test(NAME fzero_analog COMMAND fzero_analog_tests)
+        add_executable(fzero_playthrough_tests tests/test_playthrough.c src/fzero_playthrough.c)
+        target_include_directories(fzero_playthrough_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+        add_test(NAME fzero_playthrough COMMAND fzero_playthrough_tests)
+    endif()
     return()
 endif()
 
@@ -103,6 +114,10 @@ if(BUILD_TESTING)
         target_compile_options(fzero_renderer_tests PRIVATE -Wall -Wextra -Werror)
     endif()
     add_test(NAME fzero_renderer COMMAND fzero_renderer_tests)
+    add_executable(fzero_ground_colour_tests tests/test_ground_colour.c)
+    target_include_directories(fzero_ground_colour_tests PRIVATE ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
+    target_link_libraries(fzero_ground_colour_tests PRIVATE fzero_video fzero_triple_geometry)
+    add_test(NAME fzero_ground_colour COMMAND fzero_ground_colour_tests)
 endif()
 
 # Release version stamp defaults to VERSION; override explicitly for local builds.
@@ -201,6 +216,7 @@ add_executable(FZeroSNESRecomp
     src/fzero_ffb.cpp
     src/fzero_playthrough.c
     src/fzero_runtime.c)
+target_compile_definitions(FZeroSNESRecomp PRIVATE FZERO_RENDER_TIMINGS=1)
 
 function(configure_fzero_target target)
     target_sources(${target} PRIVATE src/fzero_deluxe.c src/fzero_state_mode.c src/fzero_msu.c)
@@ -279,6 +295,12 @@ if(BUILD_TESTING)
         src/fzero_hotkeys.c)
     target_include_directories(fzero_ffb_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
     add_test(NAME fzero_ffb COMMAND fzero_ffb_tests)
+    if(WIN32)
+        # Fake Win32 loader/exports: no real DLL or device is accessed.
+        add_executable(fzero_ffb_lifecycle_tests tests/test_ffb_lifecycle.cpp
+            src/fzero_hotkeys.c)
+        add_test(NAME fzero_ffb_lifecycle COMMAND fzero_ffb_lifecycle_tests)
+    endif()
 endif()
 recomp_target_launcher_ui(FZeroSNESRecomp CONSOLE snes)
 # Identify dependencies as well as the game in player performance reports.
@@ -300,11 +322,13 @@ fzero_revision("${SNESRECOMP_ROOT}" FZERO_FRAMEWORK_REVISION)
 fzero_revision("${RECOMP_UI_ROOT}" FZERO_UI_REVISION)
 configure_file(src/fzero_build.h.in generated/fzero_build.h @ONLY)
 target_include_directories(FZeroSNESRecomp PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets/img/boxart.tga")
 add_custom_command(TARGET FZeroSNESRecomp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/assets/img/boxart.tga"
         "$<TARGET_FILE_DIR:FZeroSNESRecomp>/assets/img/boxart.tga"
     VERBATIM)
+endif()
 add_custom_command(TARGET FZeroSNESRecomp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders"
