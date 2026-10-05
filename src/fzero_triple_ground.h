@@ -28,8 +28,27 @@ bool FzeroTripleGroundBuildRow(const FzeroTripleGround *ground,
                                const FzeroTripleSurface *panel,
                                int y, int width, int height,
                                FzeroTripleGroundRow *out);
+/* Same row at a fractional pixel row (y = 0 is the centre of the first row),
+ * for sub-pixel ground samples. */
+bool FzeroTripleGroundBuildRowAt(const FzeroTripleGround *ground,
+                                 const FzeroTripleSurface *panel,
+                                 double y, int width, int height,
+                                 FzeroTripleGroundRow *out);
 bool FzeroTripleGroundRowLocate(const FzeroTripleGroundRow *row,
                                 int x, FzeroMode7Texel *texel);
+/* Intersection at a fractional pixel column (x = 0 is the centre of the first
+ * pixel; sub-pixel samples reach -0.5). */
+static inline bool FzeroTripleGroundRowLocateAtInline(
+    const FzeroTripleGroundRow *row, double x, FzeroMode7Texel *texel) {
+  if (!row || !texel || !(x >= -0.5)) return false;
+  double down = row->down + x * row->down_step;
+  if (!(down > 1e-9) || !isfinite(down)) return false;
+  double reciprocal = 1.0 / down;
+  texel->x = row->camera_x + (row->x_num + x * row->x_step) * reciprocal;
+  texel->y = row->camera_y + (row->y_num + x * row->y_step) * reciprocal;
+  return isfinite(texel->x) && isfinite(texel->y) &&
+         fabs(texel->x) < 1e6 && fabs(texel->y) < 1e6;
+}
 /* Same guarded row intersection in the renderer's per-pixel translation unit;
  * the public wrapper remains for diagnostic callers and tests. */
 static inline bool FzeroTripleGroundRowLocateInline(

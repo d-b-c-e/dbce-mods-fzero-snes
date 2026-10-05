@@ -98,8 +98,16 @@ bool FzeroTripleGroundBuildRow(const FzeroTripleGround *ground,
                                const FzeroTripleSurface *panel,
                                int y, int width, int height,
                                FzeroTripleGroundRow *out) {
+  if (y < 0 || y >= height) return false;
+  return FzeroTripleGroundBuildRowAt(ground, panel, y, width, height, out);
+}
+
+bool FzeroTripleGroundBuildRowAt(const FzeroTripleGround *ground,
+                                 const FzeroTripleSurface *panel,
+                                 double y, int width, int height,
+                                 FzeroTripleGroundRow *out) {
   if (!ground || !panel || !out || width < 1 || height < 1 ||
-      y < 0 || y >= height) return false;
+      !(y >= -0.5) || !(y <= height - 0.5)) return false;
   double u = 0.5 / width;
   double v = 1.0 - (y + 0.5) / height;
   double px = panel->lower_left.x + u * panel->right.x + v * panel->up.x;

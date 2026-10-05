@@ -937,6 +937,75 @@ static bool preview_triple_vehicles(uint32_t *output, size_t capacity,
                                     int logical_width, bool center_only,
                                     unsigned *written_pixels);
 
+/* Box-filtered colours inside each 8x8 Mode 7 tile: level 1 = 2x2 blocks,
+ * level 2 = 4x4 blocks, level 3 = the whole tile. Keyed on the row's 256
+ * resolved ground colours, so it is rebuilt only when a row's colours differ. */
+typedef struct TileMip {
+  bool valid;
+  uint32_t resolved[256];
+  uint32_t level1[256][16], level2[256][4], level3[256];
+} TileMip;
+
+static uint32_t average_colour(const uint32_t *sum, unsigned count, uint32_t top) {
+  return (top & UINT32_C(0xff000000)) |
+      ((sum[2] + count / 2) / count) << 16 |
+      ((sum[1] + count / 2) / count) << 8 | (sum[0] + count / 2) / count;
+}
+
+static bool tile_mip_prepare(TileMip *mip, const uint16_t *vram,
+                             GroundColourCache *colours, const Ppu *p,
+                             const uint16_t *palette) {
+  uint32_t resolved[256];
+  for (unsigned index = 0; index < 256; ++index)
+    resolved[index] = ground_colour(colours, p, palette, index);
+  if (mip->valid && !memcmp(mip->resolved, resolved, sizeof(resolved))) return true;
+  for (int tile = 0; tile < 256; ++tile) {
+    uint32_t s1[16][3] = {{0}}, s2[4][3] = {{0}}, s3[3] = {0}, top = 0;
+    for (int py = 0; py < 8; ++py)
+      for (int px = 0; px < 8; ++px) {
+        uint32_t c = resolved[vram[tile * 64 + py * 8 + px] >> 8];
+        if (!py && !px) top = c;
+        uint32_t ch[3] = {c & 0xff, (c >> 8) & 0xff, (c >> 16) & 0xff};
+        for (int k = 0; k < 3; ++k) {
+          s1[(py >> 1) * 4 + (px >> 1)][k] += ch[k];
+          s2[(py >> 2) * 2 + (px >> 2)][k] += ch[k];
+          s3[k] += ch[k];
+        }
+      }
+    for (int b = 0; b < 16; ++b) mip->level1[tile][b] = average_colour(s1[b], 4, top);
+    for (int b = 0; b < 4; ++b) mip->level2[tile][b] = average_colour(s2[b], 16, top);
+    mip->level3[tile] = average_colour(s3, 64, top);
+  }
+  memcpy(mip->resolved, resolved, sizeof(resolved));
+  mip->valid = true;
+  return true;
+}
+
+/* Same tile and in-tile position as FzeroMode7Fetch, read from a mip level. */
+static uint32_t tile_mip_colour(const TileMip *mip, const FzeroMode7Line *line,
+                                const uint16_t *vram, FzeroMode7Texel texel,
+                                int tile, int level, GroundColourCache *colours,
+                                const Ppu *p, const uint16_t *palette) {
+  double qx = texel.x, qy = texel.y;
+  bool outside = qx < 0 || qx >= 1024 || qy < 0 || qy >= 1024;
+  if (outside && (line->control & 0x80) && !(line->control & 0x40))
+    return ground_colour(colours, p, palette, 0);
+  int tx, ty;
+  if (qx > -1073741824.0 && qx < 1073741824.0 &&
+      qy > -1073741824.0 && qy < 1073741824.0) {
+    tx = (int)qx & 1023; ty = (int)qy & 1023;
+  } else {
+    tx = ((int)fmod(qx, 1024) + 1024) & 1023;
+    ty = ((int)fmod(qy, 1024) + 1024) & 1023;
+  }
+  unsigned number = outside && (line->control & 0x80) ? 0 :
+      tile >= 0 ? (unsigned)tile & 255 : vram[(ty / 8) * 128 + tx / 8] & 255;
+  int ix = tx & 7, iy = ty & 7;
+  return level == 1 ? mip->level1[number][(iy >> 1) * 4 + (ix >> 1)] :
+         level == 2 ? mip->level2[number][(iy >> 2) * 2 + (ix >> 2)] :
+                      mip->level3[number];
+}
+
 static bool draw_triple_sides(uint32_t *output, size_t capacity,
                               const FzeroTripleRig *rig, int logical_width,
                               bool direct_sky) {
@@ -1121,6 +1190,13 @@ static bool draw_triple_sides(uint32_t *output, size_t capacity,
    * available for pixel-exact offline A/B checks of new camera fixtures. */
   RendererTimingEnd(FZERO_DIAG_TRIPLE_SKY_FILL, phase_start);
   phase_start = RendererTimingBegin();
+  /* Distance filter for the side ground (see below);
+   * FZERO_TRIPLE_DISABLE_GROUND_FILTER restores one sample per pixel. */
+  bool ground_filter = !getenv("FZERO_TRIPLE_DISABLE_GROUND_FILTER");
+  TileMip tile_mip;
+  tile_mip.valid = false;
+  unsigned level_counts[4] = {0, 0, 0, 0}, filtered_rows = 0;
+  double footprint_max = 0;
   for (int y = 0; y < ph; ++y) {
     int source_y = (int)((y + 0.5) * 224 / ph);
     if (source_y > 223) source_y = 223;
@@ -1148,7 +1224,19 @@ static bool draw_triple_sides(uint32_t *output, size_t capacity,
       if (use_row_projection &&
           !FzeroTripleGroundBuildRow(&ground, &panels[side ? 2 : 0],
                                      y, pw, ph, &row)) return false;
+      /* Distant side ground covers many texels per panel pixel (the panels
+       * are 512x288 textures scaled up), so one nearest sample shimmers.
+       * Where a pixel's footprint exceeds about 1.5 texels, read the tile's
+       * pre-averaged 2x2, 4x4 or whole-tile colour instead (a mip level inside
+       * each 8x8 Mode 7 tile); near ground keeps the single exact sample. */
+      FzeroTripleGroundRow next_row;
+      bool filtered = use_row_projection && align && ground_filter &&
+          FzeroTripleGroundBuildRowAt(&ground, &panels[side ? 2 : 0],
+                                      y + 1.0, pw, ph, &next_row) &&
+          tile_mip_prepare(&tile_mip, f->vram, &colours, &scanout, raster->palette);
+      if (filtered) ++filtered_rows;
       FzeroCourseCache cache = kCourseCacheEmpty;
+      int level = 0;
       for (int x = 0; x < pw; ++x) {
         FzeroMode7Texel texel;
         bool located = false;
@@ -1162,15 +1250,42 @@ static bool draw_triple_sides(uint32_t *output, size_t capacity,
         if (!located ||
             !FzeroTripleGroundApplyLineAlignmentInline(&alignment, texel,
                 &texel)) continue;
+        /* The footprint changes smoothly along a row: measure it every 8th
+         * pixel and keep that level for the run. */
+        if (filtered && (x & 7) == 0) {
+          level = 0;
+          FzeroMode7Texel across, down;
+          if (FzeroTripleGroundRowLocateAtInline(&row, x + 1.0, &across) &&
+              FzeroTripleGroundApplyLineAlignmentInline(&alignment, across, &across) &&
+              FzeroTripleGroundRowLocateAtInline(&next_row, x, &down) &&
+              FzeroTripleGroundApplyLineAlignmentInline(&alignment, down, &down)) {
+            double fx = hypot(across.x - texel.x, across.y - texel.y);
+            double fy = hypot(down.x - texel.x, down.y - texel.y);
+            double footprint = fx > fy ? fx : fy;
+            if (footprint > footprint_max) footprint_max = footprint;
+            level = !(footprint > 1.5) ? 0 : footprint <= 3.0 ? 1 :
+                    footprint <= 6.0 ? 2 : 3;
+          }
+        }
         texel.x = floor(texel.x);
         texel.y = floor(texel.y);
         int tile = course_sample(&course, &reference, &cache, texel);
-        unsigned index = FzeroMode7Fetch(&line, f->vram, texel, tile);
-        output[(size_t)side * pw * ph + (size_t)y * pw + x] =
-            ground_colour(&colours, &scanout, raster->palette, index);
+        size_t at = (size_t)side * pw * ph + (size_t)y * pw + x;
+        ++level_counts[level];
+        if (level == 0) {
+          unsigned index = FzeroMode7Fetch(&line, f->vram, texel, tile);
+          output[at] = ground_colour(&colours, &scanout, raster->palette, index);
+        } else {
+          output[at] = tile_mip_colour(&tile_mip, &line, f->vram, texel, tile,
+                                       level, &colours, &scanout, raster->palette);
+        }
       }
     }
   }
+  if (getenv("FZERO_TRIPLE_GROUND_FILTER_TRACE"))
+    fprintf(stderr, "[fzero-triple-ground] filtered rows %u levels %u/%u/%u/%u max footprint %.1f\n",
+            filtered_rows, level_counts[0], level_counts[1], level_counts[2],
+            level_counts[3], footprint_max);
   RendererTimingEnd(FZERO_DIAG_TRIPLE_GROUND, phase_start);
   /* Opponents on the side panels: each live car's guest sprite drawn as a
    * billboard at its world anchor, the projection checked offline by the
