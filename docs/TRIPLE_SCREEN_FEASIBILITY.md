@@ -16,7 +16,7 @@ on the centre. Simulation held 60 fps; side ground costs about 3.5 ms per emulat
 (one nearest texel per 512x288 panel pixel). **Fixed (687ba74, 824afbb):** pixels covering
 more than about 1.5 texels read a pre-averaged 2x2, 4x4 or whole-tile colour inside their
 8x8 Mode 7 tile (footprint measured every 8th pixel; tiles averaged on first use, keyed on
-the colour registers). Offline +0.4 ms; live rig run held 60 fps. 3x3 supersampling was
+the colour registers). Offline +0.4 ms; live at the rig +0.95 ms (side ground 4.45 vs 3.5 ms per frame), 60 fps held. 3x3 supersampling was
 tried and rejected (28 ms). Beyond one tile per pixel the far band still streaks; a
 course-level pyramid would be the next step. `FZERO_TRIPLE_DISABLE_GROUND_FILTER` restores
 the old output bit for bit. Opponents were not in the demo
