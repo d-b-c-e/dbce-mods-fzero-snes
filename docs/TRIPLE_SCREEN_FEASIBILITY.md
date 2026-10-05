@@ -5,6 +5,19 @@ F-Zero native recompilation, and how a future adapter can interoperate with the
 DBCE triple-screen layout contract without making the public repository depend
 on a private package.
 
+## Rig check (2026-10-05, unattended)
+
+The side-by-side test install (`F-Zero (SNES Recomp) triple-test`, main 712a7cf) was run
+under NVIDIA Surround at 7680x1440 (direct start with the ROM argument, no input, FFB off for
+the run, config restored). The attract demo race shows the side panels continuing the Mode 7
+track, bumpers and ground from the centre, with the skyline across all three and the HUD
+on the centre. Simulation held 60 fps; side ground costs about 3.5 ms per emulated frame
+(triple_projection 3.3 ms mean per presentation). **Next: the side ground aliases badly at
+distance** (one nearest texel per output pixel; the far rows shimmer). Filter only the
+distant rows (texel footprint above about 2) or split the ground rows across threads first,
+since 4x supersampling everywhere would not fit the frame. Opponents were not in the demo
+frames captured. Owner drive still pending.
+
 ## Finding
 
 F-Zero does not expose a conventional 3D scene or camera matrix. The track is
