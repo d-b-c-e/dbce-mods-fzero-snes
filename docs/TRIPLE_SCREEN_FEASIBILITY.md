@@ -12,10 +12,14 @@ under NVIDIA Surround at 7680x1440 (direct start with the ROM argument, no input
 the run, config restored). The attract demo race shows the side panels continuing the Mode 7
 track, bumpers and ground from the centre, with the skyline across all three and the HUD
 on the centre. Simulation held 60 fps; side ground costs about 3.5 ms per emulated frame
-(triple_projection 3.3 ms mean per presentation). **Next: the side ground aliases badly at
-distance** (one nearest texel per output pixel; the far rows shimmer). Filter only the
-distant rows (texel footprint above about 2) or split the ground rows across threads first,
-since 4x supersampling everywhere would not fit the frame. Opponents were not in the demo
+(triple_projection 3.3 ms mean per presentation). The side ground aliased badly at distance
+(one nearest texel per 512x288 panel pixel). **Fixed (687ba74, 824afbb):** pixels covering
+more than about 1.5 texels read a pre-averaged 2x2, 4x4 or whole-tile colour inside their
+8x8 Mode 7 tile (footprint measured every 8th pixel; tiles averaged on first use, keyed on
+the colour registers). Offline +0.4 ms; live rig run held 60 fps. 3x3 supersampling was
+tried and rejected (28 ms). Beyond one tile per pixel the far band still streaks; a
+course-level pyramid would be the next step. `FZERO_TRIPLE_DISABLE_GROUND_FILTER` restores
+the old output bit for bit. Opponents were not in the demo
 frames captured. Owner drive still pending.
 
 ## Finding
