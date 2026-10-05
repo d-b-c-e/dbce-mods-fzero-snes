@@ -5,7 +5,8 @@ set(CMAKE_C_STANDARD 11)
 
 include(CTest)
 option(FZERO_BUILD_GAME "Build game hosts (requires privately generated ROM sources)" ON)
-add_library(fzero_video STATIC src/fzero_video.c src/fzero_mode7.c src/fzero_replay.c src/fzero_hdma.c)
+add_library(fzero_video STATIC src/fzero_video.c src/fzero_mode7.c
+    src/fzero_replay.c src/fzero_hdma.c src/fzero_triple_display.c)
 target_include_directories(fzero_video PUBLIC "${CMAKE_SOURCE_DIR}/src")
 if(NOT MSVC)
     target_compile_options(fzero_video PRIVATE -Wall -Wextra -Werror)
@@ -18,6 +19,9 @@ if(BUILD_TESTING)
     add_executable(fzero_video_tests tests/test_video.c)
     target_link_libraries(fzero_video_tests PRIVATE fzero_video)
     add_test(NAME fzero_video COMMAND fzero_video_tests)
+    add_executable(fzero_triple_display_tests tests/test_triple_display.c)
+    target_link_libraries(fzero_triple_display_tests PRIVATE fzero_video)
+    add_test(NAME fzero_triple_display COMMAND fzero_triple_display_tests)
     add_executable(fzero_mode7_tests tests/test_mode7.c)
     target_link_libraries(fzero_mode7_tests PRIVATE fzero_video)
     add_test(NAME fzero_mode7 COMMAND fzero_mode7_tests)
@@ -34,6 +38,17 @@ if(BUILD_TESTING)
         target_compile_options(fzero_hotkeys_tests PRIVATE -Wall -Wextra -Werror)
         target_compile_options(fzero_state_mode_tests PRIVATE -Wall -Wextra -Werror)
     endif()
+endif()
+add_library(fzero_triple_geometry STATIC src/fzero_triple_geometry.c
+    src/fzero_triple_ground.c)
+target_include_directories(fzero_triple_geometry PUBLIC "${CMAKE_SOURCE_DIR}/src")
+if(NOT MSVC)
+    target_link_libraries(fzero_triple_geometry PUBLIC m)
+endif()
+if(BUILD_TESTING)
+    add_executable(fzero_triple_geometry_tests tests/test_triple_geometry.c)
+    target_link_libraries(fzero_triple_geometry_tests PRIVATE fzero_triple_geometry)
+    add_test(NAME fzero_triple_geometry COMMAND fzero_triple_geometry_tests)
 endif()
 if(NOT FZERO_BUILD_GAME)
     return()
@@ -56,18 +71,34 @@ find_package(OpenGL REQUIRED)
 
 add_executable(FZeroRenderCapture tools/render_capture.c src/fzero_renderer.c)
 target_include_directories(FZeroRenderCapture PRIVATE ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
-target_link_libraries(FZeroRenderCapture PRIVATE fzero_video)
+target_link_libraries(FZeroRenderCapture PRIVATE fzero_video fzero_triple_geometry)
+# Include the renderer only in this offline tool so its course/VRAM sampling
+# can be exercised without changing or linking the installed game host.
+add_executable(FZeroTripleGroundCapture tools/triple_ground_capture.c)
+target_include_directories(FZeroTripleGroundCapture PRIVATE ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
+target_link_libraries(FZeroTripleGroundCapture PRIVATE fzero_video fzero_triple_geometry)
+add_executable(FZeroTripleRuntimeCapture tools/triple_runtime_capture.c src/fzero_renderer.c)
+target_include_directories(FZeroTripleRuntimeCapture PRIVATE ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
+target_link_libraries(FZeroTripleRuntimeCapture PRIVATE fzero_video fzero_triple_geometry)
+add_executable(FZeroRendererBenchmark tools/benchmark_renderer.c src/fzero_renderer.c)
+target_include_directories(FZeroRendererBenchmark PRIVATE ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
+target_link_libraries(FZeroRendererBenchmark PRIVATE fzero_video fzero_triple_geometry)
 if(BUILD_TESTING)
     add_executable(fzero_renderer_tests tests/test_renderer.c src/fzero_renderer.c)
-    add_executable(fzero_mods_tests tests/test_mods.c src/fzero_mods.c)
-    target_include_directories(fzero_mods_tests PRIVATE "${RECOMP_UI_ROOT}/src")
+    add_executable(fzero_mods_tests tests/test_mods.c src/fzero_mods.c
+        src/fzero_hotkeys.c src/fzero_analog.c)
+    if(FZERO_DELUXE_GEN_DIR)
+        target_compile_definitions(fzero_mods_tests PRIVATE FZERO_HAS_DELUXE=1)
+    endif()
+    target_include_directories(fzero_mods_tests PRIVATE "${RECOMP_UI_ROOT}/src" "${RECOMP_UI_ROOT}/src/common")
     target_link_libraries(fzero_mods_tests PRIVATE fzero_video)
     if(NOT MSVC)
+        target_link_libraries(fzero_mods_tests PRIVATE m)
         target_compile_options(fzero_mods_tests PRIVATE -Wall -Wextra -Werror)
     endif()
     add_test(NAME fzero_mods COMMAND fzero_mods_tests)
     target_include_directories(fzero_renderer_tests PRIVATE ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
-    target_link_libraries(fzero_renderer_tests PRIVATE fzero_video)
+    target_link_libraries(fzero_renderer_tests PRIVATE fzero_video fzero_triple_geometry)
     if(NOT MSVC)
         target_compile_options(fzero_renderer_tests PRIVATE -Wall -Wextra -Werror)
     endif()
@@ -144,6 +175,9 @@ add_executable(FZeroSNESRecompHeadless
     ${FZERO_GEN_SOURCES}
     src/headless_host.c
     src/headless_main.c
+    src/fzero_playthrough.c
+    src/fzero_ffb.cpp
+    src/fzero_hotkeys.c
     src/fzero_runtime.c)
 
 # The desktop host takes the REAL host_report.c (always-on breadcrumb ring,
@@ -158,9 +192,14 @@ add_executable(FZeroSNESRecomp
     "${RECOMP_UI_ROOT}/src/third_party/gl_core_3_1.c"
     ${FZERO_GEN_SOURCES}
     src/sdl_main.c
+    src/fzero_diagnostics.c
     src/fzero_mods.c
     src/fzero_hotkeys.c
     src/fzero_gamepad.c
+    src/fzero_analog.c
+    src/fzero_telemetry.cpp
+    src/fzero_ffb.cpp
+    src/fzero_playthrough.c
     src/fzero_runtime.c)
 
 function(configure_fzero_target target)
@@ -172,7 +211,7 @@ function(configure_fzero_target target)
         target_compile_definitions(${target} PRIVATE FZERO_HAS_DELUXE=1)
     endif()
     target_sources(${target} PRIVATE src/fzero_renderer.c)
-    target_link_libraries(${target} PRIVATE fzero_video)
+    target_link_libraries(${target} PRIVATE fzero_video fzero_triple_geometry)
     target_include_directories(${target} PRIVATE
         "${CMAKE_SOURCE_DIR}"
         "${CMAKE_SOURCE_DIR}/src"
@@ -200,12 +239,67 @@ snesrecomp_target_sdl(FZeroSNESRecomp)
 
 if(BUILD_TESTING AND SNESRECOMP_SDL_BACKEND STREQUAL "SDL3")
     add_executable(fzero_gamepad_tests tests/test_gamepad.c src/fzero_gamepad.c src/fzero_hotkeys.c)
-    target_include_directories(fzero_gamepad_tests PRIVATE "${CMAKE_SOURCE_DIR}/src" ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
+    target_sources(fzero_gamepad_tests PRIVATE src/fzero_analog.c)
+    target_include_directories(fzero_gamepad_tests PRIVATE "${CMAKE_SOURCE_DIR}/src" "${RECOMP_UI_ROOT}/src/common" ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
     snesrecomp_target_sdl(fzero_gamepad_tests)
     add_test(NAME fzero_gamepad COMMAND fzero_gamepad_tests)
+
+    add_executable(fzero_analog_tests tests/test_analog.c src/fzero_analog.c)
+    target_include_directories(fzero_analog_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+    if(NOT MSVC)
+        target_link_libraries(fzero_analog_tests PRIVATE m)
+    endif()
+    add_test(NAME fzero_analog COMMAND fzero_analog_tests)
 endif()
 target_link_libraries(FZeroSNESRecomp PRIVATE OpenGL::GL)
+if(WIN32)
+    target_link_libraries(FZeroSNESRecomp PRIVATE ws2_32)
+    add_custom_command(TARGET FZeroSNESRecomp POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/lib/toolkit/native/WheelFfb.dll"
+            "$<TARGET_FILE_DIR:FZeroSNESRecomp>/WheelFfb.dll"
+        COMMENT "Staging WheelFfb runtime"
+        VERBATIM)
+endif()
+
+if(BUILD_TESTING)
+    add_executable(fzero_playthrough_tests tests/test_playthrough.c src/fzero_playthrough.c)
+    target_include_directories(fzero_playthrough_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+    add_test(NAME fzero_playthrough COMMAND fzero_playthrough_tests)
+    add_executable(fzero_telemetry_tests tests/test_telemetry.cpp
+        src/fzero_telemetry.cpp src/fzero_hotkeys.c)
+    target_include_directories(fzero_telemetry_tests PRIVATE
+        "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/lib/toolkit/include")
+    if(WIN32)
+        target_link_libraries(fzero_telemetry_tests PRIVATE ws2_32)
+    endif()
+    add_test(NAME fzero_telemetry COMMAND fzero_telemetry_tests)
+
+    add_executable(fzero_ffb_tests tests/test_ffb.cpp src/fzero_ffb.cpp
+        src/fzero_hotkeys.c)
+    target_include_directories(fzero_ffb_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+    add_test(NAME fzero_ffb COMMAND fzero_ffb_tests)
+endif()
 recomp_target_launcher_ui(FZeroSNESRecomp CONSOLE snes)
+# Identify dependencies as well as the game in player performance reports.
+find_package(Git QUIET)
+function(fzero_revision directory output)
+    set(revision "unknown")
+    if(GIT_FOUND)
+        execute_process(COMMAND "${GIT_EXECUTABLE}" describe --always --dirty --abbrev=12
+            WORKING_DIRECTORY "${directory}" OUTPUT_VARIABLE revision
+            RESULT_VARIABLE revision_result OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+        if(NOT revision_result EQUAL 0)
+            set(revision "unknown")
+        endif()
+    endif()
+    set(${output} "${revision}" PARENT_SCOPE)
+endfunction()
+fzero_revision("${CMAKE_CURRENT_SOURCE_DIR}" FZERO_SOURCE_REVISION)
+fzero_revision("${SNESRECOMP_ROOT}" FZERO_FRAMEWORK_REVISION)
+fzero_revision("${RECOMP_UI_ROOT}" FZERO_UI_REVISION)
+configure_file(src/fzero_build.h.in generated/fzero_build.h @ONLY)
+target_include_directories(FZeroSNESRecomp PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 add_custom_command(TARGET FZeroSNESRecomp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/assets/img/boxart.tga"

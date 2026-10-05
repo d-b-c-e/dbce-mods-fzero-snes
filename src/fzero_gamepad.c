@@ -1,5 +1,7 @@
 #include "fzero_gamepad.h"
+#include "fzero_analog.h"
 #include "fzero_hotkeys.h"
+#include "raw_hat_binding.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -7,6 +9,20 @@
 static char s_config[1024], s_preferred[40];
 static uint32_t s_bind[12];
 static int s_default_deadzone, s_deadzone;
+static int s_range_percent = 100, s_response_percent = 100;
+static bool s_analog_steering;
+static FzeroAnalogSteering s_steering;
+static SDL_Joystick *s_raw;
+static int s_raw_axis = 0, s_gas_axis = -1, s_brake_axis = -1;
+static int s_gas_invert, s_brake_invert, s_pedal_threshold;
+static int s_raw_buttons[18];
+static const unsigned s_raw_input_bits[18] = {
+    8, 0, 9, 1, 10, 11, 2, 3, 4, 5, 6, 7, 24, 25, 0, 0, 0, 0};
+static const char *const s_raw_keys[18] = {
+    "ButtonA", "ButtonB", "ButtonX", "ButtonY", "ButtonL", "ButtonR",
+    "ButtonSelect", "ButtonStart", "ButtonUp", "ButtonDown", "ButtonLeft",
+    "ButtonRight", "ButtonSaveStateMenu", "ButtonRewind",
+    NULL, NULL, NULL, NULL};
 
 /* SDL's standard button indices are shared by SDL2 and SDL3. Triggers are
  * axes, represented here by bits 15/16 after the standard fifteen buttons. */
@@ -20,6 +36,14 @@ static void pad_guid(SDL_GameController *pad, char guid[40]) {
   SDL_GUIDToString(SDL_GetJoystickGUID(SDL_GetGamepadJoystick(pad)), guid, 40);
 #else
   SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(SDL_GameControllerGetJoystick(pad)), guid, 40);
+#endif
+}
+
+static void joystick_guid(SDL_Joystick *stick, char guid[40]) {
+#if SNESRECOMP_SDL3
+  SDL_GUIDToString(SDL_GetJoystickGUID(stick), guid, 40);
+#else
+  SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(stick), guid, 40);
 #endif
 }
 
@@ -69,22 +93,70 @@ static void load_profile(SDL_GameController *pad) {
   FzeroIniReadInt(s_config, section, "Deadzone", &percent);
   if (percent < 0 || percent > 100) percent = s_default_deadzone;
   s_deadzone = (percent * 32767 + 50) / 100;
-  fprintf(stderr, "[fzero-input] %s guid=%s deadzone=%d%%\n",
-          SDL_GameControllerName(pad), guid, percent);
+  int analog = 0;
+  FzeroIniReadInt(s_config, section, "AnalogSteering", &analog);
+  s_analog_steering = analog != 0;
+  s_range_percent = 100; s_response_percent = 100;
+  FzeroIniReadInt(s_config, section, "SteeringRangePercent", &s_range_percent);
+  FzeroIniReadInt(s_config, section, "SteeringResponsePercent", &s_response_percent);
+  FzeroAnalogSteeringReset(&s_steering);
+  fprintf(stderr, "[fzero-input] %s guid=%s deadzone=%d%% steering=%s\n",
+          SDL_GameControllerName(pad), guid, percent,
+          s_analog_steering ? "analog" : "digital");
+}
+
+static void load_raw_profile(SDL_Joystick *stick) {
+  char guid[40], section[64];
+  joystick_guid(stick, guid);
+  snprintf(section, sizeof(section), "Controller.%s", guid);
+  int percent = s_default_deadzone, analog = 1;
+  FzeroIniReadInt(s_config, section, "Deadzone", &percent);
+  if (percent < 0 || percent > 100) percent = s_default_deadzone;
+  s_deadzone = (percent * 32767 + 50) / 100;
+  FzeroIniReadInt(s_config, section, "AnalogSteering", &analog);
+  s_analog_steering = analog != 0;
+  /* Match the launcher's wheel defaults: keep the full wheel travel, but
+   * favor small corrections and taper the slope toward the outside. */
+  s_range_percent = 100; s_response_percent = 50;
+  FzeroIniReadInt(s_config, section, "SteeringRangePercent", &s_range_percent);
+  FzeroIniReadInt(s_config, section, "SteeringResponsePercent", &s_response_percent);
+  s_raw_axis = 0; s_gas_axis = s_brake_axis = -1;
+  s_gas_invert = s_brake_invert = 0; s_pedal_threshold = 0;
+  FzeroIniReadInt(s_config, section, "SteeringAxis", &s_raw_axis);
+  FzeroIniReadInt(s_config, section, "AcceleratorAxis", &s_gas_axis);
+  FzeroIniReadInt(s_config, section, "BrakeAxis", &s_brake_axis);
+  FzeroIniReadInt(s_config, section, "AcceleratorInvert", &s_gas_invert);
+  FzeroIniReadInt(s_config, section, "BrakeInvert", &s_brake_invert);
+  FzeroIniReadInt(s_config, section, "PedalThreshold", &s_pedal_threshold);
+  for (int i = 0; i < 14; ++i) {
+    s_raw_buttons[i] = -1;
+    FzeroIniReadInt(s_config, section, s_raw_keys[i], &s_raw_buttons[i]);
+  }
+  FzeroAnalogSteeringReset(&s_steering);
+  fprintf(stderr, "[fzero-input] raw %s guid=%s steering-axis=%d gas-axis=%d brake-axis=%d\n",
+          SDL_JoystickName(stick), guid, s_raw_axis, s_gas_axis, s_brake_axis);
 }
 
 void FzeroGamepadConfigure(const char *config, const char *guid, int deadzone) {
   snprintf(s_config, sizeof(s_config), "%s", config ? config : "config.ini");
   snprintf(s_preferred, sizeof(s_preferred), "%s", guid ? guid : "");
   s_default_deadzone = deadzone >= 0 && deadzone <= 100 ? deadzone : 25;
+  s_analog_steering = false;
+  FzeroAnalogSteeringReset(&s_steering);
 }
 
 void FzeroGamepadRefresh(SDL_GameController **pad) {
   if (*pad && !SDL_GameControllerGetAttached(*pad)) {
     SDL_GameControllerClose(*pad);
     *pad = NULL;
+    FzeroAnalogSteeringReset(&s_steering);
   }
   if (*pad) return;
+  if (s_raw && !SDL_JoystickGetAttached(s_raw)) {
+    SDL_JoystickClose(s_raw);
+    s_raw = NULL;
+  }
+  if (s_raw) return;
 #if SNESRECOMP_SDL3
   int count = 0;
   SDL_JoystickID *ids = SDL_GetGamepads(&count);
@@ -111,6 +183,35 @@ void FzeroGamepadRefresh(SDL_GameController **pad) {
 #if SNESRECOMP_SDL3
   SDL_free(ids);
 #endif
+  if (*pad) return;
+#if SNESRECOMP_SDL3
+  count = 0;
+  ids = SDL_GetJoysticks(&count);
+#else
+  count = SDL_NumJoysticks();
+#endif
+  for (int i = 0; i < count && !s_raw; ++i) {
+#if SNESRECOMP_SDL3
+    SDL_Joystick *candidate = SDL_OpenJoystick(ids[i]);
+#else
+    SDL_Joystick *candidate = SDL_JoystickOpen(i);
+#endif
+    if (!candidate) continue;
+    char guid[40];
+    joystick_guid(candidate, guid);
+    if (!s_preferred[0] || SDL_strcasecmp(guid, s_preferred)) {
+      if (s_preferred[0])
+        fprintf(stderr, "[fzero-input] ignoring raw %s guid=%s (wanted %s)\n",
+                SDL_JoystickName(candidate), guid, s_preferred);
+      SDL_JoystickClose(candidate);
+      continue;
+    }
+    s_raw = candidate;
+    load_raw_profile(s_raw);
+  }
+#if SNESRECOMP_SDL3
+  SDL_free(ids);
+#endif
 }
 
 void FzeroGamepadEvent(SDL_GameController **pad, const SDL_Event *event) {
@@ -119,6 +220,7 @@ void FzeroGamepadEvent(SDL_GameController **pad, const SDL_Event *event) {
           SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(*pad))) {
     SDL_GameControllerClose(*pad);
     *pad = NULL;
+    FzeroAnalogSteeringReset(&s_steering);
   }
   if (event->type == SDL_CONTROLLERDEVICEADDED ||
       event->type == SDL_CONTROLLERDEVICEREMOVED)
@@ -127,10 +229,55 @@ void FzeroGamepadEvent(SDL_GameController **pad, const SDL_Event *event) {
       SNESRECOMP_SDL_EVENT_DEVICE(*event) ==
           SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(*pad)))
     load_profile(*pad);
+  if (s_raw && !SDL_JoystickGetAttached(s_raw)) {
+    SDL_JoystickClose(s_raw);
+    s_raw = NULL;
+    FzeroAnalogSteeringReset(&s_steering);
+    FzeroGamepadRefresh(pad);
+  }
 }
 
-uint32_t FzeroGamepadRead(SDL_GameController *pad) {
-  if (!pad || !SDL_GameControllerGetAttached(pad)) return 0;
+static uint32_t gamepad_read(SDL_GameController *pad, bool include_pedals) {
+  if ((!pad || !SDL_GameControllerGetAttached(pad)) &&
+      (!s_raw || !SDL_JoystickGetAttached(s_raw))) return 0;
+  if (!pad) {
+    uint32_t input = 0;
+    int x = SDL_JoystickGetAxis(s_raw, s_raw_axis);
+    if (s_analog_steering)
+      input |= FzeroAnalogSteeringReadTuned(&s_steering, x, s_deadzone,
+                                           s_range_percent, s_response_percent);
+    else {
+      if (x < -s_deadzone) input |= 0x0040u;
+      if (x > s_deadzone) input |= 0x0080u;
+    }
+    if (include_pedals && s_gas_axis >= 0) {
+      int value = SDL_JoystickGetAxis(s_raw, s_gas_axis);
+      if (s_gas_invert) value = -value;
+      if (value > s_pedal_threshold) input |= 0x0001u;
+    }
+    if (include_pedals && s_brake_axis >= 0) {
+      int value = SDL_JoystickGetAxis(s_raw, s_brake_axis);
+      if (s_brake_invert) value = -value;
+      if (value > s_pedal_threshold) input |= 0x0002u;
+    }
+    for (int i = 0; i < 14; ++i) {
+      int binding = s_raw_buttons[i];
+      int hat = recomp_raw_hat_index(binding);
+      if (hat >= 0) {
+#if SNESRECOMP_SDL3
+        if (hat < SDL_GetNumJoystickHats(s_raw) &&
+            (SDL_GetJoystickHat(s_raw, hat) & recomp_raw_hat_value(binding)))
+#else
+        if (hat < SDL_JoystickNumHats(s_raw) &&
+            (SDL_JoystickGetHat(s_raw, hat) & recomp_raw_hat_value(binding)))
+#endif
+          input |= 1u << s_raw_input_bits[i];
+      } else if (binding >= 0 && binding <= 127 && SDL_JoystickGetButton(s_raw, binding)) {
+        input |= 1u << s_raw_input_bits[i];
+      }
+    }
+    return input;
+  }
   uint32_t buttons = 0, input = 0;
   for (int i = 0; i < 15; ++i)
     if (SDL_GameControllerGetButton(pad, (SDL_GameControllerButton)i)) buttons |= 1u << i;
@@ -142,9 +289,34 @@ uint32_t FzeroGamepadRead(SDL_GameController *pad) {
     if (s_bind[i] && (buttons & s_bind[i]) == s_bind[i]) input |= 1u << s_input_bits[i];
   int x = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTX);
   int y = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTY);
-  if (x < -s_deadzone) input |= 0x0040u;
-  if (x > s_deadzone) input |= 0x0080u;
+  if (s_analog_steering)
+    input |= FzeroAnalogSteeringReadTuned(&s_steering, x, s_deadzone,
+                                         s_range_percent, s_response_percent);
+  else {
+    if (x < -s_deadzone) input |= 0x0040u;
+    if (x > s_deadzone) input |= 0x0080u;
+  }
   if (y < -s_deadzone) input |= 0x0010u;
   if (y > s_deadzone) input |= 0x0020u;
   return input;
+}
+
+uint32_t FzeroGamepadRead(SDL_GameController *pad) {
+  return gamepad_read(pad, true);
+}
+
+uint32_t FzeroGamepadReadOverlay(SDL_GameController *pad) {
+  return gamepad_read(pad, false);
+}
+
+void FzeroGamepadShutdown(SDL_GameController **pad) {
+  if (pad && *pad) {
+    SDL_GameControllerClose(*pad);
+    *pad = NULL;
+  }
+  if (s_raw) {
+    SDL_JoystickClose(s_raw);
+    s_raw = NULL;
+  }
+  FzeroAnalogSteeringReset(&s_steering);
 }

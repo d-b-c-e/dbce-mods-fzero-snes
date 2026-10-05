@@ -13,6 +13,9 @@
 #include "fzero_msu.h"
 #include "fzero_state_mode.h"
 #include "fzero_replay.h"
+#include "fzero_playthrough.h"
+#include "fzero_ffb.h"
+#include "fzero_renderer.h"
 
 #include "audio_trace.h"
 #include "common_rtl.h"
@@ -23,6 +26,7 @@
 #include "snes/dsp.h"
 #include "snes/ppu.h"
 #include "snes/snes.h"
+#include "snes/msu1.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -38,6 +42,14 @@ static const uint8_t kFzeroSha256[32] = {
 };
 
 enum { kFzeroRomSize = 0x80000u, kMaxInputSpans = 128 };
+
+static long s_apu_trace_frame;
+static int apu_trace_write(uint16 reg, uint8 value) {
+  if (s_apu_trace_frame >= 1200 && s_apu_trace_frame < 1600)
+    fprintf(stderr, "[fzero-apu] frame=%ld reg=%04x value=%02x\n",
+            s_apu_trace_frame, reg, value);
+  return 0;
+}
 
 typedef struct AttractStats {
   uint64_t logic_hash;
@@ -202,6 +214,109 @@ static void collect_video(AttractStats *stats, const uint8_t *pixels,
   }
 }
 
+/* Device-free flash probe for a verified input recording. Sample the same
+ * source pixels as the SDL presentation guard, before any GPU or Surround
+ * scaling can affect them. Disabled unless explicitly requested. */
+static void trace_race_luminance(const uint8_t *pixels, long frame, int width) {
+  if (!getenv("FZERO_LUMA_TRACE")) return;
+  static unsigned previous_mean;
+  if (g_ram[0x54] != 2 || g_ram[0x55] < 3) {
+    previous_mean = 0;
+    return;
+  }
+  unsigned sum = 0, samples = 0;
+  const uint32_t *words = (const uint32_t *)pixels;
+  for (int y = 224 / 32; y < 224; y += 224 / 16)
+    for (int x = width / 64; x < width; x += width / 32) {
+      uint32_t color = words[(size_t)y * width + x];
+      sum += ((color >> 16) & 255) + ((color >> 8) & 255) + (color & 255);
+      ++samples;
+    }
+  unsigned mean = samples ? sum / (3 * samples) : 0;
+  if (mean >= 180 || (previous_mean && mean > previous_mean + 32))
+    fprintf(stderr, "[fzero-luma] frame=%ld mean=%u previous=%u "
+                    "brightness=%u energy=%u\n", frame, mean, previous_mean,
+            g_snes->ppu->inidisp & 15,
+            (unsigned)g_ram[0xc9] | ((unsigned)g_ram[0xca] << 8));
+  previous_mean = mean;
+}
+
+/* Opt-in offline check for side-only bright frames. This exercises the real
+ * side compositor at the runtime's 512x288 resolution without SDL, Surround,
+ * or a wheel device. A bright frame in both center and sides points upstream
+ * of presentation; a side-only spike is worth investigating separately. */
+static void trace_triple_side_luminance(const uint8_t *center, long frame,
+                                       int center_width,
+                                       const FzeroTripleRig *rig) {
+  if (!getenv("FZERO_TRIPLE_SIDE_LUMA_TRACE")) return;
+  enum { kSideWidth = 512, kSideHeight = 288, kSideArea = kSideWidth * kSideHeight };
+  if (rig->panel_width_px != kSideWidth || rig->panel_height_px != kSideHeight)
+    return;
+  static uint32_t sides[2 * kSideArea];
+  static unsigned previous[3];
+  if (g_ram[0x54] != 2 || g_ram[0x55] < 3 || !g_ram[0x81]) {
+    memset(previous, 0, sizeof(previous));
+    return;
+  }
+  if (!FzeroRendererDrawTripleSides(sides, 2 * kSideArea, rig, center_width))
+    return;
+  const uint32_t *panels[3] = {sides, (const uint32_t *)center,
+                                sides + kSideArea};
+  const int widths[3] = {kSideWidth, center_width, kSideWidth};
+  const int heights[3] = {kSideHeight, 224, kSideHeight};
+  unsigned means[3];
+  for (int panel = 0; panel < 3; ++panel) {
+    unsigned sum = 0, samples = 0;
+    for (int y = heights[panel] / 32; y < heights[panel]; y += heights[panel] / 16)
+      for (int x = widths[panel] / 64; x < widths[panel]; x += widths[panel] / 32) {
+        uint32_t color = panels[panel][(size_t)y * widths[panel] + x];
+        sum += ((color >> 16) & 255) + ((color >> 8) & 255) + (color & 255);
+        ++samples;
+      }
+    means[panel] = samples ? sum / (3 * samples) : 0;
+  }
+  if (means[0] >= 180 || means[2] >= 180 ||
+      (previous[0] && means[0] > previous[0] + 32) ||
+      (previous[2] && means[2] > previous[2] + 32))
+    fprintf(stderr, "[fzero-triple-luma] frame=%ld left=%u center=%u right=%u "
+                    "prior=%u,%u,%u\n", frame, means[0], means[1], means[2],
+            previous[0], previous[1], previous[2]);
+  memcpy(previous, means, sizeof(previous));
+}
+
+static struct {
+  unsigned race, rejected, checked, mismatched;
+} triple_atlas_audit;
+
+/* Exercise warm atlas invalidation on every source frame, then compare a
+ * periodic exact reference over both complete side buffers. The snapshots
+ * and ROM stay local; only counts and first mismatching frame are printed. */
+static void audit_triple_atlas(long frame, int center_width,
+                               const FzeroTripleRig *rig) {
+  if (!getenv("FZERO_TRIPLE_ATLAS_AUDIT") ||
+      g_ram[0x54] != 2 || g_ram[0x55] < 3 || !g_ram[0x81]) return;
+  enum { kSideArea = 512 * 288 };
+  static uint32_t cached[2 * kSideArea], direct[2 * kSideArea];
+  ++triple_atlas_audit.race;
+  if (!FzeroRendererDrawTripleSides(cached, 2 * kSideArea, rig, center_width)) {
+    if (++triple_atlas_audit.rejected <= 12)
+      fprintf(stderr, "[fzero-triple-atlas-audit] rejected frame=%ld\n", frame);
+    return;
+  }
+  if (frame % 60) return;
+  if (!FzeroRendererDrawTripleSidesDirectSky(direct, 2 * kSideArea,
+                                               rig, center_width)) {
+    if (++triple_atlas_audit.rejected <= 12)
+      fprintf(stderr, "[fzero-triple-atlas-audit] direct rejected frame=%ld\n", frame);
+    return;
+  }
+  ++triple_atlas_audit.checked;
+  if (memcmp(cached, direct, sizeof(cached))) {
+    if (++triple_atlas_audit.mismatched <= 12)
+      fprintf(stderr, "[fzero-triple-atlas-audit] mismatch frame=%ld\n", frame);
+  }
+}
+
 static void collect_audio(AttractStats *stats, const int16_t *audio,
                           int frames) {
   int active = 0;
@@ -299,12 +414,14 @@ int main(int argc, char **argv) {
     free(rom);
     return 2;
   }
+  sha256_compute(rom, rom_size, rom_hash); /* identify the effective cartridge */
   RtlRegisterGame(FzeroGameInfo());
   if (!SnesInit(rom, (int)rom_size)) {
     fputs("failed to initialize the F-Zero cartridge\n", stderr);
     free(rom);
     return 3;
   }
+  if (getenv("FZERO_APU_TRACE")) RtlAddApuPortObserver(apu_trace_write);
   const char *save_root = getenv("SNESRECOMP_SAVE_ROOT");
   if (save_root && save_root[0]) RtlSetSaveRoot(save_root);
   if (!FzeroDeluxeSelectSaveRoot()) {
@@ -318,6 +435,44 @@ int main(int argc, char **argv) {
     return 3;
   }
   RtlReadSram();
+  FzeroPlaythrough playthrough = {0};
+  const char *record_path = getenv("FZERO_RECORD_PLAYTHROUGH");
+  const char *replay_path = getenv("FZERO_REPLAY_PLAYTHROUGH");
+  if (record_path && *record_path && replay_path && *replay_path) {
+    fputs("record and replay cannot be combined\n", stderr);
+    free(rom); return 2;
+  }
+  const char *case_path = replay_path && *replay_path ? replay_path : record_path;
+  if (case_path && *case_path) {
+    char state_path[2048];
+    if (!FzeroPlaythroughStatePath(case_path, state_path, sizeof(state_path))) {
+      fputs("playthrough path is too long\n", stderr);
+      free(rom); return 2;
+    }
+    if (replay_path && *replay_path) {
+      if (getenv("FZERO_STATE_LOAD") || getenv("FZERO_LIFECYCLE_TEST") ||
+          getenv("SNESRECOMP_INPUT_SCRIPT") ||
+          !FzeroPlaythroughPlaybackOpen(&playthrough, case_path, rom_hash) ||
+          !FzeroStateFileAcceptable(state_path) || !RtlLoadSnapshot(state_path)) {
+        fputs("playthrough identity/state invalid; replay refused\n", stderr);
+        FzeroPlaythroughAbort(&playthrough);
+        free(rom); return 3;
+      }
+      frame_limit = (long)playthrough.total;
+      fprintf(stderr, "[fzero-playthrough] replaying %ld verified frames\n", frame_limit);
+    } else {
+      FILE *existing = fopen(state_path, "rb");
+      if (existing) fclose(existing);
+      if (existing || getenv("FZERO_LIFECYCLE_TEST") ||
+          getenv("FZERO_STATE_LOAD") ||
+          !FzeroPlaythroughRecordOpen(&playthrough, case_path, rom_hash) ||
+          !RtlSaveSnapshot(state_path)) {
+        fputs("unable to create fresh playthrough input/state files\n", stderr);
+        FzeroPlaythroughAbort(&playthrough);
+        free(rom); return 3;
+      }
+    }
+  }
   /* Reproduce a reported transition from a private, mode-checked snapshot. */
   const char *initial_state = getenv("FZERO_STATE_LOAD");
   if (initial_state && *initial_state) {
@@ -355,6 +510,22 @@ int main(int argc, char **argv) {
   FzeroBeginDrawing(pixels, (size_t)frame_width * 4u);
 
   AttractStats stats = {0};
+  FzeroFfbState ffb_model = {0};
+  const char *ffb_trace = getenv("FZERO_FFB_MODEL_TRACE");
+  const char *ffb_raw_path = getenv("FZERO_FFB_OBSERVATION_RAW");
+  FILE *ffb_raw = NULL;
+  int ffb_strength = 12;
+  if ((ffb_trace || (ffb_raw_path && *ffb_raw_path)) && getenv("FZERO_FFB_MODEL_STRENGTH"))
+    ffb_strength = atoi(getenv("FZERO_FFB_MODEL_STRENGTH"));
+  if (ffb_raw_path && *ffb_raw_path) {
+    if (playthrough.mode != 2 || ffb_strength < 0 || ffb_strength > 100 ||
+        !(ffb_raw = fopen(ffb_raw_path, "wbx")) ||
+        fprintf(ffb_raw, "FZFFB1\t%d\n", ffb_strength) < 0) {
+      fputs("device-free force observation requires valid playback and a new output path\n", stderr);
+      if (ffb_raw) fclose(ffb_raw);
+      FzeroPlaythroughAbort(&playthrough); free(rom); return 4;
+    }
+  }
   WavWriter wav;
   if (!wav_open(&wav, getenv("SNESRECOMP_WAV"))) {
     fputs("unable to open WAV capture\n", stderr);
@@ -366,8 +537,19 @@ int main(int argc, char **argv) {
   const char *lifecycle = getenv("FZERO_LIFECYCLE_TEST");
   static uint8_t replay_expected[0x20000];
   uint64_t replay_master = 0;
+  const char *triple_trace = getenv("FZERO_TRIPLE_CAMERA_TRACE");
+  bool triple_audit = triple_trace && triple_trace[0] == '1';
+  unsigned triple_race = 0, triple_accepted = 0, triple_rejected = 0;
+  unsigned triple_side_anchors = 0, triple_with_reservation = 0;
+  unsigned triple_with_pixels = 0;
+  unsigned triple_missing_oam = 0;
+  unsigned triple_pixels_in_center = 0, triple_pixels_outside_center = 0;
+  unsigned triple_pixels_min = UINT32_MAX, triple_pixels_max = 0;
+  const FzeroTripleRig audit_rig = {708.4166, 398.4843, 660,
+                                    0, 70, 70, 8, 512, 288};
 
   for (long frame = 0; frame < frame_limit; frame++) {
+    s_apu_trace_frame = frame;
     if (lifecycle && frame == 1500) {
       RtlEnsureSaveDir();
       char path[1024]; RtlSaveSlotPath(11, path, sizeof(path));
@@ -412,7 +594,67 @@ int main(int argc, char **argv) {
       FzeroBeginDrawing(pixels, (size_t)frame_width * 4u);
       fprintf(stderr, "[fzero-viewport] frame=%ld width=%d\n", frame, frame_width);
     }
-    (void)RtlRunFrame(scripted_input(input_spans, input_span_count, frame));
+    uint32_t frame_input = scripted_input(input_spans, input_span_count, frame);
+    if (playthrough.mode == 2 &&
+        !FzeroPlaythroughNextInput(&playthrough, &frame_input)) {
+      fprintf(stderr, "[fzero-playthrough] missing input at frame %ld\n", frame);
+      FzeroPlaythroughAbort(&playthrough); free(rom); return 9;
+    }
+    (void)RtlRunFrame(frame_input);
+    if ((playthrough.mode == 1 &&
+         !FzeroPlaythroughRecordFrame(&playthrough, frame_input, g_ram,
+                                     sizeof(g_ram))) ||
+        (playthrough.mode == 2 &&
+         !FzeroPlaythroughVerifyFrame(&playthrough, g_ram, sizeof(g_ram)))) {
+      fprintf(stderr, "[fzero-playthrough] input/state divergence at frame %ld\n", frame);
+      FzeroPlaythroughAbort(&playthrough); free(rom); return 9;
+    }
+    if (ffb_trace || ffb_raw) {
+      FzeroFfbOutput force = {0};
+      FzeroFfbCompute(&ffb_model, g_ram, sizeof(g_ram), frame_input,
+                     ffb_strength, &force);
+      if (ffb_raw && fprintf(ffb_raw, "%ld\t%llu\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
+                             frame, (unsigned long long)g_cpu.master_cycles,
+                             force.racing, force.constant_force,
+                             force.spring_coefficient, force.damper_coefficient,
+                             force.road_magnitude, force.road_frequency_millihz,
+                             force.collision_pulse) < 0) {
+        fputs("force observation write failed\n", stderr);
+        fclose(ffb_raw); FzeroPlaythroughAbort(&playthrough); free(rom); return 9;
+      }
+      if (ffb_trace && (force.collision_pulse || (force.racing && frame % 120 == 0)))
+        fprintf(stderr, "[fzero-ffb-model] frame=%ld racing=%d spring=%d "
+                        "damper=%d road=%d collision=%d\n", frame,
+                force.racing, force.spring_coefficient,
+                force.damper_coefficient, force.road_magnitude,
+                force.collision_pulse);
+    }
+    if (getenv("FZERO_FFB_RAM_TRACE") && g_ram[0x54] == 2 && g_ram[0x55] >= 3) {
+      static uint16_t previous_energy = 0xffff;
+      static uint32_t previous_flags = UINT32_MAX;
+      uint16_t energy = (uint16_t)(g_ram[0xc9] | (g_ram[0xca] << 8));
+      uint32_t flags = (uint32_t)g_ram[0xe0] | ((uint32_t)g_ram[0xe8] << 8) |
+                       ((uint32_t)g_ram[0xe9] << 16) | ((uint32_t)g_ram[0xf5] << 24);
+      if (flags != previous_flags ||
+          (previous_energy != 0xffff && previous_energy > energy + 8) ||
+          frame % 120 == 0)
+        fprintf(stderr, "[fzero-ffb-ram] frame=%ld input=%03x energy=%u prev=%u "
+                        "flags=%08x rough=%02x speed=%02x\n", frame,
+                frame_input, energy,
+                previous_energy, flags, g_ram[0xc7], g_ram[0xbd]);
+      previous_energy = energy;
+      previous_flags = flags;
+    }
+    /* Raw contact/position evidence for distinguishing surface effects from
+     * crashes or visual-only flags. Opt-in because it emits every race frame. */
+    if (getenv("FZERO_SURFACE_TRACE") && g_ram[0x54] == 2 && g_ram[0x55] >= 3)
+      fprintf(stderr, "[fzero-surface] frame=%ld x=%u y=%u c7=%02x energy=%u input=%08x\n",
+              frame,
+              (unsigned)((g_ram[0x0b70] | ((unsigned)g_ram[0x0b71] << 8)) & 0x1fff),
+              (unsigned)((g_ram[0x0b90] | ((unsigned)g_ram[0x0b91] << 8)) & 0x0fff),
+              g_ram[0xc7],
+              (unsigned)(g_ram[0xc9] | ((unsigned)g_ram[0xca] << 8)),
+              frame_input);
     if (getenv("FZERO_SCENE_TRACE"))
       fprintf(stderr, "scene %ld state=%02x,%02x,%02x training=%02x scenery=%02x sound=%02x,%02x,%02x,%02x,%02x msu=%02x,%02x,%02x,%02x brightness=%02x\n",
               frame, g_ram[0x54], g_ram[0x55], g_ram[0x56], g_ram[0x58], g_ram[0x81],
@@ -433,12 +675,85 @@ int main(int argc, char **argv) {
     stats.logic_hash = next_logic;
 
     FzeroDrawPpuFrame();
+    if (triple_audit && g_ram[0x54] == 2 && g_ram[0x55] >= 3 &&
+        g_ram[0x81]) {
+      FzeroTripleVehicleProbe probes[6];
+      ++triple_race;
+      if (!FzeroRendererProbeTripleVehicles(&audit_rig, frame_width, probes)) {
+        if (++triple_rejected <= 12)
+          fprintf(stderr, "[fzero-triple-camera] rejected frame=%ld\n", frame);
+      } else {
+        ++triple_accepted;
+        for (int car = 1; car < 6; ++car) {
+          const FzeroTripleVehicleProbe *probe = &probes[car];
+          if ((probe->state & 0x88) != 0x88) continue;
+          for (int side = 0; side < 3; side += 2) {
+            double x = probe->panel_x[side], y = probe->panel_y[side];
+            if (!probe->projected[side] || x < 0 || x >= audit_rig.panel_width_px ||
+                y < 0 || y >= audit_rig.panel_height_px) continue;
+            ++triple_side_anchors;
+            if (probe->oam_slots) {
+              if (probe->raster_sprite_pixels) {
+                int extra = (frame_width - 256) / 2;
+                bool center_overlap = probe->raster_left <= 255 + extra &&
+                    probe->raster_right >= -extra;
+                if (center_overlap)
+                  ++triple_pixels_in_center;
+                else
+                  ++triple_pixels_outside_center;
+                if (probe->raster_sprite_pixels < triple_pixels_min)
+                  triple_pixels_min = probe->raster_sprite_pixels;
+                if (probe->raster_sprite_pixels > triple_pixels_max)
+                  triple_pixels_max = probe->raster_sprite_pixels;
+                if (center_overlap || probe->raster_sprite_pixels >= 100)
+                  fprintf(stderr, "[fzero-triple-camera] art_exception frame=%ld "
+                                  "car=%d state=%02x side=%d x=%.1f y=%.1f "
+                                  "guest=%d,%d pixels=%u raster=%d,%d..%d,%d "
+                                  "center_overlap=%d\n",
+                          frame, car, probe->state, side, x, y,
+                          probe->guest_x, probe->guest_y,
+                          probe->raster_sprite_pixels,
+                          probe->raster_left, probe->raster_top,
+                          probe->raster_right, probe->raster_bottom,
+                          center_overlap);
+                if (++triple_with_pixels <= 12)
+                  fprintf(stderr, "[fzero-triple-camera] side_pixels frame=%ld "
+                                  "car=%d state=%02x side=%d pixels=%u "
+                                  "raster=%d,%d..%d,%d\n",
+                          frame, car, probe->state, side,
+                          probe->raster_sprite_pixels,
+                          probe->raster_left, probe->raster_top,
+                          probe->raster_right, probe->raster_bottom);
+              }
+              if (++triple_with_reservation <= 12)
+                fprintf(stderr, "[fzero-triple-camera] side_reservation frame=%ld "
+                                "car=%d state=%02x side=%d x=%.1f y=%.1f "
+                                "guest=%d,%d slots=%u raster_pixels=%u\n",
+                        frame, car, probe->state, side, x, y,
+                        probe->guest_x, probe->guest_y, probe->oam_slots,
+                        probe->raster_sprite_pixels);
+            } else {
+              if (++triple_missing_oam <= 12)
+                fprintf(stderr, "[fzero-triple-camera] missing_oam frame=%ld "
+                                "car=%d state=%02x side=%d x=%.1f y=%.1f\n",
+                        frame, car, probe->state, side, x, y);
+            }
+          }
+        }
+      }
+    }
+    trace_race_luminance(pixels, frame, frame_width);
+    trace_triple_side_luminance(pixels, frame, frame_width, &audit_rig);
+    audit_triple_atlas(frame, frame_width, &audit_rig);
     collect_video(&stats, pixels, frame, frame_width);
 
     audio_accumulator += 32040.0 / 60.098811862;
     int audio_frames = (int)audio_accumulator;
     audio_accumulator -= audio_frames;
     memset(audio, 0, sizeof(audio));
+    /* Diagnostic stem: preserve the patched game's SPC output while muting
+     * only the MSU mix. The guest resets this register on its next command. */
+    if (getenv("FZERO_TEST_MUTE_MSU")) msu1_write(0x2006, 0);
     RtlRenderAudio(audio, audio_frames, 2);
     collect_audio(&stats, audio, audio_frames);
     if (!wav_append(&wav, audio, audio_frames)) {
@@ -449,7 +764,8 @@ int main(int argc, char **argv) {
     }
   }
 
-  int output_ok = wav_close(&wav) &&
+  int playthrough_ok = playthrough.mode == 0 || FzeroPlaythroughClose(&playthrough);
+  int output_ok = playthrough_ok && wav_close(&wav) &&
                   write_ppm(getenv("SNESRECOMP_FRAME_DUMP"), pixels,
                             frame_width) &&
                   write_wram_dump(getenv("SNESRECOMP_WRAM_DUMP"));
@@ -466,12 +782,35 @@ int main(int argc, char **argv) {
        stats.audio_active_frames >= (uint64_t)(frame_limit / 10) &&
        stats.audio_peak > 0 && audio_samples > 0);
 
+  if (ffb_raw) {
+    if (qualified && output_ok && fprintf(ffb_raw, "complete\t%ld\n", frame_limit) < 0)
+      output_ok = 0;
+    if (fclose(ffb_raw)) output_ok = 0;
+  }
+  if (triple_audit)
+    fprintf(stderr, "[fzero-triple-camera] race=%u accepted=%u rejected=%u "
+                    "side_anchors=%u with_reservation=%u with_pixels=%u "
+                    "missing_oam=%u center_overlap=%u outside_center=%u "
+                    "pixel_range=%u..%u\n",
+            triple_race, triple_accepted, triple_rejected,
+            triple_side_anchors, triple_with_reservation,
+            triple_with_pixels, triple_missing_oam,
+            triple_pixels_in_center, triple_pixels_outside_center,
+            triple_with_pixels ? triple_pixels_min : 0, triple_pixels_max);
+  if (getenv("FZERO_TRIPLE_ATLAS_AUDIT"))
+    fprintf(stderr, "[fzero-triple-atlas-audit] race=%u rejected=%u "
+                    "checked=%u mismatched=%u\n", triple_atlas_audit.race,
+            triple_atlas_audit.rejected, triple_atlas_audit.checked,
+            triple_atlas_audit.mismatched);
+  int atlas_ok = !getenv("FZERO_TRIPLE_ATLAS_AUDIT") ||
+                 (triple_atlas_audit.checked && !triple_atlas_audit.mismatched);
+
   fprintf(stderr,
           "fzero_native: %s frames=%ld resume=%06x master=%llu "
           "logic_changes=%llu video_active=%llu video_changes=%llu "
           "audio_samples=%u audio_active=%llu audio_peak=%u "
           "audio_underruns=%llu\n",
-          qualified && output_ok ? "PASS" : "FAIL", frame_limit,
+          qualified && output_ok && atlas_ok ? "PASS" : "FAIL", frame_limit,
           (unsigned)FzeroResumePc(), (unsigned long long)g_cpu.master_cycles,
           (unsigned long long)stats.logic_changes,
           (unsigned long long)stats.video_active_frames,
@@ -479,5 +818,5 @@ int main(int argc, char **argv) {
           (unsigned long long)stats.audio_active_frames, stats.audio_peak,
           (unsigned long long)stats.audio_underruns);
   free(rom);
-  return qualified && output_ok ? 0 : 8;
+  return qualified && output_ok && atlas_ok ? 0 : 8;
 }

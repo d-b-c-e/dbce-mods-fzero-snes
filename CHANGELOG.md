@@ -1,5 +1,56 @@
 ﻿# Changelog
 
+## 1.8.3 - 2026-09-21
+
+- Add a default-off Diagnostics mod for troubleshooting performance. Enable
+  it under Mods, reproduce a slowdown, and attach the newest timestamped
+  report from the diagnostics folder beside the game or AppImage.
+- Reports include hardware and build information, effective HD Mode 7 and
+  display settings, and timings for rendering, uploads, presentation and
+  frame pacing. Logs stay local and contain no ROM or save data.
+- This patch adds diagnostic reporting; it does not claim to fix the
+  reported HD Mode 7 performance regression.
+
+## 1.8.2 - 2026-09-21
+
+- Save and honor Skip Launcher. `--launcher` reopens it even with the setting
+  enabled; a missing or invalid remembered ROM also falls back to the launcher.
+- Allow whole-number HD Mode 7 resolution multipliers from 2x through 10x.
+  Keep 2x as the default and show a severe-slowdown warning above 4x. Graphics
+  backends that cannot create the requested texture fall back for that session.
+
+## 1.8.1 - 2026-09-21
+
+- Keep vehicle explosions and smoke together in Widescreen. Their first
+  four sprite pieces reuse rank-display slots; only actual rank digits now
+  follow the HUD anchor. Works with native and HD Mode 7 rendering.
+
+- Reduce HD Mode 7 CPU cost with Widescreen by sharing native/HD composition,
+  caching scanline color math and repeated texture lookups, and using integer
+  wrapping for ordinary texture coordinates. Rendering remains pixel-identical
+  in baseline comparisons; ultrawide views and high Presentation FPS still
+  increase the workload. See [performance measurements](docs/HD_MODE7_PERFORMANCE.md).
+
+## 1.8.0 - 2026-09-20
+
+- Add optional HD Mode 7 track rendering at 2x or 4x resolution. Enable it
+  under Mods > HD Mode 7; it starts off and works independently of
+  Widescreen and Presentation FPS.
+- Resample track tiles with finer affine coordinates and interpolate
+  compatible camera scanlines. Cars, HUD and menus keep their pixel artwork,
+  and game timing and save-state thumbnails retain native behavior.
+- Include shared snesrecomp HD Mode 7 support and documentation. Both SDL
+  and OpenGL/shader presentation use the larger texture. 4x costs more CPU
+  time, especially with wide aspect ratios or high presentation FPS.
+
+## 1.7.1 - 2026-09-20
+
+- Remember ROMs selected with Browse For ROM after both Play and closing the
+  launcher (#8). The shared recomp-ui launcher now saves the verified source
+  ROM path; cancelling or selecting an invalid file preserves the last valid
+  selection. Includes regression coverage for actual file selection and
+  relaunch, rather than relying on a pre-created ROM cache.
+
 ## 1.7.0 - 2026-09-20
 
 - Keep the live game-over HUD anchored, including the timer and power fill.

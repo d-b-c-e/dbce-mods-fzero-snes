@@ -430,6 +430,311 @@ static void test_player_spark(void) {
   }
 }
 
+static void test_explosion_slots(void) {
+  static uint32_t hd[FZERO_MAX_WIDTH * 224 * 16];
+  /* Rank -> expanding explosion -> smoke -> rank, without resetting the
+   * renderer. Include flipped pieces and the first non-rank reservation. */
+  static const unsigned tiles[] = {0x180, 0x189, 0x190, 0x199,
+                                   0x120, 0x126, 0x128, 0x140, 0x142, 0x181};
+  for (int aspect = FZERO_ASPECT_STOCK; aspect <= FZERO_ASPECT_FIT; ++aspect) {
+    setup();
+    p.screenEnabled[0] = 16;
+    memset(p.vram, 0, sizeof(p.vram));
+    p.cgram[177] = 0x03e0; /* effect palette */
+    p.cgram[129] = 0x001f; /* rank palette */
+    ram[0x50] = 1; ram[0x55] = 3;
+    FzeroVideoSettings s; FzeroVideoStock(&s);
+    s.enhanced = true; s.aspect = (FzeroAspect)aspect;
+    FzeroViewport v = FzeroCalculateViewport(&s, 5120, 1440);
+    for (unsigned phase = 0; phase < sizeof(tiles) / sizeof(*tiles); ++phase) {
+      unsigned tile = tiles[phase];
+      bool rank = phase < 4 || phase == 9;
+      for (int y = 0; y < 8; ++y) p.vram[0x1000 + (tile & 255) * 16 + y] = 255;
+      for (int slot = 48; slot <= 52; ++slot) {
+        p.oam[slot * 2] = (100 << 8) | (80 + (slot - 48) * 8);
+        p.oam[slot * 2 + 1] = tile | (rank ? 0x3000 : 0x3600) | ((slot & 3) << 14);
+        p.highOam[slot / 4] &= ~(3u << ((slot % 4) * 2));
+      }
+      publish(phase + 1);
+      for (unsigned scale = 1; scale <= 4; scale *= 2) {
+        for (int blend = 1; blend <= 2; ++blend) {
+          CHECK(scale == 1 ? FzeroRendererDraw(hd, v, blend * 0.5) :
+              FzeroRendererDrawHd(hd, sizeof(hd) / sizeof(*hd), v, blend * 0.5, scale));
+          /* Check the entire row: no piece can be detached, duplicated or
+           * lost, and genuine rank digits must still follow the left edge. */
+          for (int x = 0; x < v.width; ++x) {
+            int first = 80 + (rank ? 0 : v.extra);
+            int last = 112 + v.extra;
+            bool ink = (x >= first && x < first + 32) || (x >= last && x < last + 8);
+            unsigned expected = ink ? (rank ? 0xff0000 : 0x00ff00) : 0;
+            for (unsigned sub = 0; sub < scale; ++sub)
+              CHECK(hd[100 * scale * v.width * scale + x * scale + sub] == expected);
+          }
+        }
+      }
+    }
+  }
+}
+
+static void test_hd_mode7(void) {
+  static uint32_t hd[FZERO_MAX_WIDTH * 224 * FZERO_HD_SCALE_MAX * FZERO_HD_SCALE_MAX + 2];
+  setup();
+  FzeroVideoSettings settings; FzeroVideoStock(&settings);
+  FzeroViewport v = FzeroCalculateViewport(&settings, 800, 600);
+  memset(p.vram, 0, sizeof(p.vram));
+  for (unsigned i = 0; i < 0x4000; ++i) p.vram[i] = 1;
+  for (unsigned i = 0; i < 64; ++i) p.vram[64 + i] |= (i + 1) << 8;
+  for (unsigned i = 0; i < 256; ++i) p.cgram[i] = (uint16_t)i;
+  p.m7matrix[0] = p.m7matrix[3] = 512;
+  publish(1);
+  CHECK(FzeroRendererHasFrame());
+  CHECK(FzeroRendererDraw(guarded + 1, v, 1));
+  for (unsigned scale = 2; scale <= FZERO_HD_SCALE_MAX; ++scale) {
+    size_t count = (size_t)v.width * 224 * scale * scale;
+    hd[0] = hd[count + 1] = 0xdeadbeef;
+    CHECK(!FzeroRendererDrawHd(hd + 1, count - 1, v, 1, scale));
+    CHECK(FzeroRendererDrawHd(hd + 1, count, v, 1, scale));
+    CHECK(hd[0] == 0xdeadbeef && hd[count + 1] == 0xdeadbeef);
+    CHECK(hd[1] == palette_rgb(p.cgram[17]));
+    CHECK(hd[1 + (scale + 1) / 2] == palette_rgb(p.cgram[18]));
+    CHECK(hd[1 + v.width * scale * ((scale + 1) / 2)] == palette_rgb(p.cgram[25]));
+    /* Higher resolution cannot alter the native render or published source. */
+    CHECK(FzeroRendererDraw(hd + 1, v, 1));
+    CHECK(!memcmp(hd + 1, guarded + 1, (size_t)v.width * 224 * sizeof(*hd)));
+  }
+  const unsigned invalid_scales[] = {0, 1, 11, UINT32_MAX};
+  for (unsigned i = 0; i < countof(invalid_scales); ++i) {
+    hd[1] = 0xdeadbeef;
+    CHECK(!FzeroRendererDrawHd(hd + 1, countof(hd) - 2, v, 1, invalid_scales[i]));
+    CHECK(hd[1] == 0xdeadbeef);
+  }
+  /* An HDMA jump to another origin must not be smoothed across the split. */
+  FzeroRendererBeginFrame(ram, 2);
+  for (unsigned y = 1; y <= 224; ++y) {
+    p.m7matrix[6] = y < 100 ? 0 : 1;
+    FzeroRendererCaptureLine(&p, y);
+  }
+  FzeroRendererEndFrame(&p, stock);
+  CHECK(FzeroRendererDrawHd(hd + 1, countof(hd) - 2, v, 1, 2));
+  CHECK(hd[1 + 197 * 512] == palette_rgb(p.cgram[57]));
+  /* Geometry follows neighbouring scanlines instead of reusing one line's
+   * matrix for a whole block: 2 -> 4 horizontal texels across this band. */
+  FzeroRendererBeginFrame(ram, 3);
+  p.m7matrix[6] = 0;
+  for (unsigned y = 1; y <= 224; ++y) {
+    p.m7matrix[0] = y == 1 ? 512 : 1024;
+    FzeroRendererCaptureLine(&p, y);
+  }
+  FzeroRendererEndFrame(&p, stock);
+  CHECK(FzeroRendererDrawHd(hd + 1, countof(hd) - 2, v, 1, 2));
+  CHECK(hd[1 + 512 + 2] == palette_rgb(p.cgram[28]));
+  /* Temporal interpolation remains independent of spatial resolution. */
+  p.m7matrix[0] = 512; p.m7matrix[6] = 0;
+  FzeroRendererReset(); publish(10);
+  p.m7matrix[6] = 1; publish(11);
+  CHECK(FzeroRendererDrawHd(hd + 1, countof(hd) - 2, v, 0.5, 2));
+  CHECK(hd[1] == palette_rgb(p.cgram[18]));
+  CHECK(FzeroRendererDrawHd(hd + 1, countof(hd) - 2, v, 1, 2));
+  CHECK(hd[1] == palette_rgb(p.cgram[19]));
+  /* Flat screens retain every original pixel, including centered menus. */
+  ram[0x81] = 0; publish(4);
+  CHECK(FzeroRendererDrawHd(hd + 1, countof(hd) - 2, v, 1, 4));
+  for (size_t i = 0; i < 256 * 224 * 16; ++i) CHECK(hd[1 + i] == 0x123456);
+  FzeroRendererReset();
+  CHECK(!FzeroRendererHasFrame());
+  CHECK(!FzeroRendererDrawHd(hd + 1, countof(hd) - 2, v, 1, 2));
+}
+
+static void test_hd_composition_cache(void) {
+  static uint32_t native[FZERO_MAX_WIDTH * 224 + 2];
+  static uint32_t hd[FZERO_MAX_WIDTH * 224 * 16 + 2];
+  static uint32_t hd_only[FZERO_MAX_WIDTH * 224 * 16];
+  FzeroViewport v = {342, 43, 16.0 / 9.0, true};
+  size_t count = (size_t)v.width * 224;
+  for (unsigned scenario = 0; scenario < 64; ++scenario) {
+    setup();
+    ram[0x55] = 3;
+    for (unsigned i = 0; i < 0x8000; ++i) p.vram[i] = (i & 63) << 8;
+    for (unsigned i = 0; i < 256; ++i) p.cgram[i] = (i * 619 + 37) & 0x7fff;
+    p.inidisp = scenario % 16;
+    p.m7sel = (scenario & 3) | ((scenario & 16) ? 0x80 : 0) |
+        ((scenario & 32) ? 0x40 : 0);
+    p.screenEnabled[0] = (scenario & 1 ? 1 : 0) | (scenario & 2 ? 16 : 0);
+    p.screenEnabled[1] = (scenario & 4 ? 1 : 0) | (scenario & 8 ? 16 : 0);
+    p.screenWindowed[0] = scenario * 13;
+    p.screenWindowed[1] = scenario * 23;
+    p.windowsel = scenario * 0x194ad;
+    p.wbgobjlog = scenario * 751;
+    p.window1left = 60; p.window1right = 173;
+    p.window2left = 99; p.window2right = 255;
+    p.cgadsub = scenario * 37;
+    p.cgwsel = (scenario * 14) & 0xfe;
+    p.fixedColor = (scenario * 1739) & 0x7fff;
+    p.oam[0] = (80 << 8) | 100;
+    p.oam[1] = 64 | ((scenario & 3) << 12) | 0xe00;
+    p.highOam[0] &= ~3;
+    publish(scenario + 1);
+    CHECK(FzeroRendererDraw(guarded + 1, v, 1));
+    for (unsigned scale = 2; scale <= 4; scale *= 2) {
+      size_t hd_count = count * scale * scale;
+      native[0] = native[count + 1] = hd[0] = hd[hd_count + 1] = 0xdeadbeef;
+      native[1] = hd[1] = 0xdeadbeef;
+      CHECK(!FzeroRendererDrawPresentation(native + 1, hd + 1, hd_count - 1, v, 1, scale));
+      CHECK(native[1] == 0xdeadbeef && hd[1] == 0xdeadbeef);
+      CHECK(FzeroRendererDrawPresentation(native + 1, hd + 1, hd_count, v, 1, scale));
+      CHECK(native[0] == 0xdeadbeef && native[count + 1] == 0xdeadbeef);
+      CHECK(hd[0] == 0xdeadbeef && hd[hd_count + 1] == 0xdeadbeef);
+      CHECK(!memcmp(native + 1, guarded + 1, count * sizeof(*native)));
+      /* With integral transforms, each HD pixel's first subpixel lands on
+       * the exact native texel. The native compositor is the independent
+       * oracle for windows, OBJ priority, transparency and colour math. */
+      for (int y = 0; y < 224; ++y) for (int x = 0; x < v.width; ++x)
+        CHECK(hd[1 + ((size_t)y * scale * v.width + x) * scale] == native[1 + y * v.width + x]);
+      CHECK(FzeroRendererDrawHd(hd_only, hd_count, v, 1, scale));
+      CHECK(!memcmp(hd + 1, hd_only, hd_count * sizeof(*hd)));
+    }
+  }
+  setup(); p.inidisp = 128; publish(70);
+  CHECK(FzeroRendererDrawPresentation(native + 1, hd + 1, count * 4, v, 1, 2));
+  for (size_t i = 0; i < count; ++i) CHECK(native[1 + i] == 0);
+  for (size_t i = 0; i < count * 4; ++i) CHECK(hd[1 + i] == 0);
+}
+
+static void test_triple_fallback(void) {
+  FzeroTripleRig rig = {708.4166, 398.4843, 660, 0, 70, 70, 8, 16, 9};
+  uint32_t sides[2 * 16 * 9 + 2];
+  for (size_t i = 0; i < sizeof(sides) / sizeof(*sides); ++i)
+    sides[i] = 0xdeadbeef;
+  setup();
+  publish(100);
+  FzeroTripleVehicleProbe probes[6];
+  CHECK(!FzeroRendererProbeTripleVehicles(&rig, 342, probes));
+  CHECK(!FzeroRendererDrawTripleSides(sides + 1, 2 * 16 * 9 - 1, &rig, 342));
+  CHECK(!FzeroRendererDrawTripleSides(sides + 1, 2 * 16 * 9, &rig, 342));
+  CHECK(sides[0] == 0xdeadbeef && sides[2 * 16 * 9 + 1] == 0xdeadbeef);
+  for (size_t i = 1; i <= 2 * 16 * 9; ++i) CHECK(sides[i] == 0xdeadbeef);
+}
+
+static void publish_triple_sky(unsigned frame, unsigned sky_color) {
+  FzeroRendererBeginFrame(ram, frame);
+  for (int line = 1; line <= 224; ++line) {
+    p.bgmode = line <= 47 ? 1 : 7;
+    p.screenEnabled[0] = 1;
+    if (line <= 47) {
+      p.bgXsc[0] = 0x79;
+      p.hScroll[0] = frame == 102 ? 7 : 0;
+      p.vScroll[0] = 36;
+      p.m7matrix[0] = frame & 1; /* Unused in Mode 1, changes between frames. */
+      p.cgram[1] = sky_color;
+    } else {
+      int magnitude = 352 - (line - 81) * 242 / 100;
+      p.m7matrix[0] = p.m7matrix[3] = 0;
+      p.m7matrix[1] = -magnitude;
+      p.m7matrix[2] = magnitude;
+      p.m7matrix[4] = 264; p.m7matrix[5] = 344;
+      p.m7matrix[6] = 136; p.m7matrix[7] = 168;
+      p.cgram[1] = 0x03e0;
+    }
+    FzeroRendererCaptureLine(&p, (unsigned)line);
+  }
+  FzeroRendererEndFrame(&p, stock);
+}
+
+static void test_triple_sky_horizon(void) {
+  /* ROM-free race-shaped frame: red Mode 1 panorama above the IRQ split,
+   * green Mode 7 below. A turned side ray remains above the ground plane well
+   * after the stock split; it must show sky there, not a black triangle. */
+  setup();
+  memset(p.vram, 0, sizeof(p.vram));
+  for (int i = 0x7800; i < 0x8000; ++i) p.vram[i] = 1;
+  for (int y = 0; y < 8; ++y) p.vram[16 + y] = 255;
+  ram[0x55] = 2; /* Live countdown track precedes the racing substate. */
+  publish_triple_sky(100, 31);
+  enum { width = 64, height = 36, area = width * height };
+  FzeroTripleRig rig = {708.4166, 398.4843, 660, 0, 70, 70, 8, width, height};
+  uint32_t sides[2 * area], cold[2 * area];
+  CHECK(FzeroRendererDrawTripleSides(sides, 2 * area, &rig, 342));
+  ram[0x55] = 3;
+  publish_triple_sky(101, 31);
+  uint64_t version = FzeroRendererTripleSidesVersion();
+  CHECK(FzeroRendererDrawTripleSides(sides, 2 * area, &rig, 342));
+  memcpy(cold, sides, sizeof(sides));
+  unsigned preview_pixels = 99;
+  CHECK(FzeroRendererPreviewTripleVehicles(sides, 2 * area, &rig, 342,
+                                           &preview_pixels));
+  CHECK(preview_pixels == 0);
+  CHECK(!memcmp(sides, cold, sizeof(sides)));
+  CHECK(!FzeroRendererPreviewTripleVehicles(sides, 2 * area - 1, &rig, 342,
+                                            &preview_pixels));
+  CHECK(!memcmp(sides, cold, sizeof(sides)));
+  CHECK(FzeroRendererPreviewTripleVehicleCenter(sides, area, &rig, 342,
+                                                &preview_pixels));
+  CHECK(preview_pixels == 0);
+  CHECK(!memcmp(sides, cold, sizeof(sides)));
+  CHECK(!FzeroRendererPreviewTripleVehicleCenter(sides, area - 1, &rig, 342,
+                                                 &preview_pixels));
+  CHECK(!memcmp(sides, cold, sizeof(sides)));
+  CHECK(FzeroRendererTripleSidesVersion() != version);
+  version = FzeroRendererTripleSidesVersion();
+  CHECK(FzeroRendererDrawTripleSides(sides, 2 * area, &rig, 342));
+  CHECK(FzeroRendererTripleSidesVersion() == version);
+  CHECK(FzeroRendererDrawTripleSides(cold, 2 * area, &rig, 342));
+  CHECK(FzeroRendererTripleSidesVersion() != version);
+  CHECK(!memcmp(sides, cold, sizeof(sides)));
+  CHECK(FzeroRendererDrawTripleSidesDirectSky(cold, 2 * area, &rig, 342));
+  CHECK(!memcmp(sides, cold, sizeof(sides)));
+  CHECK(sides[0] == 0xff0000 && sides[area + width - 1] == 0xff0000);
+  CHECK(sides[12 * width] == 0xff0000);
+  CHECK(sides[area + 12 * width + width - 1] == 0xff0000);
+  /* Add a coloured tile pattern, then scroll it. The atlas must follow the
+   * scrolling panorama instead of retaining panel-column pixels. */
+  for (int i = 0x7800; i < 0x8000; ++i) p.vram[i] = i & 1 ? 2 : 1;
+  for (int y = 0; y < 8; ++y) p.vram[32 + y] = 0xff00;
+  p.cgram[2] = 0x7c00;
+  publish_triple_sky(102, 31);
+  CHECK(FzeroRendererDrawTripleSides(sides, 2 * area, &rig, 342));
+  CHECK(FzeroRendererDrawTripleSidesDirectSky(cold, 2 * area, &rig, 342));
+  CHECK(!memcmp(sides, cold, sizeof(sides)));
+  publish_triple_sky(103, 31);
+  CHECK(FzeroRendererDrawTripleSides(cold, 2 * area, &rig, 342));
+  CHECK(memcmp(sides, cold, sizeof(sides)));
+  CHECK(FzeroRendererDrawTripleSidesDirectSky(sides, 2 * area, &rig, 342));
+  CHECK(!memcmp(sides, cold, sizeof(sides)));
+  /* A warm-atlas and cold render of the same changed-scroll frame must agree. */
+  FzeroRendererReset();
+  publish_triple_sky(103, 31);
+  memcpy(sides, cold, sizeof(sides));
+  CHECK(FzeroRendererDrawTripleSides(cold, 2 * area, &rig, 342));
+  CHECK(!memcmp(sides, cold, sizeof(sides)));
+  /* Used palette and VRAM changes must both invalidate the skyline cache. */
+  publish_triple_sky(104, 0x7c00);
+  CHECK(FzeroRendererDrawTripleSides(sides, 2 * area, &rig, 342));
+  CHECK(FzeroRendererDrawTripleSidesDirectSky(cold, 2 * area, &rig, 342));
+  CHECK(!memcmp(sides, cold, sizeof(sides)));
+  for (int y = 0; y < 8; ++y) p.vram[16 + y] = p.vram[32 + y] = 0;
+  publish_triple_sky(105, 0x7c00);
+  CHECK(FzeroRendererDrawTripleSides(sides, 2 * area, &rig, 342));
+  CHECK(FzeroRendererDrawTripleSidesDirectSky(cold, 2 * area, &rig, 342));
+  CHECK(!memcmp(sides, cold, sizeof(sides)));
+  CHECK(sides[0] == 0);
+  /* The diagnostic must distinguish a world anchor from absent guest OAM.
+   * A side compositor cannot simply move artwork that was never emitted. */
+  word(0xb70, 1024); word(0xb90, 344);
+  word(0xb74, 1034); word(0xb94, 384);
+  ram[0xb04] = 0x88;
+  publish_triple_sky(106, 31);
+  FzeroTripleVehicleProbe probes[6];
+  memcpy(before, ram, sizeof(ram));
+  CHECK(FzeroRendererProbeTripleVehicles(&rig, 342, probes));
+  CHECK(!memcmp(before, ram, sizeof(ram)));
+  CHECK(probes[2].state == 0x88 && probes[2].oam_slots == 0 &&
+        probes[2].raster_sprite_pixels == 0);
+  CHECK(probes[2].raster_left == -1 && probes[2].raster_right == -1);
+  CHECK(!probes[2].billboard_valid);
+  CHECK(probes[2].world_x == 1034 && probes[2].world_y == 384);
+  CHECK(probes[2].projected[1]);
+}
+
 int main(void) {
   FzeroVideoSettings s; FzeroVideoStock(&s); /* tests build an explicit viewport, not the shipped defaults */ s.enhanced = true; s.aspect = FZERO_ASPECT_32_9;
   FzeroViewport v = FzeroCalculateViewport(&s, 5120, 1440);
@@ -482,6 +787,11 @@ int main(void) {
   test_results_fade();
   test_course_streaming();
   test_player_spark();
+  test_explosion_slots();
+  test_hd_mode7();
+  test_hd_composition_cache();
+  test_triple_fallback();
+  test_triple_sky_horizon();
   puts("F-Zero renderer: bounds, immutable frames, scene fallback, car identity, signed X, panorama wrap and HUD transitions passed");
   return 0;
 }

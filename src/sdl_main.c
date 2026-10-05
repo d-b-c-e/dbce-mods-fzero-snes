@@ -4,13 +4,20 @@
  */
 
 #include "fzero_runtime.h"
+#include "fzero_renderer.h"
 #include "fzero_mods.h"
 #include "fzero_deluxe.h"
 #include "fzero_hotkeys.h"
 #include "fzero_gamepad.h"
+#include "fzero_telemetry.h"
+#include "fzero_ffb.h"
 #include "fzero_msu.h"
 #include "fzero_replay.h"
+#include "fzero_playthrough.h"
+#include "fzero_triple_display.h"
 #include "fzero_state_mode.h"
+#include "fzero_diagnostics.h"
+#include "fzero_build.h"
 
 #include "common_rtl.h"
 #include "host_paths.h"
@@ -22,6 +29,7 @@
 #include "host_report.h"
 #include "keybinds.h"
 #include "launcher_binds.h" /* launcher_ini_kv_write: surgical config.ini edits */
+#include "launcher_cache.h"
 #include "launcher_profile.h"
 #include "recomp_launcher.h"
 #include "sha256.h"
@@ -77,6 +85,12 @@ static const char *kVideoConfig = "fzero-video.ini";
 static char video_config_path[1024];
 /* config.ini, exe-anchored: the launcher's [KeyMap] and the game's hotkeys. */
 static char g_config_path[1024];
+static FzeroPlaythrough g_playthrough;
+static void abort_playthrough(const char *reason) {
+  if (g_playthrough.mode != 1) return;
+  fprintf(stderr, "[fzero-playthrough] recording invalidated: %s\n", reason);
+  FzeroPlaythroughAbort(&g_playthrough);
+}
 static const char *const kFzeroAspectLabels[] = {
     "4:3",
     "16:9",
@@ -108,6 +122,9 @@ void NORETURN Die(const char *error) {
 
 #define GLSL_CODE(...) #__VA_ARGS__
 
+/* Fixed internal projection resolution; panel geometry uses physical size. */
+enum { kTriplePanelWidth = 512, kTriplePanelHeight = 288 };
+
 typedef struct FzeroGlRenderer {
   SDL_Window *window;
   SDL_GLContext context;
@@ -118,7 +135,9 @@ typedef struct FzeroGlRenderer {
   uint overlay_vbo;
   GlTextureWithSize texture;
   GlTextureWithSize overlay;
+  GlTextureWithSize triple_side[2];
   GlslShader *shader;
+  GlslShader *triple_shader[2];
 } FzeroGlRenderer;
 
 static void fzero_gl_prepare_window(void) {
@@ -224,7 +243,7 @@ static bool fzero_gl_create_passthrough(FzeroGlRenderer *glr) {
 }
 
 static bool fzero_gl_init(FzeroGlRenderer *glr, SDL_Window *window,
-                          const char *shader_path) {
+                          const char *shader_path, bool triple_requested) {
   memset(glr, 0, sizeof(*glr));
   glr->window = window;
   glr->context = SDL_GL_CreateContext(window);
@@ -241,34 +260,27 @@ static bool fzero_gl_init(FzeroGlRenderer *glr, SDL_Window *window,
     glr->shader = GlslShader_CreateFromFile(shader_path);
     if (!glr->shader) {
       fprintf(stderr, "[fzero-gl] Unable to load shader preset: %s; using unfiltered output\n", shader_path);
+    } else if (triple_requested) {
+      for (int side = 0; side < 2; ++side) {
+        glr->triple_shader[side] = GlslShader_CreateFromFile(shader_path);
+        if (!glr->triple_shader[side])
+          fprintf(stderr, "[fzero-gl] Unable to load shader for side %d; that panel will be unfiltered\n", side);
+      }
     }
   }
   return true;
 }
 
-static void fzero_gl_render(FzeroGlRenderer *glr, const uint8_t *pixels,
-                            int logical_width, FzeroViewport viewport,
-                            int drawable_width, int drawable_height) {
-  glActiveTexture(GL_TEXTURE0);
-  glBindTexture(GL_TEXTURE_2D, glr->texture.gl_texture);
-  if (glr->texture.width == logical_width && glr->texture.height == kFrameHeight) {
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, logical_width, kFrameHeight,
-                    GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, pixels);
-  } else {
-    glr->texture.width = (uint16)logical_width;
-    glr->texture.height = (uint16)kFrameHeight;
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, logical_width, kFrameHeight, 0,
-                 GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, pixels);
-  }
-
-  glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-  glClear(GL_COLOR_BUFFER_BIT);
-  FzeroRect rect = FzeroDestination(viewport, drawable_width, drawable_height);
+static void fzero_gl_draw_image(FzeroGlRenderer *glr,
+                                GlTextureWithSize *texture,
+                                GlslShader *shader, FzeroRect rect,
+                                int drawable_height) {
   int viewport_y = drawable_height - rect.y - rect.h;
-  if (glr->shader) {
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, texture->gl_texture);
+  if (shader) {
     glBindVertexArray(glr->vao);
-    GlslShader_Render(glr->shader, &glr->texture, rect.x, viewport_y, rect.w,
-                      rect.h);
+    GlslShader_Render(shader, texture, rect.x, viewport_y, rect.w, rect.h);
     glBindVertexArray(0);
   } else {
     int filter = g_config.linear_filtering ? GL_LINEAR : GL_NEAREST;
@@ -284,6 +296,64 @@ static void fzero_gl_render(FzeroGlRenderer *glr, const uint8_t *pixels,
     glBindVertexArray(0);
     glUseProgram(0);
   }
+}
+
+static void fzero_gl_upload_triple_sides(FzeroGlRenderer *glr,
+                                         const uint32_t *pixels) {
+  const int width = kTriplePanelWidth, height = kTriplePanelHeight;
+  for (int side = 0; side < 2; ++side) {
+    GlTextureWithSize *tex = &glr->triple_side[side];
+    if (!tex->gl_texture) glGenTextures(1, &tex->gl_texture);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, tex->gl_texture);
+    const uint32_t *source = pixels + (size_t)side * width * height;
+    if (tex->width == width && tex->height == height)
+      glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height,
+                      GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, source);
+    else {
+      tex->width = width;
+      tex->height = height;
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+                   GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, source);
+    }
+  }
+}
+
+static void fzero_gl_render(FzeroGlRenderer *glr, const uint8_t *pixels,
+                            int logical_width, int logical_height, FzeroViewport viewport,
+                            int drawable_width, int drawable_height,
+                            bool triple_active, bool triple_ready) {
+  uint64_t diagnostic_start = FzeroDiagnosticsBegin();
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, glr->texture.gl_texture);
+  if (glr->texture.width == logical_width && glr->texture.height == logical_height) {
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, logical_width, logical_height,
+                    GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, pixels);
+  } else {
+    glr->texture.width = (uint16)logical_width;
+    glr->texture.height = (uint16)logical_height;
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, logical_width, logical_height, 0,
+                 GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, pixels);
+  }
+
+  FzeroDiagnosticsEnd(FZERO_DIAG_UPLOAD, diagnostic_start);
+  diagnostic_start = FzeroDiagnosticsBegin();
+  glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT);
+  if (triple_active && triple_ready) {
+    int panel_width = drawable_width / 3;
+    FzeroRect left = {0, 0, panel_width, drawable_height};
+    FzeroRect right = {2 * panel_width, 0, panel_width, drawable_height};
+    fzero_gl_draw_image(glr, &glr->triple_side[0], glr->triple_shader[0],
+                        left, drawable_height);
+    fzero_gl_draw_image(glr, &glr->triple_side[1], glr->triple_shader[1],
+                        right, drawable_height);
+  }
+  FzeroRect rect = FzeroDestination(viewport,
+      triple_active ? drawable_width / 3 : drawable_width, drawable_height);
+  if (triple_active) rect.x += drawable_width / 3;
+  fzero_gl_draw_image(glr, &glr->texture, glr->shader, rect, drawable_height);
+  FzeroDiagnosticsEnd(FZERO_DIAG_DRAW, diagnostic_start);
 }
 
 /* An overlay panel over the GL frame, through the passthrough program rather
@@ -325,7 +395,12 @@ static void fzero_gl_draw_overlay(FzeroGlRenderer *glr, const uint32_t *panel,
 
 static void fzero_gl_destroy(FzeroGlRenderer *glr) {
   if (glr->shader) GlslShader_Destroy(glr->shader);
+  for (int side = 0; side < 2; ++side)
+    if (glr->triple_shader[side]) GlslShader_Destroy(glr->triple_shader[side]);
   if (glr->overlay.gl_texture) glDeleteTextures(1, &glr->overlay.gl_texture);
+  for (int side = 0; side < 2; ++side)
+    if (glr->triple_side[side].gl_texture)
+      glDeleteTextures(1, &glr->triple_side[side].gl_texture);
   glDeleteTextures(1, &glr->texture.gl_texture);
   glDeleteProgram(glr->program);
   glDeleteBuffers(1, &glr->vbo);
@@ -352,7 +427,8 @@ static uint8_t *read_rom(const char *path, size_t *size_out) {
     return NULL;
   }
   long length = ftell(stream);
-  if (length <= 0 || fseek(stream, 0, SEEK_SET) != 0) {
+  if ((length != kFzeroRomSize && length != kFzeroRomSize + 512) ||
+      fseek(stream, 0, SEEK_SET) != 0) {
     fclose(stream);
     return NULL;
   }
@@ -403,6 +479,9 @@ static void trim_ini_value(char *s) {
 static void load_launcher_settings(RecompLauncherCSettings *settings) {
   int value = 0;
   char text[sizeof(settings->shader_path)];
+
+  if (FzeroIniReadInt(g_config_path, "General", "SkipLauncher", &value))
+    settings->skip_launcher = value != 0;
 
   /* Display. Section and key spellings match the shared snesrecomp host's
    * config.ini so one file reads the same across every port. */
@@ -463,6 +542,8 @@ static void load_launcher_settings(RecompLauncherCSettings *settings) {
  */
 static void save_launcher_settings(const RecompLauncherCSettings *settings) {
   char number[32];
+  snprintf(number, sizeof(number), "%d", settings->skip_launcher ? 1 : 0);
+  launcher_ini_kv_write(g_config_path, "General", "SkipLauncher", number);
   snprintf(number, sizeof(number), "%d", settings->window_scale);
   launcher_ini_kv_write(g_config_path, "Graphics", "WindowScale", number);
   snprintf(number, sizeof(number), "%d", settings->fullscreen);
@@ -494,7 +575,66 @@ static void save_launcher_settings(const RecompLauncherCSettings *settings) {
   launcher_ini_kv_write(g_config_path, "Rewind", "Interval", number);
 }
 
-static int resolve_rom(int argc, char **argv, char *path, size_t path_size,
+static SDL_Joystick *s_launcher_steering_stick;
+static char s_launcher_steering_guid[40];
+
+static void launcher_steering_probe_close(void) {
+  if (s_launcher_steering_stick) SDL_JoystickClose(s_launcher_steering_stick);
+  s_launcher_steering_stick = NULL;
+  s_launcher_steering_guid[0] = 0;
+}
+
+static int launcher_steering_axis(const char *guid, int axis, int *value) {
+  if (!guid || !guid[0] || !value || axis < 0) return 0;
+#if SNESRECOMP_SDL3
+  bool attached = s_launcher_steering_stick && SDL_JoystickConnected(s_launcher_steering_stick);
+#else
+  bool attached = s_launcher_steering_stick && SDL_JoystickGetAttached(s_launcher_steering_stick);
+#endif
+  if (s_launcher_steering_stick &&
+      (!attached || strcmp(guid, s_launcher_steering_guid)))
+    launcher_steering_probe_close();
+  if (!s_launcher_steering_stick) {
+#if SNESRECOMP_SDL3
+    int count = 0;
+    SDL_JoystickID *ids = SDL_GetJoysticks(&count);
+    for (int i = 0; ids && i < count; ++i) {
+      char candidate[40];
+      SDL_GUIDToString(SDL_GetJoystickGUIDForID(ids[i]), candidate,
+                       sizeof(candidate));
+      if (strcmp(candidate, guid)) continue;
+      s_launcher_steering_stick = SDL_OpenJoystick(ids[i]);
+      break;
+    }
+    SDL_free(ids);
+#else
+    for (int i = 0; i < SDL_NumJoysticks(); ++i) {
+      char candidate[40];
+      SDL_JoystickGetGUIDString(SDL_JoystickGetDeviceGUID(i), candidate,
+                                sizeof(candidate));
+      if (strcmp(candidate, guid)) continue;
+      s_launcher_steering_stick = SDL_JoystickOpen(i);
+      break;
+    }
+#endif
+    if (!s_launcher_steering_stick) return 0;
+    snprintf(s_launcher_steering_guid, sizeof(s_launcher_steering_guid),
+             "%s", guid);
+  }
+#if SNESRECOMP_SDL3
+  SDL_UpdateJoysticks();
+  if (axis >= SDL_GetNumJoystickAxes(s_launcher_steering_stick)) return 0;
+  *value = SDL_GetJoystickAxis(s_launcher_steering_stick, axis);
+#else
+  SDL_JoystickUpdate();
+  if (axis >= SDL_JoystickNumAxes(s_launcher_steering_stick)) return 0;
+  *value = SDL_JoystickGetAxis(s_launcher_steering_stick, axis);
+#endif
+  return 1;
+}
+
+static int resolve_rom(const char *executable, const char *explicit_rom,
+                       bool force_launcher, char *path, size_t path_size,
                        RecompLauncherCSettings *settings) {
   memset(settings, 0, sizeof(*settings));
   settings->window_scale = 3;
@@ -516,13 +656,18 @@ static int resolve_rom(int argc, char **argv, char *path, size_t path_size,
       snprintf(settings->shader_path, sizeof(settings->shader_path), "%s", shader_override);
   }
 
-  if (argc > 1) {
-    snprintf(path, path_size, "%s", argv[1]);
+  if (explicit_rom && !force_launcher) {
+    snprintf(path, path_size, "%s", explicit_rom);
     return 1;
   }
 
   RecompLauncherCGameInfo game;
   memset(&game, 0, sizeof(game));
+  /* The shared launcher may select Keyboard and clear its gamepad GUID.
+   * The raw wheel mod is independent of that input-source choice, so keep
+   * its configured identity through the launcher session and save. */
+  char wheel_guid[40];
+  snprintf(wheel_guid, sizeof(wheel_guid), "%s", settings->player_gamepad_guid[0]);
   launcher_profile_apply("snes", &game);
   game.name = "F-Zero";
   game.region = "(USA)";
@@ -542,8 +687,11 @@ static int resolve_rom(int argc, char **argv, char *path, size_t path_size,
       "option overrides this when that mod is enabled.";
   game.has_shader = 1;
   game.msu1_supported = 1;
-  game.msu1_note = "Select a music folder containing Conn/Cubear v11 f-zero_msu1.ips and your PCM tracks. Works with stock F-Zero and BS Deluxe.";
-  game.mods = FzeroModsProvider(&g_video, kVideoConfig);
+  game.msu1_note = "Select a music folder with PCM tracks and the matching Conn/Cubear v11 patch: f-zero_msu1_stock.ips for stock F-Zero, f-zero_msu1.ips for BS Deluxe.";
+  game.mods = FzeroModsProviderWheel(&g_video, kVideoConfig, g_config_path,
+                                    wheel_guid,
+                                    launcher_ini_kv_write, FzeroFfbListDevices,
+                                    launcher_steering_axis);
   game.rom_cache_path = "rom.cfg";
   /* Draws the Controls page's SaveStateMenu and Rewind rows, and the
    * Settings page's rewind enable / depth / interval controls. The hotkey
@@ -554,8 +702,8 @@ static int resolve_rom(int argc, char **argv, char *path, size_t path_size,
 
   char initial_rom[1024] = {0};
   char assets_dir[1024] = ".";
-  if (argv[0] && argv[0][0]) {
-    snprintf(assets_dir, sizeof(assets_dir), "%s", argv[0]);
+  if (executable && executable[0]) {
+    snprintf(assets_dir, sizeof(assets_dir), "%s", executable);
     char *slash = strrchr(assets_dir, '/');
     char *backslash = strrchr(assets_dir, '\\');
     char *separator = slash > backslash ? slash : backslash;
@@ -564,19 +712,47 @@ static int resolve_rom(int argc, char **argv, char *path, size_t path_size,
     else
       snprintf(assets_dir, sizeof(assets_dir), "%s", ".");
   }
-  FILE *probe = fopen("fzero.sfc", "rb");
-  if (probe) {
-    fclose(probe);
-    snprintf(initial_rom, sizeof(initial_rom), "%s", "fzero.sfc");
+  if (explicit_rom) {
+    snprintf(initial_rom, sizeof(initial_rom), "%s", explicit_rom);
+  } else {
+    FILE *probe = fopen("fzero.sfc", "rb");
+    if (probe) {
+      fclose(probe);
+      snprintf(initial_rom, sizeof(initial_rom), "%s", "fzero.sfc");
+    } else {
+      snesrecomp_rom_cache_read(initial_rom, sizeof(initial_rom));
+    }
   }
 
+  if (settings->skip_launcher && !force_launcher && initial_rom[0]) {
+    size_t size = 0;
+    uint8_t *rom = read_rom(initial_rom, &size);
+    bool valid = rom && verify_rom(rom, size);
+    free(rom);
+    if (valid) {
+      snprintf(path, path_size, "%s", initial_rom);
+      fprintf(stderr, "[fzero-launcher] skipped: verified remembered ROM\n");
+      return 1;
+    }
+    fprintf(stderr, "[fzero-launcher] remembered ROM unavailable or invalid; opening launcher\n");
+  }
+
+  fprintf(stderr, "[fzero-launcher] opening%s\n", force_launcher ? " (--launcher)" : "");
   int action =
       recomp_launcher_run_window("F-Zero \xE2\x80\x94 Launcher", settings,
                                  &game, assets_dir, initial_rom, path,
                                  path_size);
+  launcher_steering_probe_close();
+  if (!settings->player_gamepad_guid[0][0] && wheel_guid[0])
+    snprintf(settings->player_gamepad_guid[0],
+             sizeof(settings->player_gamepad_guid[0]), "%s", wheel_guid);
   /* Whatever the launcher did, keep what the player chose there. Quitting is
    * as good a moment to persist as pressing Play. */
   save_launcher_settings(settings);
+  /* Mod choices are settings too. recomp-ui commits its provider on Play;
+   * persist a typed resolution (and other mod choices) when quitting as well. */
+  if (!FzeroVideoSave(&g_video, kVideoConfig))
+    fprintf(stderr, "[fzero-launcher] unable to save video/mod settings\n");
   if (action == 1) return 0;
   if (action == 0 && path[0]) return 1;
   if (initial_rom[0]) {
@@ -798,7 +974,9 @@ static int perform_state_action(SDL_Window *window, int save, int slot,
   } else {
     ok = RtlLoadSnapshot(path);
   }
+  FzeroDiagnosticsEvent(save ? (ok ? "save" : "save_failed") : (ok ? "load" : "load_failed"), slot);
   if (!save && ok) g_reset_presentation_clock = true;
+  if (!save && ok) abort_playthrough("loaded save state");
   set_state_feedback(window, save ? "save" : "load", slot, ok, feedback_until);
   fprintf(stderr, "[fzero-state] %s slot %d: %s\n", save ? "save" : "load",
           slot + 1, ok ? "ok" : "FAILED");
@@ -921,7 +1099,144 @@ typedef struct FzeroPresenter {
   int logical_width;
   FzeroViewport viewport;
   int drawable_width, drawable_height;
+  SDL_Texture *triple_texture;
+  struct FzeroTripleWindows *triple_windows;
+  uint32_t *triple_pixels;
+  uint64_t triple_uploaded_version;
+  bool triple_active;
+  bool triple_separate;
+  FzeroTripleRig triple_rig;
 } FzeroPresenter;
+
+typedef struct FzeroTripleWindows {
+  SDL_Window *window[2];
+  SDL_Renderer *renderer[2];
+  SDL_Texture *texture[2];
+  FzeroGlRenderer gl[2];
+  bool use_gl;
+} FzeroTripleWindows;
+
+static bool triple_displays_available(FzeroTripleDisplaySelection *selection) {
+  FzeroRect bounds[FZERO_TRIPLE_MAX_DISPLAYS];
+  int count = 0;
+#if SNESRECOMP_SDL3
+  SDL_DisplayID *ids = SDL_GetDisplays(&count);
+  if (!ids || count > FZERO_TRIPLE_MAX_DISPLAYS) {
+    SDL_free(ids);
+    return false;
+  }
+  for (int i = 0; i < count; ++i) {
+    SDL_Rect rect;
+    if (!SDL_GetDisplayBounds(ids[i], &rect)) {
+      SDL_free(ids);
+      return false;
+    }
+    bounds[i] = (FzeroRect){rect.x, rect.y, rect.w, rect.h};
+  }
+  SDL_free(ids);
+#else
+  count = SDL_GetNumVideoDisplays();
+  if (count > FZERO_TRIPLE_MAX_DISPLAYS) return false;
+  for (int i = 0; i < count; ++i) {
+    SDL_Rect rect;
+    if (SDL_GetDisplayBounds(i, &rect) != 0) return false;
+    bounds[i] = (FzeroRect){rect.x, rect.y, rect.w, rect.h};
+  }
+#endif
+  /* Diagnostic only: exercise the three-window path inside one Surround
+   * surface without changing the machine's display mode. Never inferred from
+   * the user's configuration and never active without this explicit opt-in. */
+  const char *split_test = getenv("FZERO_TRIPLE_SPLIT_SPAN_TEST");
+  if (count == 1 && split_test && !strcmp(split_test, "1") &&
+      FzeroTripleSpanSupported(bounds[0].w, bounds[0].h)) {
+    static bool announced;
+    FzeroRect thirds[3];
+    for (int i = 0; i < 3; ++i)
+      thirds[i] = (FzeroRect){bounds[0].x + i * bounds[0].w / 3,
+          bounds[0].y, bounds[0].w / 3, bounds[0].h};
+    if (!announced) {
+      fprintf(stderr, "[fzero-triple] diagnostic three-window test inside one Surround span\n");
+      announced = true;
+    }
+    return FzeroTripleSelectDisplays(thirds, 3, selection);
+  }
+  return FzeroTripleSelectDisplays(bounds, count, selection);
+}
+
+static bool triple_display_bounds_equal(const FzeroTripleDisplaySelection *a,
+                                        const FzeroTripleDisplaySelection *b) {
+  for (int i = 0; i < 3; ++i) {
+    const FzeroRect x = a->bounds[i], y = b->bounds[i];
+    if (x.x != y.x || x.y != y.y || x.w != y.w || x.h != y.h)
+      return false;
+  }
+  return true;
+}
+
+static void triple_windows_destroy(FzeroTripleWindows *windows) {
+  if (!windows) return;
+  for (int side = 0; side < 2; ++side) {
+    if (windows->gl[side].context) {
+      SDL_GL_MakeCurrent(windows->window[side], windows->gl[side].context);
+      fzero_gl_destroy(&windows->gl[side]);
+    }
+    if (windows->texture[side]) SDL_DestroyTexture(windows->texture[side]);
+    if (windows->renderer[side]) SDL_DestroyRenderer(windows->renderer[side]);
+    if (windows->window[side]) SDL_DestroyWindow(windows->window[side]);
+  }
+  memset(windows, 0, sizeof(*windows));
+}
+
+static bool triple_windows_create(FzeroTripleWindows *windows,
+                                  const FzeroTripleDisplaySelection *selection,
+                                  SDL_WindowFlags high_dpi_flag, bool use_gl,
+                                  const char *shader_path) {
+  memset(windows, 0, sizeof(*windows));
+  windows->use_gl = use_gl;
+  for (int side = 0; side < 2; ++side) {
+    const FzeroRect rect = selection->bounds[side ? 2 : 0];
+    windows->window[side] = snesrecomp_sdl_create_window(
+        side ? "F-Zero - Right" : "F-Zero - Left", rect.w, rect.h,
+        SDL_WINDOW_BORDERLESS | high_dpi_flag |
+            (use_gl ? SDL_WINDOW_OPENGL : 0));
+    if (!windows->window[side]) goto fail;
+    SDL_SetWindowPosition(windows->window[side], rect.x, rect.y);
+    if (use_gl) {
+      if (!fzero_gl_init(&windows->gl[side], windows->window[side],
+                        shader_path, false)) goto fail;
+      /* The center window owns presentation pacing. Waiting for vsync on
+       * every side swap would serialize three refresh waits per frame. */
+      SDL_GL_SetSwapInterval(0);
+      continue;
+    }
+    windows->renderer[side] = snesrecomp_sdl_create_renderer(
+        windows->window[side], false, 0);
+    if (!windows->renderer[side]) goto fail;
+    windows->texture[side] = SDL_CreateTexture(windows->renderer[side],
+        SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING,
+        kTriplePanelWidth, kTriplePanelHeight);
+    if (!windows->texture[side]) goto fail;
+    snesrecomp_sdl_set_texture_opaque(windows->texture[side]);
+    snesrecomp_sdl_set_texture_linear(windows->texture[side], true);
+  }
+  return true;
+fail:
+  triple_windows_destroy(windows);
+  return false;
+}
+
+/* A fixed internal side resolution bounds CPU projection cost independently
+ * of the physical display resolution. The output stretch is physical-panel
+ * correct because rays use normalized panel coordinates and millimetres. */
+static FzeroTripleRig triple_rig_for_span(const FzeroVideoSettings *video,
+                                         int span_width, int span_height) {
+  double panel_width = (double)video->triple_panel_width_mm;
+  double physical_height = panel_width * span_height / (span_width / 3);
+  return (FzeroTripleRig){panel_width, physical_height,
+      (double)video->triple_eye_distance_mm, (double)video->triple_eye_height_mm,
+      (double)video->triple_left_yaw_deg, (double)video->triple_right_yaw_deg,
+      (double)video->triple_bezel_gap_mm, kTriplePanelWidth, kTriplePanelHeight};
+}
 
 static SDL_Texture *g_overlay_texture;
 static int g_overlay_texture_w, g_overlay_texture_h;
@@ -931,7 +1246,12 @@ static int g_overlay_texture_w, g_overlay_texture_h;
  * belongs across the bottom third of it, not centred over the middle. */
 static FzeroRect overlay_rect(const FzeroPresenter *p, int is_menu) {
   FzeroRect game =
-      FzeroDestination(p->viewport, p->drawable_width, p->drawable_height);
+      FzeroDestination(p->viewport,
+          p->triple_active && !p->triple_separate ?
+              p->drawable_width / 3 : p->drawable_width,
+          p->drawable_height);
+  if (p->triple_active && !p->triple_separate)
+    game.x += p->drawable_width / 3;
   if (is_menu) return game;
   int strip = game.h / 3;
   if (strip < 1) strip = 1;
@@ -973,34 +1293,230 @@ static void overlay_draw_sdl(const FzeroPresenter *p, const uint32_t *panel,
  * after a present, what a read-back returns is undefined. */
 static void overlay_dump(const FzeroPresenter *p, int is_menu);
 
+static unsigned source_frame_mean(const uint8_t *pixels, int width, int height) {
+  if (!pixels || width <= 0 || height <= 0) return 0;
+  unsigned sum = 0, samples = 0;
+  const uint32_t *sample_pixels = (const uint32_t *)pixels;
+  for (int y = height / 32; y < height; y += height / 16)
+    for (int x = width / 64; x < width; x += width / 32) {
+      uint32_t color = sample_pixels[(size_t)y * width + x];
+      sum += ((color >> 16) & 255) + ((color >> 8) & 255) + (color & 255);
+      ++samples;
+    }
+  return samples ? sum / (3 * samples) : 0;
+}
+
+static void present_separate_sides(FzeroPresenter *p, bool ready) {
+  if (!p->triple_windows) return;
+  FzeroTripleWindows *windows = p->triple_windows;
+  if (ready) {
+    uint64_t version = FzeroRendererTripleSidesVersion();
+    if (version != p->triple_uploaded_version) {
+      uint64_t upload_start = FzeroDiagnosticsBegin();
+      for (int side = 0; side < 2; ++side) {
+        const uint32_t *source = p->triple_pixels +
+            (size_t)side * kTriplePanelWidth * kTriplePanelHeight;
+#if SNESRECOMP_SDL3
+        bool uploaded = SDL_UpdateTexture(windows->texture[side], NULL,
+            source, kTriplePanelWidth * kBytesPerPixel);
+#else
+        bool uploaded = SDL_UpdateTexture(windows->texture[side], NULL,
+            source, kTriplePanelWidth * kBytesPerPixel) == 0;
+#endif
+        if (!uploaded) ready = false;
+      }
+      FzeroDiagnosticsEnd(FZERO_DIAG_TRIPLE_UPLOAD, upload_start);
+      if (ready) p->triple_uploaded_version = version;
+    }
+  }
+  for (int side = 0; side < 2; ++side) {
+    SDL_Renderer *renderer = windows->renderer[side];
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+    if (ready)
+      snesrecomp_sdl_render_texture(renderer, windows->texture[side], NULL, NULL);
+    SDL_RenderPresent(renderer);
+  }
+}
+
+static bool present_separate_gl_sides(FzeroPresenter *p, bool ready) {
+  FzeroTripleWindows *windows = p->triple_windows;
+  if (!windows || !windows->use_gl) return false;
+  for (int side = 0; side < 2; ++side) {
+    FzeroGlRenderer *glr = &windows->gl[side];
+#if SNESRECOMP_SDL3
+    bool current = SDL_GL_MakeCurrent(glr->window, glr->context);
+#else
+    bool current = SDL_GL_MakeCurrent(glr->window, glr->context) == 0;
+#endif
+    if (!current) return false;
+    int output_width = 0, output_height = 0;
+    snesrecomp_sdl_get_drawable_size(glr->window, &output_width, &output_height);
+    if (output_width <= 0 || output_height <= 0) return false;
+    if (ready) {
+      const uint32_t *source = p->triple_pixels +
+          (size_t)side * kTriplePanelWidth * kTriplePanelHeight;
+      GlTextureWithSize *texture = &glr->texture;
+      uint64_t diagnostic_start = FzeroDiagnosticsBegin();
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, texture->gl_texture);
+      if (texture->width == kTriplePanelWidth &&
+          texture->height == kTriplePanelHeight)
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                        kTriplePanelWidth, kTriplePanelHeight,
+                        GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, source);
+      else {
+        texture->width = kTriplePanelWidth;
+        texture->height = kTriplePanelHeight;
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+                     kTriplePanelWidth, kTriplePanelHeight, 0,
+                     GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, source);
+      }
+      FzeroDiagnosticsEnd(FZERO_DIAG_TRIPLE_UPLOAD, diagnostic_start);
+    }
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    if (ready) {
+      FzeroRect full = {0, 0, output_width, output_height};
+      fzero_gl_draw_image(glr, &glr->texture, glr->shader, full,
+                          output_height);
+    }
+    SDL_GL_SwapWindow(glr->window);
+  }
+  return true;
+}
+
 /* One present, with an optional panel over it. The game image is whatever is
  * already in `pixels`: while a panel is up the guest is frozen, so the frame
  * behind it is the moment the player stopped at. */
-static void present_frame(const FzeroPresenter *p, const uint32_t *panel,
+static void present_frame(FzeroPresenter *p, const uint32_t *panel,
                           int pw, int ph, int is_menu) {
+  const uint32_t *hd_frame = FzeroHdFrame();
+  unsigned scale = FzeroHdScale();
+  const uint8_t *pixels = hd_frame ? (const uint8_t *)hd_frame : p->pixels;
+  int width = p->logical_width * (int)scale;
+  int height = kFrameHeight * (int)scale;
+  /* Sparse, opt-in luminance probe. If a white flash is already present in
+   * the source pixels, it is upstream of SDL/Surround presentation. */
+  if (getenv("FZERO_RENDER_TRACE") && !panel && pixels) {
+    static unsigned count, previous_mean;
+    static int previous_hd = -1;
+    unsigned mean = source_frame_mean(pixels, width, height);
+    int hd = hd_frame != NULL;
+    if (count++ % 120 == 0 || (count > 2 && mean > previous_mean + 24 &&
+                               mean > previous_mean * 3 / 2) ||
+        (previous_hd >= 0 && previous_hd != hd))
+      fprintf(stderr, "[fzero-render-trace] present=%u mean=%u prior=%u hd=%d "
+                      "race=%02x,%02x triple=%d\n",
+              count, mean, previous_mean, hd, g_ram[0x54], g_ram[0x55],
+              p->triple_active);
+    previous_mean = mean;
+    previous_hd = hd;
+  }
   if (p->gl) {
-    fzero_gl_render(p->gl, p->pixels, p->logical_width, p->viewport,
-                    p->drawable_width, p->drawable_height);
+    bool triple_ready = false;
+    if (p->triple_active && p->triple_pixels) {
+      uint64_t projection_start = FzeroDiagnosticsBegin();
+      triple_ready = FzeroRendererDrawTripleSides(p->triple_pixels,
+          (size_t)2 * kTriplePanelWidth * kTriplePanelHeight,
+          &p->triple_rig, p->logical_width);
+      FzeroDiagnosticsEnd(FZERO_DIAG_TRIPLE_PROJECTION, projection_start);
+      if (triple_ready && !p->triple_separate) {
+        /* Shader presets with Prev-frame history rotate their input texture
+         * handles inside GlslShader_Render. Refresh each presentation even
+         * when the CPU side projection itself was cached. */
+        uint64_t upload_start = FzeroDiagnosticsBegin();
+        fzero_gl_upload_triple_sides(p->gl, p->triple_pixels);
+        FzeroDiagnosticsEnd(FZERO_DIAG_TRIPLE_UPLOAD, upload_start);
+      }
+    }
+    if (p->triple_separate && !present_separate_gl_sides(p, triple_ready)) {
+      static bool warned;
+      if (!warned) {
+        fprintf(stderr, "[fzero-triple] side OpenGL context unavailable; showing center only\n");
+        warned = true;
+      }
+    }
+#if SNESRECOMP_SDL3
+    if (p->triple_separate && !SDL_GL_MakeCurrent(p->gl->window, p->gl->context))
+      Die("Unable to restore center OpenGL context");
+#else
+    if (p->triple_separate && SDL_GL_MakeCurrent(p->gl->window, p->gl->context) != 0)
+      Die("Unable to restore center OpenGL context");
+#endif
+    fzero_gl_render(p->gl, pixels, width, height, p->viewport,
+                    p->drawable_width, p->drawable_height,
+                    p->triple_active && !p->triple_separate, triple_ready);
     if (panel) {
       fzero_gl_draw_overlay(p->gl, panel, pw, ph, overlay_rect(p, is_menu),
                             p->drawable_height);
       overlay_dump(p, is_menu);
     }
+    uint64_t diagnostic_start = FzeroDiagnosticsBegin();
     SDL_GL_SwapWindow(p->gl->window);
+    FzeroDiagnosticsEnd(FZERO_DIAG_PRESENT, diagnostic_start);
     return;
   }
-  SDL_Rect source = {0, 0, p->logical_width, kFrameHeight};
-  SDL_UpdateTexture(p->texture, &source, p->pixels,
-                    p->logical_width * kBytesPerPixel);
+  SDL_Rect source = {0, 0, width, height};
+  uint64_t diagnostic_start = FzeroDiagnosticsBegin();
+  SDL_UpdateTexture(p->texture, &source, pixels, width * kBytesPerPixel);
+  FzeroDiagnosticsEnd(FZERO_DIAG_UPLOAD, diagnostic_start);
+  bool triple_ready = false;
+  if (p->triple_active && p->triple_pixels &&
+      (p->triple_texture || p->triple_separate)) {
+    diagnostic_start = FzeroDiagnosticsBegin();
+    triple_ready = FzeroRendererDrawTripleSides(p->triple_pixels,
+        (size_t)2 * kTriplePanelWidth * kTriplePanelHeight,
+        &p->triple_rig, p->logical_width);
+    FzeroDiagnosticsEnd(FZERO_DIAG_TRIPLE_PROJECTION, diagnostic_start);
+    /* At high host refresh rates the same source frame is presented several
+     * times. Upload the immutable side panels only when projection rewrites
+     * them; keep drawing the already resident streaming texture otherwise. */
+    uint64_t version = FzeroRendererTripleSidesVersion();
+    if (!p->triple_separate && triple_ready &&
+        version != p->triple_uploaded_version) {
+      diagnostic_start = FzeroDiagnosticsBegin();
+#if SNESRECOMP_SDL3
+      bool uploaded = SDL_UpdateTexture(p->triple_texture, NULL, p->triple_pixels,
+                                        kTriplePanelWidth * kBytesPerPixel);
+#else
+      bool uploaded = SDL_UpdateTexture(p->triple_texture, NULL, p->triple_pixels,
+                                        kTriplePanelWidth * kBytesPerPixel) == 0;
+#endif
+      FzeroDiagnosticsEnd(FZERO_DIAG_TRIPLE_UPLOAD, diagnostic_start);
+      if (uploaded) p->triple_uploaded_version = version;
+    }
+  }
+  if (p->triple_separate) present_separate_sides(p, triple_ready);
+  diagnostic_start = FzeroDiagnosticsBegin();
   SDL_SetRenderDrawColor(p->renderer, 0, 0, 0, 255);
   SDL_RenderClear(p->renderer);
+  if (triple_ready && !p->triple_separate) {
+    SDL_Rect left_src = {0, 0, kTriplePanelWidth, kTriplePanelHeight};
+    SDL_Rect right_src = {0, kTriplePanelHeight, kTriplePanelWidth, kTriplePanelHeight};
+    SDL_Rect left_dst = {0, 0, p->drawable_width / 3, p->drawable_height};
+    SDL_Rect right_dst = {2 * p->drawable_width / 3, 0,
+                          p->drawable_width / 3, p->drawable_height};
+    snesrecomp_sdl_render_texture(p->renderer, p->triple_texture,
+                                  &left_src, &left_dst);
+    snesrecomp_sdl_render_texture(p->renderer, p->triple_texture,
+                                  &right_src, &right_dst);
+  }
   FzeroRect rect =
-      FzeroDestination(p->viewport, p->drawable_width, p->drawable_height);
+      FzeroDestination(p->viewport,
+          p->triple_active && !p->triple_separate ?
+              p->drawable_width / 3 : p->drawable_width,
+          p->drawable_height);
+  if (p->triple_active && !p->triple_separate)
+    rect.x += p->drawable_width / 3;
   SDL_Rect destination = {rect.x, rect.y, rect.w, rect.h};
   snesrecomp_sdl_render_texture(p->renderer, p->texture, &source, &destination);
   overlay_draw_sdl(p, panel, pw, ph, is_menu);
   if (panel) overlay_dump(p, is_menu);
+  FzeroDiagnosticsEnd(FZERO_DIAG_DRAW, diagnostic_start);
+  diagnostic_start = FzeroDiagnosticsBegin();
   SDL_RenderPresent(p->renderer);
+  FzeroDiagnosticsEnd(FZERO_DIAG_PRESENT, diagnostic_start);
 }
 
 /*
@@ -1073,7 +1589,7 @@ static void overlay_dump(const FzeroPresenter *p, int is_menu) {
           is_menu ? "save-state browser" : "rewind filmstrip");
 }
 
-static void present_overlay(const FzeroPresenter *p, int is_menu) {
+static void present_overlay(FzeroPresenter *p, int is_menu) {
   const uint32_t *panel = NULL;
   int pw = 0, ph = 0;
   int have = is_menu ? snes_savestate_menu_overlay_image(&panel, &pw, &ph)
@@ -1094,7 +1610,7 @@ static uint32_t overlay_filter_guest_input(uint32_t inputs) {
 }
 
 static uint32_t overlay_nav_inputs(SDL_GameController *pad) {
-  return keyboard_input() | controller_input(pad);
+  return keyboard_input() | FzeroGamepadReadOverlay(pad);
 }
 
 /* Pad gestures, for a player who never touches the keyboard. Select + R opens
@@ -1307,7 +1823,7 @@ static void selftest_pump_tick(unsigned pump) {
   }
 }
 
-static void savestate_menu_loop(const FzeroPresenter *p, int *running,
+static void savestate_menu_loop(FzeroPresenter *p, int *running,
                                 SDL_GameController **pad) {
   /* The browser loads through the engine directly, so the host cannot check
    * the file first the way perform_state_action does. Arm the undo snapshot
@@ -1350,9 +1866,11 @@ static void rewind_key_down(int key, int repeat) {
  * browser's handle_key/poll_nav. Controls match the framework host — Left and
  * Right scrub (hold to keep scrubbing), Enter or Space commits, Escape
  * cancels, and the pad mirrors them. */
-static void rewind_loop(const FzeroPresenter *p, int *running,
+static void rewind_loop(FzeroPresenter *p, int *running,
                         SDL_GameController **pad) {
-  uint32_t prev_pad = 0, held_dir = 0, held_since = 0, last_repeat = 0;
+  /* The button held when opening the strip is not a new overlay press. */
+  uint32_t prev_pad = overlay_nav_inputs(*pad);
+  uint32_t held_dir = 0, held_since = 0, last_repeat = 0;
   unsigned pump = 0;
   fprintf(stderr, "[fzero-overlay] rewind filmstrip OPEN - guest frozen until "
                   "it closes (pad B, or Escape; Left/Right scrub, A or Enter "
@@ -1435,12 +1953,23 @@ int main(int argc, char **argv) {
    * even when a shortcut or terminal starts us in a different directory.
    * Resolve an explicit ROM against the caller's cwd before changing it. */
   char command_line_rom[1024];
-  if (argc > 1) {
-    if (!snesrecomp_abspath(argv[1], command_line_rom, sizeof(command_line_rom))) {
+  const char *explicit_rom = NULL;
+  bool force_launcher = false, positional_only = false;
+  for (int i = 1; i < argc; ++i) {
+    if (!positional_only && !strcmp(argv[i], "--")) { positional_only = true; continue; }
+    if (!positional_only && !strcmp(argv[i], "--launcher")) { force_launcher = true; continue; }
+    if (explicit_rom || (!positional_only && argv[i][0] == '-')) {
+      fprintf(stderr, "usage: FZeroSNESRecomp [--launcher] [path-to-rom.sfc]\n");
+      return 2;
+    }
+    explicit_rom = argv[i];
+  }
+  if (explicit_rom) {
+    if (!snesrecomp_abspath(explicit_rom, command_line_rom, sizeof(command_line_rom))) {
       fprintf(stderr, "Unable to resolve the command-line ROM path\n");
       return 2;
     }
-    argv[1] = command_line_rom;
+    explicit_rom = command_line_rom;
   }
   snesrecomp_anchor_to_exe_dir();
   const char *config_override = getenv("FZERO_VIDEO_CONFIG");
@@ -1469,6 +1998,7 @@ int main(int argc, char **argv) {
   if (!snesrecomp_exe_dir_path("config.ini", g_config_path,
                                sizeof(g_config_path)))
     snprintf(g_config_path, sizeof(g_config_path), "config.ini");
+  FzeroTelemetryInit(g_config_path);
   if (!FzeroReplayConfigure(getenv("SNESRECOMP_INPUT_SCRIPT"), getenv("FZERO_VIEWPORT_SCRIPT"))) {
     fprintf(stderr, "[fzero] Invalid validation replay\n");
     return 2;
@@ -1477,7 +2007,7 @@ int main(int argc, char **argv) {
   char rom_path[1024] = {0};
   RecompLauncherCSettings launcher_settings;
   int resolve_result =
-      resolve_rom(argc, argv, rom_path, sizeof(rom_path), &launcher_settings);
+      resolve_rom(argv[0], explicit_rom, force_launcher, rom_path, sizeof(rom_path), &launcher_settings);
   if (resolve_result <= 0) return resolve_result == 0 ? 0 : 2;
   if (!g_video.enhanced) {
     g_video.aspect = launcher_aspect(launcher_settings.aspect_index);
@@ -1522,6 +2052,8 @@ int main(int argc, char **argv) {
     fprintf(stderr, "[fzero-msu1] %s Starting with original audio.\n", FzeroMsuError());
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "MSU-1 pack not loaded", FzeroMsuError(), NULL);
   }
+  uint8_t playthrough_rom_sha[32];
+  sha256_compute(rom, rom_size, playthrough_rom_sha);
 
   /* Match the shared host: keep gamepads live through launcher/game focus
    * transitions and host overlays (SDL otherwise suppresses their state). */
@@ -1565,6 +2097,51 @@ int main(int argc, char **argv) {
   if (!FzeroDeluxeSelectSaveRoot()) Die(FzeroDeluxeError());
   if (!FzeroMsuSelectSaveRoot()) Die(FzeroMsuError());
   RtlReadSram();
+  const char *record_path = getenv("FZERO_RECORD_PLAYTHROUGH");
+  const char *replay_path = getenv("FZERO_REPLAY_PLAYTHROUGH");
+  bool replay_failed = false;
+  if (record_path && *record_path && replay_path && *replay_path) {
+    fprintf(stderr, "[fzero-playthrough] record and replay cannot be combined\n");
+    free(rom);
+    return 2;
+  }
+  if (replay_path && *replay_path) {
+    char state_path[2048];
+    if (FzeroReplayHasInput() || getenv("FZERO_VIEWPORT_SCRIPT") ||
+        getenv("FZERO_STATE_SAVE_AT") || getenv("FZERO_STATE_LOAD_AT") ||
+        !FzeroPlaythroughStatePath(replay_path, state_path, sizeof(state_path)) ||
+        !FzeroPlaythroughPlaybackOpen(&g_playthrough, replay_path,
+                                     playthrough_rom_sha) ||
+        !FzeroStateFileAcceptable(state_path) ||
+        !RtlLoadSnapshot(state_path)) {
+      fprintf(stderr, "[fzero-playthrough] identity/state invalid; visual replay refused\n");
+      FzeroPlaythroughAbort(&g_playthrough);
+      free(rom);
+      return 3;
+    }
+    fprintf(stderr, "[fzero-playthrough] visual replay: %llu verified frames, "
+                    "physical FFB disabled\n",
+            (unsigned long long)g_playthrough.total);
+  }
+  if (record_path && *record_path) {
+    char state_path[2048];
+    bool valid_path = FzeroPlaythroughStatePath(record_path, state_path,
+                                               sizeof(state_path));
+    bool state_exists = false;
+    if (valid_path) {
+      FILE *existing = fopen(state_path, "rb");
+      if (existing) { fclose(existing); state_exists = true; }
+    }
+    if (!valid_path || state_exists ||
+        !FzeroPlaythroughRecordOpen(&g_playthrough, record_path,
+                                   playthrough_rom_sha) ||
+        !RtlSaveSnapshot(state_path)) {
+      abort_playthrough("could not create fresh input/state files");
+      fprintf(stderr, "[fzero-playthrough] recording unavailable: %s\n", record_path);
+    } else {
+      fprintf(stderr, "[fzero-playthrough] recording from boot: %s\n", record_path);
+    }
+  }
   /* After the machine exists: the ring's slots are whole-machine snapshots
    * and it sizes them from a real one. */
   snes_rewind_configure();
@@ -1577,6 +2154,17 @@ int main(int argc, char **argv) {
   const Uint32 kHighDpiFlag = SDL_WINDOW_ALLOW_HIGHDPI;
 #endif
   bool use_gl_renderer = launcher_settings.shader_path[0] != 0;
+  bool triple_requested = g_video.triple_screen && FzeroTripleValidLayout(&g_video) &&
+                          launcher_settings.fullscreen;
+  if (g_video.triple_screen && !triple_requested)
+    fprintf(stderr, "[fzero-triple] experimental mode needs a valid rig and fullscreen; using stock view\n");
+  bool triple_separate = triple_requested &&
+      g_video.triple_output_mode == FZERO_TRIPLE_OUTPUT_SEPARATE;
+  FzeroTripleDisplaySelection separate_layout = {0};
+  if (triple_separate && !triple_displays_available(&separate_layout)) {
+    fprintf(stderr, "[fzero-triple] separate mode needs one unambiguous row of three equal, aligned displays; using stock view\n");
+    triple_requested = triple_separate = false;
+  }
   if (use_gl_renderer) fzero_gl_prepare_window();
   /* Window scale is a real row on the Settings page, so it has to size the
    * window: it was drawn, saved and then ignored in favour of a hardcoded
@@ -1585,24 +2173,47 @@ int main(int argc, char **argv) {
   if (window_scale < 1 || window_scale > 8) window_scale = 3;
   SDL_Window *window = snesrecomp_sdl_create_window(
       kWindowTitle, 256 * window_scale, 192 * window_scale,
-      SDL_WINDOW_RESIZABLE | kHighDpiFlag |
+      (triple_separate ? SDL_WINDOW_BORDERLESS : SDL_WINDOW_RESIZABLE) |
+          kHighDpiFlag |
           (use_gl_renderer ? SDL_WINDOW_OPENGL : 0));
   if (!window) Die("Unable to create the game window");
-  if (launcher_settings.fullscreen)
+  void *native_window = NULL;
+#if SNESRECOMP_SDL3 && defined(_WIN32)
+  native_window = SDL_GetPointerProperty(SDL_GetWindowProperties(window),
+                                         SDL_PROP_WINDOW_WIN32_HWND_POINTER,
+                                         NULL);
+#endif
+  if (triple_separate) {
+    const FzeroRect center = separate_layout.bounds[1];
+    SDL_SetWindowSize(window, center.w, center.h);
+    SDL_SetWindowPosition(window, center.x, center.y);
+  } else if (launcher_settings.fullscreen)
     snesrecomp_sdl_set_fullscreen(window, true);
   FzeroGlRenderer gl_renderer;
   SDL_Renderer *renderer = NULL;
   SDL_Texture *texture = NULL;
+  unsigned texture_scale = g_video.hd_mode7 ? g_video.hd_scale : 1;
+  const unsigned requested_texture_scale = texture_scale;
   if (use_gl_renderer) {
-    if (!fzero_gl_init(&gl_renderer, window, launcher_settings.shader_path))
+    if (!fzero_gl_init(&gl_renderer, window, launcher_settings.shader_path,
+                       triple_requested && !triple_separate))
       Die("Unable to initialize the OpenGL shader renderer");
+    GLint max_texture_size = 0;
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_texture_size);
+    while (texture_scale > 1 && max_texture_size > 0 &&
+           FZERO_MAX_WIDTH * texture_scale > (unsigned)max_texture_size)
+      texture_scale = texture_scale > 4 ? 4 : texture_scale > 2 ? 2 : 1;
   } else {
     renderer = snesrecomp_sdl_create_renderer(window, false, false);
     if (!renderer) renderer = snesrecomp_sdl_create_renderer(window, true, false);
     if (!renderer) Die("Unable to create the game renderer");
-    texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
-                                SDL_TEXTUREACCESS_STREAMING, FZERO_MAX_WIDTH,
-                                kFrameHeight);
+    for (;;) {
+      texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
+                                  SDL_TEXTUREACCESS_STREAMING, FZERO_MAX_WIDTH * texture_scale,
+                                  kFrameHeight * texture_scale);
+      if (texture || texture_scale == 1) break;
+      texture_scale = texture_scale > 4 ? 4 : texture_scale > 2 ? 2 : 1;
+    }
     if (!texture) Die("Unable to create the game texture");
     /* Scale quality is per-texture in SDL3 (the SDL2 render hint is gone), and
      * the SNES framebuffer leaves alpha zero, so it must be marked opaque or
@@ -1611,14 +2222,59 @@ int main(int argc, char **argv) {
                                       launcher_settings.linear_filter != 0);
     snesrecomp_sdl_set_texture_opaque(texture);
   }
+  /* Side windows must exist before FFB init: creating or focusing windows
+   * after acquisition can make some direct-drive drivers silently drop their
+   * effects until a menu/rewind transition reacquires them. */
+  FzeroTripleWindows separate_windows = {0};
+  if (triple_separate) {
+    if (!triple_windows_create(&separate_windows, &separate_layout, kHighDpiFlag,
+                               use_gl_renderer, launcher_settings.shader_path)) {
+      fprintf(stderr, "[fzero-triple] unable to create side windows; using centered stock view\n");
+      triple_requested = triple_separate = false;
+      SDL_SetWindowSize(window, 256 * window_scale, 192 * window_scale);
+      snesrecomp_sdl_set_fullscreen(window, true);
+    } else {
+      if (use_gl_renderer) SDL_GL_MakeCurrent(window, gl_renderer.context);
+      SDL_RaiseWindow(window);
+      fprintf(stderr, "[fzero-triple] separate windows: left=%d center=%d right=%d, %dx%d per display\n",
+              separate_layout.index[0], separate_layout.index[1],
+              separate_layout.index[2], separate_layout.bounds[1].w,
+              separate_layout.bounds[1].h);
+    }
+    if (use_gl_renderer) SDL_GL_MakeCurrent(window, gl_renderer.context);
+  }
+  if (texture_scale != requested_texture_scale) {
+    char message[256];
+    snprintf(message, sizeof(message),
+        "This renderer could not create the %ux HD Mode 7 texture. Using %ux for this session. "
+        "Choose a lower resolution in Mods > HD Mode 7 if this persists.",
+        requested_texture_scale, texture_scale);
+    fprintf(stderr, "[fzero-hd] %s\n", message);
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "HD Mode 7 resolution", message, window);
+  }
 
   static uint8_t pixels[FZERO_MAX_WIDTH * kFrameHeight * kBytesPerPixel];
+  uint32_t *hd_pixels = NULL;
+  size_t hd_capacity = (size_t)FZERO_MAX_WIDTH * kFrameHeight * texture_scale * texture_scale;
+  if (texture_scale > 1) {
+    hd_pixels = calloc(hd_capacity, sizeof(*hd_pixels));
+    if (!hd_pixels) Die("Unable to allocate HD Mode 7 frame");
+  }
+  FzeroSetMode7Hd(texture_scale > 1 ? texture_scale : 0, hd_pixels, hd_capacity);
   int drawable_width = 256 * window_scale, drawable_height = 192 * window_scale;
   if (use_gl_renderer)
     snesrecomp_sdl_get_drawable_size(window, &drawable_width, &drawable_height);
   else
     snesrecomp_sdl_get_render_output_size(renderer, &drawable_width, &drawable_height);
-  FzeroViewport viewport = FzeroCalculateViewport(&g_video, drawable_width, drawable_height);
+  bool triple_active = triple_separate ||
+      (triple_requested && FzeroTripleSpanSupported(drawable_width,
+                                                     drawable_height));
+  if (triple_requested && !triple_separate && !triple_active)
+    fprintf(stderr, "[fzero-triple] expected three equal 1.2:1–2.5:1 panels in one fullscreen span; got %dx%d, using stock view\n",
+            drawable_width, drawable_height);
+  FzeroViewport viewport = FzeroCalculateViewport(&g_video,
+      triple_active && !triple_separate ? drawable_width / 3 : drawable_width,
+      drawable_height);
   FzeroSetViewport(viewport);
   FzeroSetDeferredPresentation(true);
   int logical_width = viewport.width;
@@ -1658,7 +2314,17 @@ int main(int argc, char **argv) {
   SDL_GameController *pad = NULL;
   FzeroGamepadConfigure(g_config_path, g_selftest_pad ? g_selftest_guid : launcher_settings.player_gamepad_guid[0],
                          launcher_settings.deadzone[0]);
-  FzeroGamepadRefresh(&pad);
+  if (g_playthrough.mode != 2) FzeroGamepadRefresh(&pad);
+
+  /* The fullscreen transition and renderer creation can make DirectInput
+   * re-acquire the wheel. Starting effects before either step leaves some
+   * drivers accepting updates to effects that are no longer playing until a
+   * menu calls ZeroForces. Start after the window settles, then clear the
+   * initial effect state so the first nonzero update explicitly starts it. */
+  if (g_playthrough.mode != 2) {
+    FzeroFfbInit(g_config_path, native_window);
+    FzeroFfbSilence();
+  }
 
   int running = 1;
   int paused = 0;
@@ -1668,13 +2334,57 @@ int main(int argc, char **argv) {
   const char *auto_close = getenv("SNESRECOMP_AUTOCLOSE_FRAMES");
   if (auto_close) auto_close_frames = strtol(auto_close, NULL, 10);
   FzeroClock clock;
-  double hz = g_video.fps_enabled ? FzeroPresentationHz(g_video.fps, display_refresh(window)) : FZERO_SIMULATION_HZ;
+  double actual_refresh = display_refresh(window);
+  double hz = g_video.fps_enabled ? FzeroPresentationHz(g_video.fps, actual_refresh) : FZERO_SIMULATION_HZ;
+  if (g_video.diagnostics) {
+    FzeroDiagnosticSession session = {
+      .version = kBuildVersion, .revision = FZERO_SOURCE_REVISION,
+      .framework_revision = FZERO_FRAMEWORK_REVISION, .ui_revision = FZERO_UI_REVISION,
+      .build_type = FZERO_BUILD_TYPE, .compiler = FZERO_COMPILER,
+      .backend = "SDL", .shader = launcher_settings.shader_path,
+      .shader_loaded = use_gl_renderer && gl_renderer.shader != NULL,
+      .allocated_scale = texture_scale, .vsync = -99,
+      .linear_filter = launcher_settings.linear_filter != 0,
+      .audio_enabled = launcher_settings.enable_audio != 0,
+      .rewind_enabled = snes_rewind_enabled()
+    };
+    if (use_gl_renderer) {
+      session.backend = "OpenGL";
+      session.gpu = (const char *)glGetString(GL_RENDERER);
+      session.gpu_vendor = (const char *)glGetString(GL_VENDOR);
+      session.driver = (const char *)glGetString(GL_VERSION);
+#if SNESRECOMP_SDL3
+      SDL_GL_GetSwapInterval(&session.vsync);
+#else
+      session.vsync = SDL_GL_GetSwapInterval();
+#endif
+    } else {
+#if SNESRECOMP_SDL3
+      session.backend = SDL_GetRendererName(renderer);
+      SDL_GetRenderVSync(renderer, &session.vsync);
+#else
+      SDL_RendererInfo info;
+      if (!SDL_GetRendererInfo(renderer, &info)) {
+        session.backend = info.name;
+        session.vsync = (info.flags & SDL_RENDERER_PRESENTVSYNC) != 0;
+      }
+#endif
+    }
+    char directory[1200];
+    if (!snesrecomp_exe_dir_path("diagnostics", directory, sizeof(directory)))
+      snprintf(directory, sizeof(directory), "diagnostics");
+    FzeroDiagnosticsStart(true, directory, &session);
+  }
   FzeroClockReset(&clock, monotonic_seconds(), hz);
   bool suspended = false;
   const FzeroScriptedState scripted_save = parse_scripted_state("FZERO_STATE_SAVE_AT");
   const FzeroScriptedState scripted_load = parse_scripted_state("FZERO_STATE_LOAD_AT");
   double next_display_check = 0;
   uint64_t presentations = 0, missed_presentations = 0;
+  const char *reduce_flash_env = getenv("FZERO_SUPPRESS_RACE_FLASH");
+  bool reduce_race_flash = reduce_flash_env && *reduce_flash_env ?
+      strcmp(reduce_flash_env, "0") != 0 : g_video.reduce_crash_flash;
+  unsigned suppressed_flashes = 0;
   FzeroPresenter presenter;
   memset(&presenter, 0, sizeof(presenter));
   presenter.window = window;
@@ -1682,6 +2392,33 @@ int main(int argc, char **argv) {
   presenter.texture = texture;
   presenter.gl = use_gl_renderer ? &gl_renderer : NULL;
   presenter.pixels = pixels;
+  presenter.triple_separate = triple_separate;
+  presenter.triple_windows = triple_separate ? &separate_windows : NULL;
+  if (triple_active)
+    presenter.triple_rig = triple_rig_for_span(&g_video,
+        triple_separate ? drawable_width * 3 : drawable_width, drawable_height);
+  if (triple_requested) {
+    presenter.triple_pixels = calloc((size_t)2 * kTriplePanelWidth * kTriplePanelHeight,
+                                     sizeof(*presenter.triple_pixels));
+    if (!use_gl_renderer && !triple_separate)
+      presenter.triple_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
+          SDL_TEXTUREACCESS_STREAMING, kTriplePanelWidth, 2 * kTriplePanelHeight);
+    if (!presenter.triple_pixels ||
+        (!use_gl_renderer && !triple_separate && !presenter.triple_texture)) {
+      fprintf(stderr, "[fzero-triple] unable to allocate side panels; using stock view\n");
+      triple_requested = triple_active = false;
+      presenter.triple_separate = triple_separate = false;
+      presenter.triple_windows = NULL;
+      triple_windows_destroy(&separate_windows);
+      viewport = FzeroCalculateViewport(&g_video, drawable_width, drawable_height);
+      FzeroSetViewport(viewport);
+      logical_width = viewport.width;
+      FzeroBeginDrawing(pixels, (size_t)logical_width * kBytesPerPixel);
+    } else if (presenter.triple_texture) {
+      snesrecomp_sdl_set_texture_opaque(presenter.triple_texture);
+      snesrecomp_sdl_set_texture_linear(presenter.triple_texture, true);
+    }
+  }
 
   /* Outside the loop on purpose. A hotkey press is a request that survives
    * until it is acted on: the event pump runs every host iteration but a
@@ -1691,13 +2428,37 @@ int main(int argc, char **argv) {
    * made F7 look intermittent on the high-refresh presentation path. */
   int open_savestate_menu = 0;
   int open_rewind = 0;
+  uint32_t held_wheel_host_buttons = 0;
+  FzeroDiagnosticFrame diagnostic_frame = {0};
 
   while (running) {
+    if (g_video.diagnostics) {
+      diagnostic_frame = (FzeroDiagnosticFrame){
+        .simulation = (uint64_t)frames, .presentations = presentations,
+        .missed = missed_presentations + clock.missed_presentations,
+        .settings = g_video, .viewport = viewport,
+        .output_width = drawable_width, .output_height = drawable_height,
+        .effective_scale = FzeroHdScale(), .target_hz = hz, .refresh_hz = actual_refresh,
+        .fullscreen = (SDL_GetWindowFlags(window) & SNESRECOMP_SDL_WINDOW_FULLSCREEN_DESKTOP) != 0,
+        .suspended = suspended, .scene = g_ram[0x54], .subscene = g_ram[0x55]
+      };
+      FzeroDiagnosticsSample(&diagnostic_frame, false);
+    }
     SDL_Event event;
     int panel = 0; /* 0 none, 1 save-state browser, 2 rewind filmstrip */
     while (SDL_PollEvent(&event)) {
       if (event.type == SDL_QUIT) running = 0;
-      FzeroGamepadEvent(&pad, &event);
+#if SNESRECOMP_SDL3
+      if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) running = 0;
+#else
+      if (event.type == SDL_WINDOWEVENT &&
+          event.window.event == SDL_WINDOWEVENT_CLOSE) running = 0;
+#endif
+      if (g_playthrough.mode == 2 && event.type == SDL_KEYDOWN) {
+        if (SNESRECOMP_SDL_EVENT_KEY(event) == SDLK_ESCAPE) running = 0;
+        continue; /* no user hotkey may mutate a verified visual replay */
+      }
+      if (g_playthrough.mode != 2) FzeroGamepadEvent(&pad, &event);
       if (event.type == SDL_KEYDOWN && !event.key.repeat) {
         /* Hotkeys are tested before the quick slots, so a binding on an
          * F-key takes that key from the slot behind it. */
@@ -1753,6 +2514,7 @@ int main(int argc, char **argv) {
             break;
           case SDLK_r:
             if (mod & KMOD_CTRL) {
+              abort_playthrough("guest reset");
               RtlReset(1);
               FzeroGameInfo()->session_reset();
               FzeroSetViewport(viewport);
@@ -1760,7 +2522,7 @@ int main(int argc, char **argv) {
             }
             break;
           case SDLK_RETURN: {
-            if (!(mod & KMOD_ALT)) break;
+            if (!(mod & KMOD_ALT) || triple_separate) break;
             Uint32 flags = (Uint32)SDL_GetWindowFlags(window);
             snesrecomp_sdl_set_fullscreen(
                 window,
@@ -1774,7 +2536,7 @@ int main(int argc, char **argv) {
     }
 
     update_state_feedback(window, &state_feedback_until);
-    {
+    if (g_playthrough.mode != 2) {
       int slot = debug_server_consume_loadstate();
       if (slot >= 0)
         perform_state_action(window, 0, slot, &state_feedback_until);
@@ -1790,13 +2552,30 @@ int main(int argc, char **argv) {
     bool should_suspend = paused || (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED);
     if (should_suspend != suspended) {
       suspended = should_suspend;
+      if (suspended) FzeroFfbSilence();
+      FzeroDiagnosticsEvent(suspended ? "pause" : "resume", 0);
       snesrecomp_sdl_pause_audio_device(audio, suspended || !launcher_settings.enable_audio);
       g_reset_presentation_clock = true;
     }
-    if (suspended) { SDL_Delay(10); continue; }
+    if (suspended) {
+      uint64_t diagnostic_start = FzeroDiagnosticsBegin();
+      SDL_Delay(10);
+      FzeroDiagnosticsEnd(FZERO_DIAG_PAUSED, diagnostic_start);
+      continue;
+    }
     double now = monotonic_seconds();
     if (now >= next_display_check) {
-      double next_hz = g_video.fps_enabled ? FzeroPresentationHz(g_video.fps, display_refresh(window)) : FZERO_SIMULATION_HZ;
+      if (triple_separate) {
+        FzeroTripleDisplaySelection current_layout;
+        if (!triple_displays_available(&current_layout) ||
+            !triple_display_bounds_equal(&separate_layout, &current_layout)) {
+          fprintf(stderr, "[fzero-triple] display layout changed; closing three-window session safely\n");
+          running = 0;
+          break;
+        }
+      }
+      actual_refresh = display_refresh(window);
+      double next_hz = g_video.fps_enabled ? FzeroPresentationHz(g_video.fps, actual_refresh) : FZERO_SIMULATION_HZ;
       if (next_hz != hz) {
         hz = next_hz;
         clock.presentation_hz = hz;
@@ -1805,6 +2584,7 @@ int main(int argc, char **argv) {
       next_display_check = now + 0.25;
     }
     if (g_reset_presentation_clock) {
+      FzeroDiagnosticsEvent("clock_reset", 0);
       missed_presentations += clock.missed_presentations;
       FzeroClockReset(&clock, now, hz);
       g_reset_presentation_clock = false;
@@ -1841,13 +2621,23 @@ int main(int argc, char **argv) {
                                    &state_feedback_until);
       FzeroReplayViewport((unsigned)frames, &g_video);
       int replay_width, replay_height;
-      if (FzeroReplayWindow((unsigned)frames, &replay_width, &replay_height))
+      if (!triple_separate &&
+          FzeroReplayWindow((unsigned)frames, &replay_width, &replay_height))
         SDL_SetWindowSize(window, replay_width, replay_height);
       if (use_gl_renderer)
         snesrecomp_sdl_get_drawable_size(window, &drawable_width, &drawable_height);
       else
         snesrecomp_sdl_get_render_output_size(renderer, &drawable_width, &drawable_height);
-      FzeroViewport next = FzeroCalculateViewport(&g_video, drawable_width, drawable_height);
+      triple_active = triple_separate ||
+          (triple_requested && FzeroTripleSpanSupported(drawable_width,
+                                                         drawable_height));
+      if (triple_active)
+        presenter.triple_rig = triple_rig_for_span(&g_video,
+            triple_separate ? drawable_width * 3 : drawable_width,
+            drawable_height);
+      FzeroViewport next = FzeroCalculateViewport(&g_video,
+          triple_active && !triple_separate ? drawable_width / 3 : drawable_width,
+          drawable_height);
       if (next.width != viewport.width || next.aspect != viewport.aspect) {
         viewport = next;
         FzeroSetViewport(viewport);
@@ -1857,7 +2647,24 @@ int main(int argc, char **argv) {
       uint32_t input = keyboard_input() | controller_input(pad) |
                        debug_server_get_controller_inputs() | (1u << 30) |
                        debug_server_get_controller_active_mask();
+      uint32_t wheel_host_buttons = input & (FZERO_WHEEL_SAVE_MENU | FZERO_WHEEL_REWIND);
+      uint32_t wheel_host_pressed = wheel_host_buttons & ~held_wheel_host_buttons;
+      held_wheel_host_buttons = wheel_host_buttons;
+      input &= ~(FZERO_WHEEL_SAVE_MENU | FZERO_WHEEL_REWIND);
+      if (wheel_host_pressed & FZERO_WHEEL_SAVE_MENU) {
+        (void)snes_savestate_menu_poll_open(FZERO_MENU_GESTURE);
+      }
+      if (wheel_host_pressed & FZERO_WHEEL_REWIND) {
+        (void)snes_rewind_open();
+      }
       if (FzeroReplayHasInput()) input = FzeroReplayInput((unsigned)frames);
+      if (g_playthrough.mode == 2 &&
+          !FzeroPlaythroughNextInput(&g_playthrough, &input)) {
+        fprintf(stderr, "[fzero-playthrough] missing input at frame %ld\n", frames);
+        replay_failed = true;
+        running = 0;
+        break;
+      }
       /* Seat 0's word, before the guest sees it: the overlays are a player-1
        * facility, and the press that closed one must neither reach the game
        * nor re-open the panel. */
@@ -1876,19 +2683,41 @@ int main(int argc, char **argv) {
         panel = 2;
         break;
       }
+      uint64_t diagnostic_start = FzeroDiagnosticsBegin();
       (void)RtlRunFrame(input);
+      if (g_playthrough.mode == 1 &&
+          !FzeroPlaythroughRecordFrame(&g_playthrough, input, g_ram, sizeof(g_ram)))
+        fprintf(stderr, "[fzero-playthrough] write failed; case incomplete\n");
+      if (g_playthrough.mode == 2 &&
+          !FzeroPlaythroughVerifyFrame(&g_playthrough, g_ram, sizeof(g_ram))) {
+        fprintf(stderr, "[fzero-playthrough] input/state divergence at frame %ld\n", frames);
+        replay_failed = true;
+        running = 0;
+        break;
+      }
+      if (g_playthrough.mode != 2) {
+        FzeroTelemetryFrame(g_ram, sizeof(g_ram), input);
+        FzeroFfbFrame(g_ram, sizeof(g_ram), input);
+      }
+      FzeroDiagnosticsEnd(FZERO_DIAG_SIMULATION, diagnostic_start);
       if (g_fail || !FzeroLastLleResult()) {
         fprintf(stderr, "[fzero-failure] frame=%ld resume=$%06x bus_fault=%d execution=%d state=%02x,%02x,%02x car=%02x\n",
                 frames, (unsigned)FzeroResumePc(), g_fail, FzeroLastLleResult(),
                 g_ram[0x54], g_ram[0x55], g_ram[0x56], g_ram[0x52]);
         Die("F-Zero runtime execution failed");
       }
+      diagnostic_start = FzeroDiagnosticsBegin();
       FzeroDrawPpuFrame();
+      FzeroDiagnosticsEnd(FZERO_DIAG_PPU, diagnostic_start);
       /* One emulated frame elapsed: the ring captures on its own cadence. */
       snes_rewind_note_frame();
       frames++;
       FzeroClockSimulationDone(&clock);
       now = monotonic_seconds();
+      if (g_playthrough.mode == 2 && (uint64_t)frames >= g_playthrough.total) {
+        running = 0;
+        break;
+      }
       if (auto_close_frames > 0 && frames >= auto_close_frames) { running = 0; break; }
     }
 
@@ -1898,17 +2727,22 @@ int main(int argc, char **argv) {
     presenter.drawable_height = drawable_height;
     presenter.texture = texture;
     presenter.renderer = renderer;
+    presenter.triple_active = triple_active;
 
     if (panel) {
+      abort_playthrough("state/rewind overlay opened");
       /* A panel owns the screen: freeze the guest, and let the window keep
        * repainting the frame the player stopped at with the panel over it.
        * Audio goes quiet for the duration, as it would for any paused
        * game. */
       snesrecomp_sdl_pause_audio_device(audio, true);
+      FzeroFfbSilence();
+      FzeroDiagnosticsEvent("menu_open", panel);
       if (panel == 1)
         savestate_menu_loop(&presenter, &running, &pad);
       else
         rewind_loop(&presenter, &running, &pad);
+      FzeroDiagnosticsEvent("menu_close", panel);
       if (FzeroStateGuardTripped())
         set_title_message(window, "State refused: taken on the other cartridge",
                           &state_feedback_until);
@@ -1923,26 +2757,58 @@ int main(int argc, char **argv) {
     }
 
     if (FzeroClockPresentationDue(&clock, now)) {
-      FzeroPresent(FzeroClockAlpha(&clock, now));
-      present_frame(&presenter, NULL, 0, 0, 0);
-      /* Offer what was just presented as the next save's thumbnail and as
-       * the filmstrip's frame for the next capture. Both downsample into
-       * small fixed buffers and keep nothing else. */
-      snes_savestate_menu_note_frame((const uint32_t *)pixels, logical_width,
+      uint64_t diagnostic_start = FzeroDiagnosticsBegin();
+      FzeroPresent(triple_active ? 1.0 : FzeroClockAlpha(&clock, now));
+      FzeroDiagnosticsEnd(FZERO_DIAG_COMPOSITION, diagnostic_start);
+      const uint32_t *hd_frame = FzeroHdFrame();
+      unsigned hd_scale = FzeroHdScale();
+      const uint8_t *source = hd_frame ? (const uint8_t *)hd_frame : pixels;
+      unsigned mean = reduce_race_flash ? source_frame_mean(source,
+          logical_width * (int)hd_scale, kFrameHeight * (int)hd_scale) : 0;
+      bool hold_flash = reduce_race_flash && g_ram[0x54] == 2 &&
+          g_ram[0x55] >= 3 && mean >= 225 && suppressed_flashes < 6;
+      if (hold_flash) {
+        ++suppressed_flashes;
+        fprintf(stderr, "[fzero-flash] held race presentation at frame=%ld "
+                        "mean=%u consecutive=%u\n", frames, mean,
+                suppressed_flashes);
+      } else {
+        suppressed_flashes = 0;
+        present_frame(&presenter, NULL, 0, 0, 0);
+        FzeroDiagnosticsPresented();
+        /* Offer what was just presented as the next save's thumbnail and as
+         * the filmstrip's frame for the next capture. Both downsample into
+         * small fixed buffers and keep nothing else. */
+        snes_savestate_menu_note_frame((const uint32_t *)pixels, logical_width,
+                                       kFrameHeight);
+        snes_rewind_note_framebuffer((const uint32_t *)pixels, logical_width,
                                      kFrameHeight);
-      snes_rewind_note_framebuffer((const uint32_t *)pixels, logical_width,
-                                   kFrameHeight);
+        ++presentations;
+      }
       FzeroClockPresentationDone(&clock, monotonic_seconds());
-      ++presentations;
     }
-    if (running) wait_until(FzeroClockNextDeadline(&clock));
+    if (running) {
+      uint64_t diagnostic_start = FzeroDiagnosticsBegin();
+      wait_until(FzeroClockNextDeadline(&clock));
+      FzeroDiagnosticsEnd(FZERO_DIAG_WAIT, diagnostic_start);
+    }
+  }
+  if (g_video.diagnostics) {
+    diagnostic_frame.simulation = (uint64_t)frames;
+    diagnostic_frame.presentations = presentations;
+    diagnostic_frame.missed = missed_presentations + clock.missed_presentations;
+    FzeroDiagnosticsSample(&diagnostic_frame, true);
+    FzeroDiagnosticsStop();
   }
   fprintf(stderr, "[fzero-presentation] simulation=%ld presentations=%llu missed=%llu target_hz=%.3f\n",
           frames, (unsigned long long)presentations,
           (unsigned long long)(missed_presentations + clock.missed_presentations), hz);
 
   const char *frame_dump = getenv("SNESRECOMP_FRAME_BMP");
-  if (!write_frame_bmp(frame_dump, pixels, logical_width, kFrameHeight))
+  const uint32_t *hd_dump = FzeroHdFrame();
+  unsigned dump_scale = FzeroHdScale();
+  if (!write_frame_bmp(frame_dump, hd_dump ? (const uint8_t *)hd_dump : pixels,
+                       logical_width * (int)dump_scale, kFrameHeight * (int)dump_scale))
     fprintf(stderr, "Unable to write frame dump: %s\n", frame_dump);
   const char *ram_dump = getenv("SNESRECOMP_WRAM_DUMP");
   if (ram_dump && ram_dump[0]) {
@@ -1951,7 +2817,9 @@ int main(int argc, char **argv) {
       fprintf(stderr, "Unable to write WRAM capture\n");
     if (dump) fclose(dump);
   }
-  RtlWriteSram();
+  if (g_playthrough.mode != 2) RtlWriteSram();
+  FzeroSetMode7Hd(0, NULL, 0);
+  free(hd_pixels);
   debug_server_shutdown();
   snesrecomp_sdl_pause_audio_device(audio, true);
 #if SNESRECOMP_SDL3
@@ -1964,17 +2832,33 @@ int main(int argc, char **argv) {
 #else
   SDL_CloseAudioDevice(audio);
 #endif
-  if (pad) SDL_GameControllerClose(pad);
+  FzeroGamepadShutdown(&pad);
+  FzeroFfbShutdown();
   snes_rewind_shutdown();
   if (g_overlay_texture) {
     SDL_DestroyTexture(g_overlay_texture);
     g_overlay_texture = NULL;
   }
+  if (presenter.triple_texture) SDL_DestroyTexture(presenter.triple_texture);
+  free(presenter.triple_pixels);
+  triple_windows_destroy(&separate_windows);
   if (use_gl_renderer) {
+    SDL_GL_MakeCurrent(window, gl_renderer.context);
     fzero_gl_destroy(&gl_renderer);
   } else {
     SDL_DestroyTexture(texture);
     SDL_DestroyRenderer(renderer);
+  }
+  FzeroTelemetryShutdown();
+  if (g_playthrough.mode == 1) {
+    if (!FzeroPlaythroughClose(&g_playthrough))
+      fprintf(stderr, "[fzero-playthrough] close failed; case incomplete\n");
+    else fprintf(stderr, "[fzero-playthrough] recording complete\n");
+  } else if (g_playthrough.mode == 2) {
+    if (!FzeroPlaythroughClose(&g_playthrough)) {
+      fprintf(stderr, "[fzero-playthrough] visual replay incomplete\n");
+      replay_failed = true;
+    } else fprintf(stderr, "[fzero-playthrough] visual replay complete\n");
   }
   SDL_DestroyWindow(window);
   SDL_DestroyMutex(g_audio_mutex);
@@ -1983,5 +2867,5 @@ int main(int argc, char **argv) {
   free(rom);
   /* A self-test that printed FAIL must not exit 0: a harness that only reads
    * the exit status would otherwise record a pass. */
-  return g_selftest_failed ? 4 : 0;
+  return replay_failed ? 9 : g_selftest_failed ? 4 : 0;
 }

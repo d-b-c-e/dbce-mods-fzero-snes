@@ -72,6 +72,9 @@ for filename in ("README.md", "CHANGELOG.md", "VERSION", "LICENSE"):
 shutil.copy2(ROOT / "docs/ADAPTIVE_RENDERER.md", stage / "docs/ADAPTIVE_RENDERER.md")
 shutil.copy2(ROOT / "docs/BS_DELUXE_EXPLORATION.md", stage / "docs/BS_DELUXE_EXPLORATION.md")
 shutil.copy2(ROOT / "docs/SAVE_STATES.md", stage / "docs/SAVE_STATES.md")
+shutil.copy2(ROOT / "docs/HD_MODE7.md", stage / "docs/HD_MODE7.md")
+shutil.copy2(ROOT / "docs/HD_MODE7_PERFORMANCE.md", stage / "docs/HD_MODE7_PERFORMANCE.md")
+shutil.copy2(ROOT / "docs/PERFORMANCE_DIAGNOSTICS.md", stage / "docs/PERFORMANCE_DIAGNOSTICS.md")
 screenshots = ROOT / "docs/screenshots"
 if screenshots.is_dir():
     shutil.copytree(screenshots, stage / "docs/screenshots")
@@ -94,9 +97,17 @@ for filename in ("bs-deluxe-import.json", "BS-Deluxe-credits.txt"):
     "folder in Settings > Sound. Keep using your unmodified USA ROM.\n"
     "The MSU patch, music and CRT-Geom shader are not bundled. See README.md\n"
     "for import instructions and save-state/audio limitations.\n\n"
-    "Mods starts with everything on: Widescreen at Fit, which follows the\n"
+    "Mods defaults to Widescreen at Fit, which follows the\n"
     "window between 4:3 and 32:9, Presentation FPS at Auto, and BS Deluxe.\n"
     "Turn any of them off in Mods, or choose a fixed aspect or rate there.\n\n"
+    "HD Mode 7 starts off. Enable it in Mods for sharper tracks at 2x through 10x.\n"
+    "Start at 2x. Above 4x can cause severe slowdown; use at your own risk.\n"
+    "Cars and HUD keep their original pixel artwork.\n"
+    "See docs/HD_MODE7.md for details.\n\n"
+    "Diagnostics starts off. Enable Mods > Diagnostics, reproduce a slowdown,\n"
+    "then attach the newest diagnostics/performance-*.jsonl file to your report.\n"
+    "Logs stay local and include no ROM or save data.\n"
+    "See docs/PERFORMANCE_DIAGNOSTICS.md for details.\n\n"
     "BS Deluxe gives you the original and the BS content together, and keeps\n"
     "its saves apart under saves/bs-deluxe. It is included with permission\n"
     "from its authors: GuyPerfect, Porthor, and PowerPanda. The SNES patch is\n"
@@ -170,7 +181,9 @@ for font in (stage / "assets/fonts").glob("*.ttf"):
                 records.append(text)
     (notices / (font.stem + ".txt")).write_text("\n\n".join(records), encoding="utf-8")
 
-git = "C:/Program Files/Git/mingw64/bin/git.exe"
+git = shutil.which("git")
+if git is None:
+    raise SystemExit("Git is required to record release source and dependency pins")
 commit = subprocess.check_output([git, "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
 pins = {name: subprocess.check_output([git, "rev-parse", "HEAD"],
                                      cwd=ROOT / name, text=True).strip()
