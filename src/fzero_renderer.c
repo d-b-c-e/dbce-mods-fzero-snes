@@ -938,10 +938,14 @@ static bool preview_triple_vehicles(uint32_t *output, size_t capacity,
                                     unsigned *written_pixels);
 
 /* Box-filtered colours inside each 8x8 Mode 7 tile: level 1 = 2x2 blocks,
- * level 2 = 4x4 blocks, level 3 = the whole tile. Keyed on the row's 256
- * resolved ground colours, so it is rebuilt only when a row's colours differ. */
+ * level 2 = 4x4 blocks, level 3 = the whole tile. Keyed on the row's palette and
+ * colour state; a tile's averages are built the first time a
+ * distant pixel needs it, and dropped when a row's colours differ. */
 typedef struct TileMip {
   bool valid;
+  uint16_t palette[256];
+  uint32_t state[4];
+  uint32_t built[8];
   uint32_t resolved[256];
   uint32_t level1[256][16], level2[256][4], level3[256];
 } TileMip;
@@ -952,37 +956,45 @@ static uint32_t average_colour(const uint32_t *sum, unsigned count, uint32_t top
       ((sum[1] + count / 2) / count) << 8 | (sum[0] + count / 2) / count;
 }
 
-static bool tile_mip_prepare(TileMip *mip, const uint16_t *vram,
-                             GroundColourCache *colours, const Ppu *p,
-                             const uint16_t *palette) {
-  uint32_t resolved[256];
+static bool tile_mip_prepare(TileMip *mip, GroundColourCache *colours,
+                             const Ppu *p, const uint16_t *palette) {
+  /* Exactly the state colour() reads for ground pixels (window "inside" is
+   * always false there). */
+  uint32_t state[4] = {p->cgwsel, p->cgadsub, (uint32_t)p->fixedColor,
+                       (p->inidisp & 15u) | (p->screenEnabled[0] & 1u) << 4 |
+                       (p->screenEnabled[1] & 1u) << 5};
+  if (mip->valid && !memcmp(mip->state, state, sizeof(state)) &&
+      !memcmp(mip->palette, palette, sizeof(mip->palette))) return true;
   for (unsigned index = 0; index < 256; ++index)
-    resolved[index] = ground_colour(colours, p, palette, index);
-  if (mip->valid && !memcmp(mip->resolved, resolved, sizeof(resolved))) return true;
-  for (int tile = 0; tile < 256; ++tile) {
-    uint32_t s1[16][3] = {{0}}, s2[4][3] = {{0}}, s3[3] = {0}, top = 0;
-    for (int py = 0; py < 8; ++py)
-      for (int px = 0; px < 8; ++px) {
-        uint32_t c = resolved[vram[tile * 64 + py * 8 + px] >> 8];
-        if (!py && !px) top = c;
-        uint32_t ch[3] = {c & 0xff, (c >> 8) & 0xff, (c >> 16) & 0xff};
-        for (int k = 0; k < 3; ++k) {
-          s1[(py >> 1) * 4 + (px >> 1)][k] += ch[k];
-          s2[(py >> 2) * 2 + (px >> 2)][k] += ch[k];
-          s3[k] += ch[k];
-        }
-      }
-    for (int b = 0; b < 16; ++b) mip->level1[tile][b] = average_colour(s1[b], 4, top);
-    for (int b = 0; b < 4; ++b) mip->level2[tile][b] = average_colour(s2[b], 16, top);
-    mip->level3[tile] = average_colour(s3, 64, top);
-  }
-  memcpy(mip->resolved, resolved, sizeof(resolved));
+    mip->resolved[index] = ground_colour(colours, p, palette, index);
+  memcpy(mip->state, state, sizeof(state));
+  memcpy(mip->palette, palette, sizeof(mip->palette));
+  memset(mip->built, 0, sizeof(mip->built));
   mip->valid = true;
   return true;
 }
 
+static void tile_mip_build(TileMip *mip, const uint16_t *vram, unsigned tile) {
+  uint32_t s1[16][3] = {{0}}, s2[4][3] = {{0}}, s3[3] = {0}, top = 0;
+  for (int py = 0; py < 8; ++py)
+    for (int px = 0; px < 8; ++px) {
+      uint32_t c = mip->resolved[vram[tile * 64 + py * 8 + px] >> 8];
+      if (!py && !px) top = c;
+      uint32_t ch[3] = {c & 0xff, (c >> 8) & 0xff, (c >> 16) & 0xff};
+      for (int k = 0; k < 3; ++k) {
+        s1[(py >> 1) * 4 + (px >> 1)][k] += ch[k];
+        s2[(py >> 2) * 2 + (px >> 2)][k] += ch[k];
+        s3[k] += ch[k];
+      }
+    }
+  for (int b = 0; b < 16; ++b) mip->level1[tile][b] = average_colour(s1[b], 4, top);
+  for (int b = 0; b < 4; ++b) mip->level2[tile][b] = average_colour(s2[b], 16, top);
+  mip->level3[tile] = average_colour(s3, 64, top);
+  mip->built[tile >> 5] |= UINT32_C(1) << (tile & 31);
+}
+
 /* Same tile and in-tile position as FzeroMode7Fetch, read from a mip level. */
-static uint32_t tile_mip_colour(const TileMip *mip, const FzeroMode7Line *line,
+static uint32_t tile_mip_colour(TileMip *mip, const FzeroMode7Line *line,
                                 const uint16_t *vram, FzeroMode7Texel texel,
                                 int tile, int level, GroundColourCache *colours,
                                 const Ppu *p, const uint16_t *palette) {
@@ -1000,12 +1012,13 @@ static uint32_t tile_mip_colour(const TileMip *mip, const FzeroMode7Line *line,
   }
   unsigned number = outside && (line->control & 0x80) ? 0 :
       tile >= 0 ? (unsigned)tile & 255 : vram[(ty / 8) * 128 + tx / 8] & 255;
+  if (!(mip->built[number >> 5] & (UINT32_C(1) << (number & 31))))
+    tile_mip_build(mip, vram, number);
   int ix = tx & 7, iy = ty & 7;
   return level == 1 ? mip->level1[number][(iy >> 1) * 4 + (ix >> 1)] :
          level == 2 ? mip->level2[number][(iy >> 2) * 2 + (ix >> 2)] :
                       mip->level3[number];
 }
-
 static bool draw_triple_sides(uint32_t *output, size_t capacity,
                               const FzeroTripleRig *rig, int logical_width,
                               bool direct_sky) {
@@ -1233,7 +1246,7 @@ static bool draw_triple_sides(uint32_t *output, size_t capacity,
       bool filtered = use_row_projection && align && ground_filter &&
           FzeroTripleGroundBuildRowAt(&ground, &panels[side ? 2 : 0],
                                       y + 1.0, pw, ph, &next_row) &&
-          tile_mip_prepare(&tile_mip, f->vram, &colours, &scanout, raster->palette);
+          tile_mip_prepare(&tile_mip, &colours, &scanout, raster->palette);
       if (filtered) ++filtered_rows;
       FzeroCourseCache cache = kCourseCacheEmpty;
       int level = 0;
