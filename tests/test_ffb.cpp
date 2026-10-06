@@ -93,7 +93,7 @@ int main() {
   FzeroFfbCompute(&state, ram, 12, 0, 40, &out);
   CHECK(!out.racing);
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
   char devices[16][256]{};
   int device_count = FzeroFfbListDevices(devices, 16);
   CHECK(device_count >= 0 && device_count <= 16);

@@ -431,3 +431,5 @@ claim and actual distribution scope need review before including the patch.
 No blanket asset clearance or whole-product MIT license is implied.
 
 *F-Zero* belongs to Nintendo. The game ROM is not included.
+
+Developer: [offline FFB comparison and normalization status](docs/FFB-COMPARISON.md).

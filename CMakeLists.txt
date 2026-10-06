@@ -294,7 +294,13 @@ if(BUILD_TESTING)
     add_executable(fzero_ffb_tests tests/test_ffb.cpp src/fzero_ffb.cpp
         src/fzero_hotkeys.c)
     target_include_directories(fzero_ffb_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+    # Offline means no optional native loader or device discovery, even when a
+    # real WheelFfb.dll is beside the test. Hardware lifecycle has a fake suite.
+    target_compile_definitions(fzero_ffb_tests PRIVATE FZERO_FFB_MODEL_ONLY)
     add_test(NAME fzero_ffb COMMAND fzero_ffb_tests)
+    add_executable(fzero_force_trace tools/force_model_trace.cpp src/fzero_ffb.cpp src/fzero_hotkeys.c)
+    target_include_directories(fzero_force_trace PRIVATE "${CMAKE_SOURCE_DIR}/src")
+    target_compile_definitions(fzero_force_trace PRIVATE FZERO_FFB_MODEL_ONLY)
     if(WIN32)
         # Fake Win32 loader/exports: no real DLL or device is accessed.
         add_executable(fzero_ffb_lifecycle_tests tests/test_ffb_lifecycle.cpp

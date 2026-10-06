@@ -1,3 +1,5 @@
+**FFB comparison (2026-10-06):** `docs/FFB-COMPARISON.md` documents the new offline tools and remaining physical acceptance. No installed tune/default was changed. Coordinate normalization with the shared toolkit findings before changing gains.
+
 Public packaging review (2026-10-05): read docs/PUBLIC-PACKAGING.md. Public fork main b7eb125 includes the integration; 24 package tests pass. No new binary release. Deluxe is compiled with embedded cartridge data; a stock-only ZIP cannot gain Deluxe just by adding a patch. Preserve owner builds/assets and confirm the distribution route before packaging Deluxe.
 
 # Agent notes

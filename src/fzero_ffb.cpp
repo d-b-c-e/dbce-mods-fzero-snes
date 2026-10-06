@@ -11,7 +11,7 @@ extern "C" {
 #include <cstring>
 #include <mutex>
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
 #define NOMINMAX
 #include "../lib/toolkit/include/wheelffb.h"
 #endif
@@ -24,7 +24,7 @@ constexpr int kConstantImpactMs = 120;
 constexpr int kSineImpactMs = 140;
 constexpr int kCollisionMinEnergyLoss = 16;
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
 using CreateConstantBurstFn = int (__cdecl *)(int);
 using PlayConstantBurstFn = int (__cdecl *)(int, int);
 using ReleaseConstantBurstsFn = void (__cdecl *)();
@@ -62,7 +62,7 @@ int wrapped_delta(uint16_t current, uint16_t previous, int modulus) {
 
 int FzeroFfbListDevices(char names[][256], int max_devices) {
   if (!names || max_devices <= 0) return 0;
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
   std::lock_guard<std::recursive_mutex> call(s_call_gate);
   if (s_closed) return 0;
   WheelFfbApi api{};
@@ -139,11 +139,11 @@ void FzeroFfbCompute(FzeroFfbState *state, const uint8_t *ram,
 }
 
 void FzeroFfbInit(const char *config_path, void *native_window) {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
   std::lock_guard<std::recursive_mutex> call(s_call_gate);
 #endif
   FzeroFfbShutdown();
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
   s_closed = false; /* Explicit main-thread initialization starts a new session. */
 #endif
   int enabled = 0;
@@ -156,7 +156,7 @@ void FzeroFfbInit(const char *config_path, void *native_window) {
   s_strength = std::max(0, std::min(s_strength, 100));
   s_impact_strength = std::max(0, std::min(s_impact_strength, 100));
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
   char impact_type[32] = "Constant";
   FzeroIniReadString(config_path, "ForceFeedback", "ImpactType", impact_type,
                      sizeof(impact_type));
@@ -249,7 +249,7 @@ void FzeroFfbInit(const char *config_path, void *native_window) {
 }
 
 void FzeroFfbFrame(const uint8_t *ram, size_t ram_size, uint32_t input) {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
   std::lock_guard<std::recursive_mutex> call(s_call_gate);
   if (!s_active) return;
   FzeroFfbOutput output{};
@@ -298,14 +298,14 @@ void FzeroFfbFrame(const uint8_t *ram, size_t ram_size, uint32_t input) {
 }
 
 void FzeroFfbSilence(void) {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
   std::lock_guard<std::recursive_mutex> call(s_call_gate);
   if (s_active) s_ffb.ZeroForces();
 #endif
 }
 
 void FzeroFfbShutdown(void) {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
   std::lock_guard<std::recursive_mutex> call(s_call_gate);
   s_closed = true;
   s_active = false; /* Reentrant/late frame and silence calls cannot emit exports. */

@@ -10,7 +10,7 @@ Audited 2026-10-04 (read-only standards audit); STD-001 and STD-010 revised 2026
 |---|---|---|---|
 | STD-001 | One mod per game | partial | wheel/FFB/telemetry/triple/recording merged with main on claude/fzero-main-merge (2026-10-04, merge of codex/triple-wheel-integration a1a1267; Release MSVC build with embedded BS Deluxe and 15/15 ctest pass); now merged to main b7eb125; previous staging branch is historical. codex/analog-wheel, codex/force-feedback, codex/telemetry hold superseded early versions (no unique work worth merging) |
 | STD-002 | Recording and playback from launch | partial | deterministic input recorder + WRAM hash replay (fzero_playthrough.c, docs/PLAYTHROUGH_RECORDING.md) now on main b7eb125; env-var builds; the one stored case (wheel-drive-20260928-235320.fzpt) diverges at frame 155 on both the a1a1267 build and the merge build, so it needs re-recording |
-| STD-003 | Normalized FFB strength | pending | own formula strength*55/100/40 (fzero_ffb.cpp:120-128), default 40; toolkit force model/profile unused |
+| STD-003 | Normalized FFB strength | partial | Device-free production-model synthetic component trace; spring/damper/road remain distinct, default40 unchanged. Recorded reference and physical normalization pending. See docs/FFB-COMPARISON.md. |
 | STD-004 | Consistent settings UX | partial | settings in the recomp launcher Mods page; F6/F8 taken by save slots/rewind (sdl_main.c:2020,2481-2503) |
 | STD-005 | Camera numpad layout 8/2 9/3 4/6 7/1 +/- 5 | n/a | no 3D camera rig; Mode 7 fixed chase view |
 | STD-006 | Camera step sizes are settings | n/a | no adjustable camera mount |
