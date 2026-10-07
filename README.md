@@ -389,6 +389,10 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
+On Windows, `.\build.ps1 -Deluxe -Test` sets up MSVC itself, configures the integration build in `build-merge` with BS
+Deluxe embedded (after `tools/regen_bs_deluxe.py`) and runs the ROM-free tests; `.\tools\Install-StreamDeck.ps1 -Label <name>`
+then installs it into the Stream Deck copy with a backup and receipt. Plain `.\build.ps1` builds the stock game in `build`.
+
 Local ROMs, generated files, saves, captures, and builds are ignored by git.
 
 Run the ROM-free regression suites with `ctest --test-dir build --output-on-failure`.
