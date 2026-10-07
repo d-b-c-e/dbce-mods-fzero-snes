@@ -20,3 +20,17 @@ Audited 2026-10-04 (read-only standards audit); STD-001 and STD-010 revised 2026
 | STD-010 | Install the latest build for testing | partial | Stream Deck key runs Launch-FZeroRecomp.bat -> FZeroSNESRecomp-wheel-launcher.exe, which is already the integration build (SHA-256 80dba7ff..., embeds BS Deluxe, backups under deployment-backups\); LaunchBox still runs the stock 1.7.0 FZeroSNESRecomp.exe; no backup-and-install script |
 
 | STD-011 | Work lands on main | adopted | Packaging research starts from b7eb125 and returns to main; private ROMs, generated content and recordings remain outside release archives. |
+| STD-012 | Reproduce the route and preserve original signals | partial | Deterministic input recorder and WRAM-hash replay (STD-002 row); grid REC/PLY 🔧, the replay test is to be re-recorded on current main |
+| STD-013 | The installed build launches plainly | partial | The Stream Deck key launches the integration build with no extra arguments (grid PLN 🧪); triple screens start only when the Triple Screen mod is on in the launcher |
+| STD-014 | Request reciprocal review when progress stalls | adopted | Process standard; reviews go through the portfolio inbox |
+| STD-015 | Triples on Surround and on separate monitors | partial | Display layout Surround (one spanning fullscreen display) or Separate monitors (one borderless SDL window per display); Surround seen at the rig 2026-10-05, separate displays not yet at the rig |
+| STD-016 | Telemetry: Forza Horizon layout, on by default | partial | Forza Horizon 324-byte UDP built in, but off by default (`[Telemetry] Enabled=1` in config.ini) |
+| STD-017 | Hide settings pages that have nothing to offer | n/a | Settings live in the recomp launcher's Mods page; there is no family panel |
+| STD-018 | Handling changes never reach online scores | n/a | No online play or leaderboards |
+| STD-019 | Menus on the centre screen; side screens only in gameplay | unchecked | The centre window keeps the stock game, vehicle and HUD; whether the side windows stay black in menus is not yet checked |
+| STD-020 | Standard feature checklist per game | adopted | Row in the portfolio grid (dbce-project-mgmt PROJECTS.md) |
+| STD-021 | art of rally is the FFB reference | pending | Own condition-effect model (spring, damper, road), default 40; Strength 50 trace exported (docs/FFB-COMPARISON.md); physical comparison with art at 50 pending |
+| STD-022 | One triple-screen selector | adopted | Launcher: the Triple Screen mod on/off is Off, then Display layout "Surround" / "Separate monitors" (labels aligned 2026-10-07; saved values stay Span/Separate) |
+| STD-023 | Frame-rate readout in the settings panel and the log | unchecked | Ctrl+F7 sets the presentation frame rate; no measured readout yet |
+| STD-024 | Optional on-screen frame-rate counter | unchecked | As STD-023 |
+| STD-025 | One force model for every tyre game | n/a | Hover machines with no tyre model; the condition-effect model stays game-specific |

@@ -167,8 +167,8 @@ buckets. The earlier comparison predates that split.
 
 ### Separate-display preview (2026-10-01)
 
-The Triple Screen mod's **Display layout** option defaults to **One Surround /
-span display**. **Three separate displays** opens borderless left, center,
+The Triple Screen mod's **Display layout** option defaults to **Surround** (one
+spanning display). **Separate monitors** opens borderless left, center,
 and right windows on exactly one unambiguous horizontal row of three equal,
 edge-adjacent landscape displays. The center window retains the stock game,
 vehicle, and HUD compositor; the side windows show the projected side panels.

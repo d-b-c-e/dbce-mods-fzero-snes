@@ -227,7 +227,7 @@ static int option_get(void *ctx, const char *package, const char *feature, int i
   if (kind == 8 && index == TRIPLE_OPTIONS) {
     memset(out, 0, sizeof(*out));
     COPY(out->id, "TripleOutputMode"); COPY(out->label, "Display layout");
-    COPY(out->description, "Span uses one fullscreen Surround display. Separate opens one borderless window on each of three equal, horizontally aligned displays. The selected CRT shader applies independently to all three panels in either layout.");
+    COPY(out->description, "Surround: one fullscreen display that spans the three screens (NVIDIA Surround or a span). Separate monitors: one borderless window on each of three equal, horizontally aligned displays. The selected CRT shader applies independently to all three panels in either layout. Turn the Triple Screen mod off for one view.");
     out->type = RECOMP_MOD_OPTION_CHOICE; out->choice_count = 2;
     COPY(out->value, video->triple_output_mode == FZERO_TRIPLE_OUTPUT_SEPARATE ? "Separate" : "Span");
     COPY(out->default_value, "Span");
@@ -322,7 +322,7 @@ static int choice_get(void *ctx, const char *package, const char *feature,
   if (identity(package, feature) == 8 && !strcmp(option, "TripleOutputMode") && index < 2) {
     memset(out, 0, sizeof(*out));
     COPY(out->value, index ? "Separate" : "Span");
-    COPY(out->label, index ? "Three separate displays" : "One Surround / span display");
+    COPY(out->label, index ? "Separate monitors" : "Surround");   /* STD-022 names; saved values stay Span/Separate */
     return 1;
   }
   if (identity(package, feature) == 7 && !strcmp(option, "Device") &&
