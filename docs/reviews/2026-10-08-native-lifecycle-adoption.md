@@ -40,7 +40,13 @@ records the payloads. Backup: `deployment-backups/2026-10-08-steering-native50ba
 private pre-install hashes: `build/fleet-protected-before.json`.
 
 This local launcher embeds private Deluxe data and is not a public distributable.
-Muted launcher rendering, hardware feel and calibration to Art remain pending.
+The 05:39 CT muted plain-launch check rendered the installed launcher and closed
+normally (exit 0). Force feedback and telemetry were temporarily disabled in
+the saved INI, then all 36 root/save/diagnostic files were restored byte-exact.
+The game-window capture shows the launcher, verified ROM and Keyboard selected;
+no settings navigation or device binding was tested. Evidence:
+`SessionEvidence/fzero-muted-launcher-20261008-0539`. Steering-slider rendering,
+hardware feel and calibration to Art remain pending.
 No physical force was sent. The three complete synthetic stock playthrough
 replays in `../2026-10-08-stock-replay-proof.md` are separate from this installed
 Deluxe build and are excluded from normalization.

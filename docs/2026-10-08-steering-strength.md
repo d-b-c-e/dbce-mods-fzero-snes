@@ -65,5 +65,7 @@ invariance across separate steering trials; see `2026-10-08-stock-replay-proof.m
 Claude's source cross-review passed for the split and accepted-zero startup.
 The combined steering/native candidate was installed at 04:36 CT on October 8
 from clean `4ac6f6b`, with protected owner files unchanged; see
-`reviews/2026-10-08-native-lifecycle-adoption.md`. Launcher rendering, Deluxe
-capture and attended feel remain pending. No physical force was sent.
+`reviews/2026-10-08-native-lifecycle-adoption.md`. The muted plain launcher
+subsequently rendered and exited normally with 36 protected files restored;
+the Mods-page slider, Deluxe capture and attended feel remain pending.
+No physical force was sent.
