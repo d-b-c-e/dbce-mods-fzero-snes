@@ -26,6 +26,21 @@ Strength is saved (the old panel displayed 35 in that case). This intentionally
 aligns fresh panel settings with the runtime; existing Strength remains the
 fallback when SteeringStrength is absent. Crash intensity stays independent.
 
-At this source checkpoint, consumer build/install and muted launcher loading
-remain pending. Hardware feel and calibration to Art remain attended checks.
-Headless stock playthrough evidence is separate from the installed Deluxe build.
+## Installed candidate
+
+All 17 CTest suites, 31 replay/package Python tests and 11 dummy installer checks
+passed. The installer refuses missing or stale staged native bytes without
+changing the target. A native DLL change now triggers relinking/staging.
+
+The exact clean `4ac6f6b2d1afc49a22bff4f23ac66bd7bf5f6e74` build was installed
+with the game closed at 04:36 CT, October 8, using `Install-StreamDeck.ps1`.
+The installed launcher and native DLL match the build; five protected root
+configuration/ROM files stayed byte-identical. The target's `install-receipt.json`
+records the payloads. Backup: `deployment-backups/2026-10-08-steering-native50ba`;
+private pre-install hashes: `build/fleet-protected-before.json`.
+
+This local launcher embeds private Deluxe data and is not a public distributable.
+Muted launcher rendering, hardware feel and calibration to Art remain pending.
+No physical force was sent. The three complete synthetic stock playthrough
+replays in `../2026-10-08-stock-replay-proof.md` are separate from this installed
+Deluxe build and are excluded from normalization.

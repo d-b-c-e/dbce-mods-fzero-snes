@@ -63,5 +63,7 @@ present at its documented or archived location. A fresh synthetic stock case
 now passes three complete 3,600-frame headless replays with exact auxiliary
 invariance across separate steering trials; see `2026-10-08-stock-replay-proof.md`.
 Claude's source cross-review passed for the split and accepted-zero startup.
-Launcher rendering, Deluxe capture and attended feel remain pending. This
-checkpoint is not installed and no physical force was sent.
+The combined steering/native candidate was installed at 04:36 CT on October 8
+from clean `4ac6f6b`, with protected owner files unchanged; see
+`reviews/2026-10-08-native-lifecycle-adoption.md`. Launcher rendering, Deluxe
+capture and attended feel remain pending. No physical force was sent.
