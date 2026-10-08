@@ -2,14 +2,14 @@
   "schema": "dbce.fzero-toolkit-candidate",
   "schemaVersion": 1,
   "repository": "d-b-c-e/dbce-wheel-mod-toolkit",
-  "sourceCommit": "f8f0619b5588f2d11b44f4becd4198775d4a8bcf",
-  "sourceTree": "d9f59422cff93383f9cf27f3cd641fd2adf00a35",
+  "sourceCommit": "50ba139bcaee14aee080abe438d6beec4f6a2b47",
+  "sourceTree": "462c1d7eba0f634b87790e91c7143153a6ce7f37",
   "baseline": "v0.13.0/native 0.6.0/41 exports",
   "nativeVersion": 600,
   "architecture": "x64",
   "exportCount": 41,
-  "dllSha256": "0b8848e1cb66cfb02c21926bbc1ca7e2fb0312e80ad1d6d1c828253759c396ac",
-  "sourceToBinaryManifestSha256": "1f62a7f6269da488076a67c1b1b62050db49dde45517a50cc47b131f25b15b37",
+  "dllSha256": "3f6cc51444879d01feb900098b2de94242594d093f523e3c34bd511d69c0d946",
+  "sourceToBinaryManifestSha256": "b29637fd908fab8abdd055c2a689993fb5e7d315bb620e1f280512335abbf58e",
   "compatibleHeaders": {
     "dinput_proxy.h": {
       "sourcePath": "native/dinput-proxy/dinput_proxy.h",
@@ -39,5 +39,7 @@
   },
   "installed": false,
   "physicalAcceptance": false,
-  "scope": "Isolated stock candidate; independent source/binary review approved import. No installed replacement or device operation."
+  "scope": "Native-only retained-identity and lock/shutdown fixes; headers, profiles and force arithmetic retained. Consumer startup uses accepted zero. Physical feel unqualified.",
+  "headersAndProfilesSourceCommit": "f8f0619b5588f2d11b44f4becd4198775d4a8bcf",
+  "nativeSourceTag": "native-0.6.0-retained-identity"
 }
