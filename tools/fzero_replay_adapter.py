@@ -163,10 +163,12 @@ def verified_source_and_state(case: dict, root: Path) -> tuple[Path, Path]:
     return source, state
 
 
-def raw_rows(path: Path, expected_count: int, strength: int):
+def raw_rows(path: Path, expected_count: int, strength: int, steering_strength: int | None = None):
     """Validate a complete raw stream before the toolkit sink is created."""
     with path.open("r", encoding="ascii", newline="") as stream:
-        if stream.readline() != f"FZFFB1\t{strength}\n":
+        expected_header = (f"FZFFB1\t{strength}\n" if steering_strength is None else
+                           f"FZFFB2\t{strength}\t{steering_strength}\n")
+        if stream.readline() != expected_header:
             raise ValueError("raw model header or strength mismatch")
         previous_tick = -1
         for frame in range(expected_count):
@@ -263,6 +265,11 @@ def observe(args: argparse.Namespace) -> None:
     strength = args.strength if args.strength is not None else config.getint("ForceFeedback", "Strength")
     if not 0 <= strength <= 100:
         raise ValueError("strength out of range")
+    steering_strength = getattr(args, "steering_strength", None)
+    if steering_strength is None:
+        steering_strength = config.getint("ForceFeedback", "SteeringStrength", fallback=None)
+    if steering_strength is not None and not 0 <= steering_strength <= 100:
+        raise ValueError("steering strength out of range")
     impact_strength = getattr(args, "impact_strength", None)
     if impact_strength is None:
         impact_strength = config.getint("ForceFeedback", "ImpactStrength", fallback=20)
@@ -274,14 +281,18 @@ def observe(args: argparse.Namespace) -> None:
     # configuration digest does, and the runner hash identifies its model code.
     runner_sha = sha256(args.runner)
     profile = MODEL_PROFILE + (":impact=" + impact_type + ":software-intent").encode("ascii")
-    trial = json.dumps({"strength": strength, "impactStrength": impact_strength,
-                        "impactType": impact_type, "runnerSha256": runner_sha,
-                        "profile": profile.decode("ascii")}, sort_keys=True,
-                       separators=(",", ":")).encode("ascii")
+    if steering_strength is not None:
+        profile = profile.replace(b"fzero-ffb@2:", b"fzero-ffb@3:steering=independent;")
+    trial_settings = {"strength": strength, "impactStrength": impact_strength,
+                      "impactType": impact_type, "runnerSha256": runner_sha,
+                      "profile": profile.decode("ascii")}
+    if steering_strength is not None:
+        trial_settings["steeringStrength"] = steering_strength
+    trial = json.dumps(trial_settings, sort_keys=True, separators=(",", ":")).encode("ascii")
     header = {
         "kind": "header", "schema": "dbce.wheel.force-observation", "version": 1,
         "caseId": case["caseId"], "caseSha256": identity["caseSha256"],
-        "clock": case["clock"], "model": "fzero-ffb@2:" + runner_sha[:16],
+        "clock": case["clock"], "model": ("fzero-ffb@2:" if steering_strength is None else "fzero-ffb@3:") + runner_sha[:16],
         "configSha256": hashlib.sha256(trial).hexdigest(),
         "profileSha256": hashlib.sha256(profile).hexdigest(),
         "output": "observe", "physicalOutput": False,
@@ -296,6 +307,8 @@ def observe(args: argparse.Namespace) -> None:
             "FZERO_FFB_MODEL_STRENGTH": str(strength),
             "FZERO_FFB_OBSERVATION_RAW": str(raw),
         })
+        if steering_strength is not None:
+            environment["FZERO_FFB_MODEL_STEERING_STRENGTH"] = str(steering_strength)
         if patch:
             environment["SNESRECOMP_MSU1"] = str(pack)
         run = subprocess.run([str(args.runner), str(args.rom)], env=environment,
@@ -304,10 +317,10 @@ def observe(args: argparse.Namespace) -> None:
             raise ValueError(f"verified headless replay failed ({run.returncode}): {run.stderr[-2000:]}")
         # Pass one validates the complete game/model trace before opening any
         # observation file; pass two emits only validated model requests.
-        for _ in raw_rows(raw, frame_count, strength):
+        for _ in raw_rows(raw, frame_count, strength, steering_strength):
             pass
         with toolkit.ObservationSink(args.output, header) as sink:
-            for request in requests(raw_rows(raw, frame_count, strength), strength,
+            for request in requests(raw_rows(raw, frame_count, strength, steering_strength), strength,
                                     impact_strength, impact_type):
                 sink.emit(request)
     print(f"verified frames={frame_count} caseSha256={identity['caseSha256']} output={args.output}")
@@ -326,7 +339,10 @@ def main() -> int:
     run = sub.add_parser("observe", help="verified game replay to toolkit force observations")
     for name in ("case", "toolkit", "runner", "rom", "output"):
         run.add_argument("--" + name, type=Path, required=True)
-    run.add_argument("--strength", type=int)
+    run.add_argument("--strength", type=int,
+                     help="legacy combined strength; with independent steering, controls damping/road only")
+    run.add_argument("--steering-strength", type=int,
+                     help="model-3 spring/fallback strength only, 0-100; other effects stay recorded")
     run.add_argument("--impact-strength", type=int,
                      help="independent software crash strength, 0-100; no torque is applied")
     run.add_argument("--impact-type", choices=("Constant", "Sine"),

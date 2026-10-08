@@ -34,3 +34,6 @@ Audited 2026-10-04 (read-only standards audit); STD-001 and STD-010 revised 2026
 | STD-023 | Frame-rate readout in the settings panel and the log | unchecked | Ctrl+F7 sets the presentation frame rate; no measured readout yet |
 | STD-024 | Optional on-screen frame-rate counter | unchecked | As STD-023 |
 | STD-025 | One force model for every tyre game | n/a | Hover machines with no tyre model; the condition-effect model stays game-specific |
+| STD-026 | Deliberate player tuning | partial | Launcher exposes steering/crash; saved legacy auxiliary level is retained. New candidate remains uninstalled pending review. |
+| STD-027 | Independent steering and effect strengths | partial | October 8 candidate splits spring/fallback from damping/road; preserves legacy model 2 and adds model 3/headless header. Build, model/lifecycle/provider and adapter tests pass; rendering and feel pending. See docs/2026-10-08-steering-strength.md. |
+| STD-028 | Complete owner registry snapshots | n/a | Native app uses INI/save files; current test and install paths do not export/delete Unity registry keys. |

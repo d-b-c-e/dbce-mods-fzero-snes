@@ -11,6 +11,33 @@ static void put16(uint8_t *p, uint16_t value) {
 }
 
 int main() {
+  // Compare identical trajectories under legacy, equivalent split, and zero
+  // steering. Turning steering off must not erase road, damping or impacts.
+  {
+    uint8_t track[0x20000]{};
+    FzeroFfbState legacy{}, equivalent{}, zero{};
+    FzeroFfbOutput a{}, b{}, c{};
+    track[0x54] = 2; track[0x55] = 3;
+    int contacts = 0;
+    for (int frame = 0; frame < 600; ++frame) {
+      put16(track + 0xb70, (uint16_t)(frame * 2));
+      put16(track + 0xc9, frame < 300 ? 2000 : 1900);
+      track[0xc7] = frame >= 200 ? 1 : 0;
+      if (frame > 570) track[0x55] = 0;
+      unsigned input = frame % 60 < 30 ? 0x40 : 0x80;
+      FzeroFfbCompute(&legacy, track, sizeof(track), input, 40, &a);
+      FzeroFfbComputeSteering(&equivalent, track, sizeof(track), input, 40, 40, &b);
+      FzeroFfbComputeSteering(&zero, track, sizeof(track), input, 40, 0, &c);
+      CHECK(!std::memcmp(&a, &b, sizeof(a)));
+      CHECK(!std::memcmp(&legacy, &equivalent, sizeof(legacy)) && !std::memcmp(&legacy, &zero, sizeof(legacy)));
+      CHECK(c.constant_force == 0 && c.spring_coefficient == 0);
+      CHECK(a.damper_coefficient == c.damper_coefficient && a.road_magnitude == c.road_magnitude);
+      CHECK(a.road_frequency_millihz == c.road_frequency_millihz && a.collision_pulse == c.collision_pulse && a.racing == c.racing);
+      contacts += c.collision_pulse;
+      if (frame == 250) CHECK(a.spring_coefficient > 0 && c.road_magnitude > 0 && c.damper_coefficient > 0);
+    }
+    CHECK(contacts == 1);
+  }
   uint8_t ram[0x20000]{};
   FzeroFfbState state{};
   FzeroFfbOutput out{};

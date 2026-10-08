@@ -29,6 +29,11 @@ typedef struct FzeroFfbOutput {
 void FzeroFfbCompute(FzeroFfbState *state, const uint8_t *ram,
                      size_t ram_size, uint32_t input, int strength,
                      FzeroFfbOutput *out);
+/* Model 3: steering affects the spring/fallback only. Strength retains the
+ * recorded legacy damping/road level. The model-2 entry above stays exact. */
+void FzeroFfbComputeSteering(FzeroFfbState *state, const uint8_t *ram,
+                            size_t ram_size, uint32_t input, int strength,
+                            int steering_strength, FzeroFfbOutput *out);
 void FzeroFfbInit(const char *config_path, void *native_window);
 void FzeroFfbFrame(const uint8_t *ram, size_t ram_size, uint32_t input);
 void FzeroFfbShutdown(void);

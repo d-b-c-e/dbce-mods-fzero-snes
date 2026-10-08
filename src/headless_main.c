@@ -517,10 +517,22 @@ int main(int argc, char **argv) {
   int ffb_strength = 12;
   if ((ffb_trace || (ffb_raw_path && *ffb_raw_path)) && getenv("FZERO_FFB_MODEL_STRENGTH"))
     ffb_strength = atoi(getenv("FZERO_FFB_MODEL_STRENGTH"));
+  const char *steering_text = getenv("FZERO_FFB_MODEL_STEERING_STRENGTH");
+  int ffb_steering_strength = ffb_strength;
+  if (steering_text) {
+    char *end = NULL;
+    long parsed = strtol(steering_text, &end, 10);
+    if (!steering_text[0] || *end || parsed < 0 || parsed > 100) {
+      fputs("invalid model steering strength\n", stderr);
+      FzeroPlaythroughAbort(&playthrough); free(rom); return 4;
+    }
+    ffb_steering_strength = (int)parsed;
+  }
   if (ffb_raw_path && *ffb_raw_path) {
     if (playthrough.mode != 2 || ffb_strength < 0 || ffb_strength > 100 ||
         !(ffb_raw = fopen(ffb_raw_path, "wbx")) ||
-        fprintf(ffb_raw, "FZFFB1\t%d\n", ffb_strength) < 0) {
+        (steering_text ? fprintf(ffb_raw, "FZFFB2\t%d\t%d\n", ffb_strength, ffb_steering_strength) :
+                         fprintf(ffb_raw, "FZFFB1\t%d\n", ffb_strength)) < 0) {
       fputs("device-free force observation requires valid playback and a new output path\n", stderr);
       if (ffb_raw) fclose(ffb_raw);
       FzeroPlaythroughAbort(&playthrough); free(rom); return 4;
@@ -611,8 +623,8 @@ int main(int argc, char **argv) {
     }
     if (ffb_trace || ffb_raw) {
       FzeroFfbOutput force = {0};
-      FzeroFfbCompute(&ffb_model, g_ram, sizeof(g_ram), frame_input,
-                     ffb_strength, &force);
+      FzeroFfbComputeSteering(&ffb_model, g_ram, sizeof(g_ram), frame_input,
+                             ffb_strength, ffb_steering_strength, &force);
       if (ffb_raw && fprintf(ffb_raw, "%ld\t%llu\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
                              frame, (unsigned long long)g_cpu.master_cycles,
                              force.racing, force.constant_force,

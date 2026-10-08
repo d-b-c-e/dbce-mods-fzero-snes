@@ -19,6 +19,7 @@ extern "C" {
 namespace {
 FzeroFfbState s_state{};
 int s_strength = 40;
+int s_steering_strength = 40;
 int s_impact_strength = 20;
 constexpr int kConstantImpactMs = 120;
 constexpr int kSineImpactMs = 140;
@@ -85,10 +86,17 @@ int FzeroFfbListDevices(char names[][256], int max_devices) {
 void FzeroFfbCompute(FzeroFfbState *state, const uint8_t *ram,
                      size_t ram_size, uint32_t input, int strength,
                      FzeroFfbOutput *out) {
+  FzeroFfbComputeSteering(state, ram, ram_size, input, strength, strength, out);
+}
+
+void FzeroFfbComputeSteering(FzeroFfbState *state, const uint8_t *ram,
+                            size_t ram_size, uint32_t input, int strength,
+                            int steering_strength, FzeroFfbOutput *out) {
   if (!out) return;
   std::memset(out, 0, sizeof(*out));
   if (!state || !ram || ram_size < 0x0be2) return;
   strength = std::max(0, std::min(strength, 100));
+  steering_strength = std::max(0, std::min(steering_strength, 100));
 
   const bool racing = ram[0x54] == 2 && ram[0x55] >= 3;
   const uint16_t x = read16(ram + 0x0b70) & 0x1fff;
@@ -127,8 +135,8 @@ void FzeroFfbCompute(FzeroFfbState *state, const uint8_t *ram,
    * world units per frame. Dividing by 24 kept the default 35% spring below
    * WheelFfb's 500-unit update step, leaving the wheel effectively limp. */
   const float speed_scale = std::min(state->speed / 2.0f, 1.0f);
-  out->constant_force = (int)(direction * strength * 55.0f * speed_scale);
-  out->spring_coefficient = (int)(strength * 100.0f * speed_scale);
+  out->constant_force = (int)(direction * steering_strength * 55.0f * speed_scale);
+  out->spring_coefficient = (int)(steering_strength * 100.0f * speed_scale);
   out->damper_coefficient = (int)(strength * 40.0f * speed_scale);
 
   /* Surface bits are non-zero on rough/slip zones. Keep normal track texture
@@ -154,6 +162,9 @@ void FzeroFfbInit(const char *config_path, void *native_window) {
   FzeroIniReadInt(config_path, "ForceFeedback", "Strength", &s_strength);
   FzeroIniReadInt(config_path, "ForceFeedback", "ImpactStrength", &s_impact_strength);
   s_strength = std::max(0, std::min(s_strength, 100));
+  s_steering_strength = s_strength; // Existing configs retain every component.
+  FzeroIniReadInt(config_path, "ForceFeedback", "SteeringStrength", &s_steering_strength);
+  s_steering_strength = std::max(0, std::min(s_steering_strength, 100));
   s_impact_strength = std::max(0, std::min(s_impact_strength, 100));
 
 #if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
@@ -237,8 +248,8 @@ void FzeroFfbInit(const char *config_path, void *native_window) {
   s_active = true;
   s_trace_frames = 0;
   s_trace_enabled = std::getenv("FZERO_FFB_TRACE") != nullptr;
-  std::fprintf(stderr, "[fzero-ffb] active on %s at %d%% (spring=%d damper=%d road=%d impact=%s/%d/%d%%)\n",
-               requested, s_strength, s_spring, s_damper, s_road,
+  std::fprintf(stderr, "[fzero-ffb] active on %s: steering=%d%% auxiliary=%d%% (spring=%d damper=%d road=%d impact=%s/%d/%d%%)\n",
+               requested, s_steering_strength, s_strength, s_spring, s_damper, s_road,
                s_use_constant_impact ? "constant" : "sine",
                s_use_constant_impact ? s_collision_constant : s_collision_sine,
                s_impact_strength);
@@ -253,7 +264,7 @@ void FzeroFfbFrame(const uint8_t *ram, size_t ram_size, uint32_t input) {
   std::lock_guard<std::recursive_mutex> call(s_call_gate);
   if (!s_active) return;
   FzeroFfbOutput output{};
-  FzeroFfbCompute(&s_state, ram, ram_size, input, s_strength, &output);
+  FzeroFfbComputeSteering(&s_state, ram, ram_size, input, s_strength, s_steering_strength, &output);
   /* The SNES input is pulse-density modulated, so applying those digital
    * pulses directly to constant force feels like a brief tick followed by
    * silence. Let the wheel's own position-sensitive spring hold a continuous

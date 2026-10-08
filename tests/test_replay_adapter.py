@@ -10,6 +10,23 @@ from tools.fzero_replay_adapter import create_case, observe, raw_rows, requests,
 
 
 class ReplayAdapterTests(unittest.TestCase):
+    def test_independent_steering_requires_matching_version_and_both_strengths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "model.raw"
+            path.write_bytes(b"FZFFB2\t40\t0\n0\t100\t1\t0\t0\t1600\t1600\t42000\t1\ncomplete\t1\n")
+            rows = list(raw_rows(path, 1, 40, 0))
+            events = list(requests(rows, 40, 70))
+            self.assertEqual(events[1]["magnitude"], 0)
+            self.assertEqual(events[2]["magnitude"], 0.16)
+            self.assertEqual(events[3]["magnitude"], 0.16)
+            self.assertEqual(events[4]["magnitude"], 0.70)
+            for base, steering in ((40, None), (40, 50), (50, 0)):
+                with self.subTest(base=base, steering=steering), self.assertRaisesRegex(ValueError, "header"):
+                    list(raw_rows(path, 1, base, steering))
+            path.write_bytes(b"FZFFB1\t40\ncomplete\t0\n")
+            with self.assertRaisesRegex(ValueError, "header"):
+                list(raw_rows(path, 0, 40, 50))
+
     def test_case_snapshots_config_and_patch(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

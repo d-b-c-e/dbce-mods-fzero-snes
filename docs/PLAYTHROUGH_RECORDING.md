@@ -86,6 +86,12 @@ reproduced the effects; physical validation remains attended work.
 
 ## Shared toolkit force-observation adapter
 
+The historical local example below moved during repository consolidation; its
+case file was not found at the documented or archived path on October 8. Do not
+claim a replay from that example without locating and validating the original
+artifacts. [Model 3](2026-10-08-steering-strength.md) adds an independent steering
+trial and a strict two-strength raw header; legacy cases keep model 2.
+
 `tools/fzero_replay_adapter.py` consumes the toolkit's
 `tools/replay/replay_case.py` contract without copying its implementation or
 loading `WheelFfb.dll`. `create` pins the original `.fzpt`, snapshot, ROM,

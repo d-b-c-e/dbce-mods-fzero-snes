@@ -1,5 +1,10 @@
 # Device-free FFB component comparison
 
+October 8 adds an [independent steering candidate](2026-10-08-steering-strength.md).
+The historical combined-strength numbers below stay valid for the legacy model.
+An optional third trace argument varies steering alone, retaining the second
+argument's damping/road level. Preserve both arguments with any comparison.
+
 Build with the normal CMake/MSVC environment, then choose a new output path:
 
 ```powershell

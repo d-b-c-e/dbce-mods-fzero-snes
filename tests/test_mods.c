@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #define CHECK(e) do { if (!(e)) { fprintf(stderr, "%d: %s\n", __LINE__, #e); exit(1); } } while (0)
-static int wrote_wheel_range, wrote_rewind, wrote_ffb, wrote_impact, wrote_brake_invert;
+static int wrote_wheel_range, wrote_rewind, wrote_ffb, wrote_steering, wrote_impact, wrote_brake_invert;
 static char wrote_device[256], wrote_impact_type[32];
 static int live_axis_value;
 static int read_live_axis(const char *guid, int axis, int *value) {
@@ -27,6 +27,8 @@ static void note_ini(const char *path, const char *section,
       !strcmp(key, "ButtonRewind")) wrote_rewind = atoi(value);
   if (!strcmp(section, "ForceFeedback") &&
       !strcmp(key, "Strength")) wrote_ffb = atoi(value);
+  if (!strcmp(section, "ForceFeedback") &&
+      !strcmp(key, "SteeringStrength")) wrote_steering = atoi(value);
   if (!strcmp(section, "ForceFeedback") &&
       !strcmp(key, "ImpactStrength")) wrote_impact = atoi(value);
   if (!strcmp(section, "ForceFeedback") &&
@@ -229,6 +231,8 @@ int main(void) {
   CHECK(!s.hd_mode7 && s.hd_scale == 10 && s.enhanced);
   CHECK(p->feature_enable(NULL, deluxe.package_id, deluxe.id, 0));
   CHECK(!s.bs_deluxe && s.enhanced && !s.fps_enabled);
+  FILE *legacy_config = fopen("wheel-options.ini", "w"); CHECK(legacy_config);
+  fputs("[ForceFeedback]\nStrength=12\n", legacy_config); fclose(legacy_config);
   p = FzeroModsProviderWheel(&s, "test-mods.ini", "wheel-options.ini",
                              "030000004c0500006802000000000000", note_ini, list_ffb, read_live_axis);
   CHECK(p->feature_count(NULL) == 9);
@@ -266,6 +270,9 @@ int main(void) {
   CHECK(option.type == RECOMP_MOD_OPTION_BOOLEAN && !strcmp(option.value, "false"));
   CHECK(p->feature_option_get(NULL, ffb.package_id, ffb.id, 1, &option));
   CHECK(option.type == RECOMP_MOD_OPTION_CHOICE && option.choice_count == 3);
+  CHECK(p->feature_option_get(NULL, ffb.package_id, ffb.id, 0, &option));
+  CHECK(!strcmp(option.id, "SteeringStrength") && !strcmp(option.value, "12"));
+  CHECK(strstr(option.label, "Steering strength") && strstr(option.description, "Damping"));
   CHECK(p->feature_option_get(NULL, ffb.package_id, ffb.id, 2, &option));
   CHECK(!strcmp(option.id, "ImpactStrength") && !strcmp(option.value, "20"));
   CHECK(p->feature_option_get(NULL, ffb.package_id, ffb.id, 3, &option));
@@ -289,7 +296,9 @@ int main(void) {
   CHECK(!p->feature_set_option(NULL, wheel.package_id, wheel.id,
                                "ButtonRewind", "128"));
   CHECK(p->feature_set_option(NULL, ffb.package_id, ffb.id,
-                              "Strength", "40"));
+                              "SteeringStrength", "40"));
+  CHECK(!p->feature_set_option(NULL, ffb.package_id, ffb.id, "SteeringStrength", "101"));
+  CHECK(!p->feature_set_option(NULL, ffb.package_id, ffb.id, "Strength", "80"));
   CHECK(p->feature_set_option(NULL, ffb.package_id, ffb.id,
                               "ImpactStrength", "25"));
   CHECK(p->feature_set_option(NULL, ffb.package_id, ffb.id,
@@ -305,10 +314,11 @@ int main(void) {
   CHECK(p->feature_set_option(NULL, wheel.package_id, wheel.id,
                               "BrakeInvert", "true"));
   CHECK(p->commit(NULL, NULL));
-  CHECK(wrote_wheel_range == 45 && wrote_rewind == 37 && wrote_ffb == 40 &&
+  CHECK(wrote_wheel_range == 45 && wrote_rewind == 37 && wrote_ffb == 12 && wrote_steering == 40 &&
         wrote_impact == 25 && !strcmp(wrote_impact_type, "Sine"));
   CHECK(wrote_brake_invert == 1 && !strcmp(wrote_device, "MOZA R12 Base"));
   remove("test-mods.ini");
+  remove("wheel-options.ini");
   test_selection_rebind();
   puts("Independent widescreen and presentation FPS plugins passed");
   return 0;
