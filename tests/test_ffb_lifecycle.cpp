@@ -37,6 +37,8 @@ static int loads, unloads;
 static bool missing_export, block_frame, frame_entered, release_frame;
 static bool shutdown_requested, free_entered, release_shutdown, worker_active;
 static bool shutdown_completed;
+static bool refuse_zero, refuse_init, strict_selected;
+static int initial_x, initial_y;
 static void note(const char *name) {
   std::unique_lock<std::mutex> lock(events_mutex);
   events.emplace_back(name);
@@ -63,6 +65,15 @@ static int __cdecl device_name(int, char *name, int cap) {
 static int __cdecl device_guid(int, void *guid) {
   note("GetDeviceGuid"); std::memset(guid,1,16); return 1;
 }
+static void __cdecl strict_selection(int enabled) {
+  note("SetStrictDeviceSelection"); strict_selected = enabled == 1;
+}
+static int __cdecl initialize(int) {
+  note("InitDirectInput"); CHECK(strict_selected); return refuse_init ? 0 : 1;
+}
+static int __cdecl forces(int x, int y) {
+  initial_x=x; initial_y=y; note("SetDeviceForcesXY"); return refuse_zero ? 0 : 1;
+}
 static HMODULE WINAPI fake_load(LPCWSTR) {
   std::lock_guard<std::mutex> lock(events_mutex); ++loads; return (HMODULE)1;
 }
@@ -75,6 +86,9 @@ static FARPROC WINAPI fake_export(HMODULE, LPCSTR name) {
   if (missing_export && !std::strcmp(name,"GetLastHResult")) return nullptr;
   if (!std::strcmp(name,"GetDeviceName")) return (FARPROC)device_name;
   if (!std::strcmp(name,"GetDeviceGuid")) return (FARPROC)device_guid;
+  if (!std::strcmp(name,"SetStrictDeviceSelection")) return (FARPROC)strict_selection;
+  if (!std::strcmp(name,"InitDirectInput")) return (FARPROC)initialize;
+  if (!std::strcmp(name,"SetDeviceForcesXY")) return (FARPROC)forces;
 #define RESOLVE(ret,export_name,args) if (!std::strcmp(name,#export_name)) return (FARPROC)stub_##export_name;
   WHEELFFB_API_LIST(RESOLVE)
 #undef RESOLVE
@@ -97,6 +111,8 @@ int main() {
   std::fclose(cfg);
   FzeroFfbInit("fake-ffb-lifecycle.ini",nullptr);
   CHECK(worker_active);
+  CHECK(initial_x==0 && initial_y==0);
+  for (const auto &e: events) CHECK(e!="StartEffect");
   unsigned char ram[0x20000]{};
   ram[0x54]=2; ram[0x55]=3;
   block_frame=true;
@@ -134,6 +150,31 @@ int main() {
   size_t final_count=event_count();
   FzeroFfbShutdown(); FzeroFfbSilence(); FzeroFfbFrame(ram,sizeof(ram),0);
   CHECK(FzeroFfbListDevices(names,2)==0 && event_count()==final_count && loads==2);
+  // A refused neutral start must not create/start any other effect or watchdog.
+  block_frame=false; refuse_zero=true; strict_selected=false;
+  size_t start=event_count();
+  FzeroFfbInit("fake-ffb-lifecycle.ini",nullptr);
+  CHECK(!s_active && !worker_active && loads==3 && unloads==3);
+  CHECK(initial_x==0 && initial_y==0 && strict_selected);
+  for (size_t i=start;i<events.size();++i) {
+    CHECK(events[i]!="StartEffect" && events[i]!="SetHoldTimeoutMs");
+    CHECK(events[i]!="CreateConditionEffect" && events[i]!="CreatePeriodicEffect");
+  }
+  final_count=event_count();
+  FzeroFfbFrame(ram,sizeof(ram),0); FzeroFfbSilence();
+  CHECK(event_count()==final_count);
+  // Strict device open refusal also completes cleanup without an output call.
+  refuse_zero=false; refuse_init=true; strict_selected=false; start=event_count();
+  FzeroFfbInit("fake-ffb-lifecycle.ini",nullptr);
+  CHECK(!s_active && !worker_active && loads==4 && unloads==4 && strict_selected);
+  for (size_t i=start;i<events.size();++i)
+    CHECK(events[i]!="SetDeviceForcesXY" && events[i]!="StartEffect" && events[i]!="SetHoldTimeoutMs");
+  // A deliberate later initialization can start neutrally after the failure.
+  refuse_init=false;
+  FzeroFfbInit("fake-ffb-lifecycle.ini",nullptr);
+  CHECK(s_active && worker_active && initial_x==0 && initial_y==0);
+  FzeroFfbShutdown();
+  CHECK(!s_active && !worker_active && loads==5 && unloads==5);
   std::remove("fake-ffb-lifecycle.ini");
   std::puts("Consumer drain, close, completed-shutdown/unload and late-call gates passed (fake backend only)");
 }
