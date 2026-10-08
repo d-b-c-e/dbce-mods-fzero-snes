@@ -59,7 +59,9 @@ zero steering produces zero spring/fallback values throughout. Evidence is
 private under `SessionEvidence/fzero-independent-steering-20261008`.
 
 The historical September 28 case path in PLAYTHROUGH_RECORDING.md is no longer
-present at its documented or archived location. This change is therefore not
-claimed as a new original-playthrough qualification. Source cross-review,
-launcher rendering, fresh stock/Deluxe capture and attended feel remain pending.
-Nothing has been installed and no physical force was sent.
+present at its documented or archived location. A fresh synthetic stock case
+now passes three complete 3,600-frame headless replays with exact auxiliary
+invariance across separate steering trials; see `2026-10-08-stock-replay-proof.md`.
+Claude's source cross-review passed for the split and accepted-zero startup.
+Launcher rendering, Deluxe capture and attended feel remain pending. This
+checkpoint is not installed and no physical force was sent.
