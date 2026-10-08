@@ -50,6 +50,15 @@ $commit = (git -C $repo rev-parse HEAD).Trim()
 $dirty = @(git -C $repo status --porcelain --untracked-files=no)
 if ($dirty.Count) { throw 'Commit the source first: the receipt names the commit the build came from.' }
 $sources = @{ $launcher = $built; 'WheelFfb.dll' = (Join-Path $BuildDir 'WheelFfb.dll') }
+$nativePin = @(Get-Content -LiteralPath (Join-Path $repo 'lib/toolkit/MANIFEST.txt') |
+    Where-Object { $_ -match '^[0-9A-Fa-f]{64}\s+native/WheelFfb\.dll\s*$' })
+if ($nativePin.Count -ne 1 -or -not (Test-Path -LiteralPath $sources['WheelFfb.dll'])) {
+    throw 'Missing or ambiguous native pin/build runtime. Nothing changed.'
+}
+$nativeHash = ($nativePin[0] -split '\s+')[0]
+if ((Get-FileHash -LiteralPath $sources['WheelFfb.dll']).Hash -ine $nativeHash) {
+    throw 'Built WheelFfb.dll differs from the source pin; rebuild before installing. Nothing changed.'
+}
 
 $changes = @($owned | Where-Object { (Test-Path -LiteralPath $sources[$_]) -and (Get-FileHash -LiteralPath $sources[$_]).Hash -ne (Get-FileHash -LiteralPath (Join-Path $Target $_)).Hash })
 if (-not $changes.Count) { 'The installed files already match this build; nothing changed.'; return }

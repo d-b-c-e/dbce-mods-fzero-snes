@@ -270,6 +270,10 @@ endif()
 target_link_libraries(FZeroSNESRecomp PRIVATE OpenGL::GL)
 if(WIN32)
     target_link_libraries(FZeroSNESRecomp PRIVATE ws2_32)
+    # A native-only toolkit update must refresh the runtime beside an otherwise
+    # unchanged executable; POST_BUILD alone would leave the old DLL staged.
+    set_property(TARGET FZeroSNESRecomp APPEND PROPERTY LINK_DEPENDS
+        "${CMAKE_SOURCE_DIR}/lib/toolkit/native/WheelFfb.dll")
     add_custom_command(TARGET FZeroSNESRecomp POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${CMAKE_SOURCE_DIR}/lib/toolkit/native/WheelFfb.dll"
