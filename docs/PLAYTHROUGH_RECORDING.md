@@ -1,5 +1,33 @@
 # Recorded F-Zero drives (experimental)
 
+**Current verified example (October 8):** the [fresh stock capture and three
+steering trials](2026-10-08-stock-replay-proof.md) each pass all 3,600 recorded
+frame-state checks. It is a synthetic stock-cartridge diagnostic, not an owner
+normalization drive or proof for BS Deluxe. Use the sealed case and frozen runner
+below for an unattended, device-free check from this repository root:
+
+```powershell
+$caseDir = Join-Path $env:LOCALAPPDATA 'Dbce/StagePlayback/SessionEvidence/fzero-stock-synthetic-20261008-0346'
+$output = Join-Path $env:TEMP ('fzero-observation-' + [Guid]::NewGuid().ToString('N') + '.jsonl')
+python tools/fzero_replay_adapter.py observe `
+  --case (Join-Path $caseDir 'diagnostic.case.json') `
+  --toolkit E:/Source/toolkits/dbce-wheel-mod-toolkit `
+  --runner (Join-Path $caseDir 'FZeroSNESRecompHeadless.exe') `
+  --rom (Join-Path $caseDir 'fzero.sfc') `
+  --output $output
+```
+
+Add `--steering-strength 0` or `80` for a steering-only trial. Omitting
+`--strength` preserves the recorded auxiliary level. The manifest pins private
+local artifacts; it is not a downloadable public example. The adapter verifies
+them and every game-state checkpoint before exporting force requests, without
+loading the wheel DLL. Do not replace missing artifacts with current files.
+
+The direct environment-variable examples and September measurements below are
+historical. Their old checkout paths are not the current install or a verified
+available recording. Physical recording is attended; this overnight proof uses
+the headless runner above.
+
 This opt-in diagnostic records the **SNES input word after wheel/keyboard
 binding**, once per emulated frame. It writes a complete machine snapshot
 before frame zero and a post-frame WRAM hash for every input. The recording
