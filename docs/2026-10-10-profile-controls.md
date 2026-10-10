@@ -58,3 +58,13 @@ carry DirectInput indexes over to SDL (`fzero_controls`: 108 checks; 18/18 suite
 the revision was already recorded, so nothing was rewritten (`config.ini` byte-identical across the run). The game
 opened the R12 with steering 0, accelerator 2, brake 5, and the other 98 owner files were byte-exact. Evidence:
 `E:\Source\_archive\2026-10-10\fzero-controls-refusals-005400`.
+
+## 01:07: the reviewed transaction build (06ef443)
+
+Astra reviewed 3cfaa00 (3487): both blockers from their 3459 are closed. Button pedals are refused, and the edit is
+one read-back document moved over `config.ini` in one step, with fault-injection tests. Remaining limits as stated
+there: R12 correlation only, the owner's threshold and rest behaviour kept, and a revision gate rather than
+continuous readback. 06ef443 adds the toolkit 65c686d header (one-line bindings). 18/18 suites. Installed as
+`controls-transaction` (backup `deployment-backups\2026-10-10-controls-transaction`). Launch check 01:07: nothing
+pending, `config.ini` unchanged, the R12 opened with steering 0 / accelerator 2 / brake 5, the other 98 owner files
+byte-exact. Evidence: `E:\Source\_archive\2026-10-10\fzero-controls-transaction-010755`.
