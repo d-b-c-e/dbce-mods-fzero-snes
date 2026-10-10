@@ -4,8 +4,8 @@
 
 #include <stdio.h>
 
-/* The startup half of fzero_controls.h: find the profile's wheel among the attached joysticks (SDL exposes USB
- * vendor/product, not the DirectInput instance GUID, so two identical wheels cannot be told apart here). */
+/* The startup half of fzero_controls.h: find the profile's wheel among the attached joysticks. SDL exposes USB
+ * vendor/product, not the DirectInput instance GUID, so with two identical wheels attached nothing is applied. */
 int FzeroControlsApplyAtStartup(const char *config_path) {
   FzeroControlsPlan plan;
   if (!FzeroControlsPlanFile(config_path, &plan)) return 0;
@@ -48,9 +48,12 @@ int FzeroControlsApplyAtStartup(const char *config_path) {
             "retrying at the next start\n", plan.profile, plan.revision, plan.vendor, plan.product, plan.device);
     return 0;
   }
-  if (matches > 1)
-    fprintf(stderr, "[fzero-controls] %d joysticks are %04x:%04x; using the first\n", matches, plan.vendor,
-            plan.product);
+  if (matches > 1) {
+    fprintf(stderr, "[fzero-controls] profile '%s' revision %s not applied: %d attached joysticks are %04x:%04x and "
+            "SDL cannot tell which one the profile means; nothing written\n", plan.profile, plan.revision, matches,
+            plan.vendor, plan.product);
+    return 0;
+  }
   if (!FzeroControlsWrite(config_path, guid, &plan)) {
     fprintf(stderr, "[fzero-controls] could not write %s\n", config_path);
     return 0;

@@ -124,6 +124,13 @@ static void plan_tests(void) {
   const char *schema2[] = {"Schema = 2", "steer = axis 0 " WHEEL " range=0..65535 rest=32768 travel=-1"};
   FzeroControlsPlanLines(schema2, 2, &p);
   CHECK(!p.ok && strstr(p.error, "Schema 2"));
+  /* A device whose SDL numbering was never compared with DirectInput's is refused, not guessed. */
+  const char *other[] = {"Schema = 1", "steer = axis 0 dev={11111111-2222-3333-4444-555555555555} "
+                         "prod={56781234-0000-0000-0000-504944564944} range=0..65535 rest=32768 travel=-1",
+                         "confirm = button 31 dev={11111111-2222-3333-4444-555555555555} "
+                         "prod={56781234-0000-0000-0000-504944564944}"};
+  FzeroControlsPlanLines(other, 3, &p);
+  CHECK(!p.ok && p.nkeys == 0 && strstr(p.error, "1234:5678 is not qualified"));
   const char *nosteer[] = {"Schema = 1", "confirm = button 31 " WHEEL};
   FzeroControlsPlanLines(nosteer, 2, &p);
   CHECK(!p.ok && strstr(p.error, "no steer"));
@@ -255,6 +262,19 @@ static void startup_tests(void) {
   int start = 0, y = 0;
   CHECK(FzeroIniReadInt(cfg, section, "ButtonStart", &start) && start == 40);
   CHECK(FzeroIniReadInt(cfg, section, "ButtonY", &y) && y == 7);
+
+  /* Two attached wheels with the profile's vendor/product: SDL cannot tell them apart, so nothing is written. */
+  desc.name = "second MOZA R12 Base";
+  SDL_JoystickID twin = SDL_AttachVirtualJoystick(&desc);
+  CHECK(twin != 0);
+  CHECK(FzeroControlsIniSet(cfg, "Controls", "Revision", "rev-twin"));
+  char *pre = slurp(cfg);
+  CHECK(FzeroControlsApplyAtStartup(cfg) == 0);
+  char *post = slurp(cfg);
+  CHECK(pre && post && !strcmp(pre, post));
+  free(pre);
+  free(post);
+  CHECK(SDL_DetachVirtualJoystick(twin));
 
   /* No matching device attached: nothing is written and the revision stays pending. */
   SDL_CloseJoystick(wheel);

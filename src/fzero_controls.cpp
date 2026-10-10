@@ -2,10 +2,10 @@
 // shared one (src/vendor/controls/dbce_controls.hpp, toolkit e4502a6), so this file holds only the F-Zero mapping
 // and the config.ini edits.
 //
-// Index mapping: the profile names DirectInput objects (axis 0 X, 2 Z, 5 Rz ...; button n = DIJOYSTATE button n).
-// SDL opens a wheel like the R12 through its DirectInput driver, which numbers axes and buttons in the same object
-// order, so the index carries over unchanged. The owner's own launcher capture of 2026-09-30 agrees with Wheelkit's
-// DirectInput capture for every control both name (steering 0, accelerator 2, brake 5, buttons 31 and 18).
+// Index mapping: the profile names DirectInput objects (axis 0 X, 2 Z, 5 Rz ...; button n = DIJOYSTATE button n);
+// F-Zero's keys are SDL joystick indexes. They are carried over unchanged only for devices where the two numberings
+// were seen to agree (kQualified). Any other device is refused rather than guessed: SDL's numbering depends on its
+// driver and on which objects a device reports.
 #include "fzero_controls.h"
 
 #include "vendor/controls/dbce_controls.hpp"
@@ -24,6 +24,14 @@ namespace {
 
 // recomp-ui raw_hat_binding.h: raw bindings 0..127 are buttons; 128 + hat * 4 + direction (up, right, down, left).
 enum { kMaxButton = 127, kHatBase = 128, kMaxHat = 15 };
+
+// Devices whose SDL indexes were observed to equal their DirectInput indexes.
+struct Qualified { unsigned vendor, product; };
+const Qualified kQualified[] = {
+    // MOZA R12 Base: the owner's launcher capture (SDL, 2026-09-30) and Wheelkit's DirectInput capture agree on
+    // every control both name (steering 0, accelerator 2, brake 5, buttons 31 and 18); hat 0 maps to 128-131.
+    {0x346E, 0x0006},
+};
 
 struct Digital { const char *action, *key; };
 // confirm/back follow the owner's own launcher mapping (wheel confirm -> SNES A, wheel back -> SNES B).
@@ -174,6 +182,14 @@ extern "C" void FzeroControlsPlanLines(const char *const *lines, int count, Fzer
     p->vendor = id & 0xFFFFu;
     p->product = id >> 16;
     snprintf(p->device, sizeof(p->device), "%s", steer->name.c_str());
+    bool qualified = false;
+    for (const Qualified &q : kQualified) qualified = qualified || (q.vendor == p->vendor && q.product == p->product);
+    if (!qualified) {
+        snprintf(p->error, sizeof(p->error),
+                 "%04x:%04x is not qualified (its SDL and DirectInput numbering were never compared)", p->vendor,
+                 p->product);
+        return;
+    }
     if (steer->inverted) note(p, "steer", "inverted steering has no F-Zero setting; steering axis left as it is");
     else setKey(p, "SteeringAxis", steer->index);
 

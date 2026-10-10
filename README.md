@@ -351,9 +351,12 @@ as they are: X, Y, L, R, the save-state and rewind buttons, dead zone, steering
 range and response, and the pedal threshold. Clutch, handbrake, shifts, gears,
 camera, look back, reset and horn have no F-Zero control, and a binding on a
 second device (F-Zero reads one controller) is not applied. Each skipped entry
-is logged as `[fzero-controls] not applied: ...`. A diagonal hat, an inverted
-steering axis and two identical wheels (SDL shows no DirectInput instance GUID)
-are reported too, never approximated.
+is logged as `[fzero-controls] not applied: ...`. A diagonal hat and an
+inverted steering axis are reported too, never approximated. Nothing is applied
+when two attached joysticks share the wheel's vendor and product (SDL shows no
+DirectInput instance GUID), or when the wheel is not one whose SDL numbering was
+checked against DirectInput's. So far that is only the MOZA R12 Base (346e:0006);
+any other device is refused.
 
 ### Where states are kept
 
