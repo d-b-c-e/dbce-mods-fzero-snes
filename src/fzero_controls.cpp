@@ -18,6 +18,11 @@
 #include <string>
 #include <vector>
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 namespace ctl = dbce::controls;
 
 namespace {
@@ -131,14 +136,81 @@ bool readLines(const char *path, std::vector<std::string> &lines, bool &crlf)
     return true;
 }
 
-bool writeLines(const char *path, const std::vector<std::string> &lines, bool crlf)
+// An INI file held in memory: every edit lands here, and the file is replaced once, atomically.
+struct Doc {
+    std::vector<std::string> lines;
+    bool crlf = false;
+};
+
+std::string render(const Doc &d)
 {
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    if (!out) return false;
-    for (const std::string &l : lines) out << l << (crlf ? "\r\n" : "\n");
-    return (bool)out;
+    std::string out;
+    for (const std::string &l : d.lines) out += l + (d.crlf ? "\r\n" : "\n");
+    return out;
 }
 
+// "key = value" inside [section]; every other line is kept; the section or key is added when absent.
+void setInDoc(Doc &d, const std::string &section, const std::string &key, const std::string &value)
+{
+    std::vector<std::string> &lines = d.lines;
+    std::string assign = key + " = " + value;
+    int start = -1, end = (int)lines.size();
+    for (int i = 0; i < (int)lines.size(); ++i) {
+        if (!isSection(lines[i])) continue;
+        if (start >= 0) { end = i; break; }
+        if (iequal(sectionName(lines[i]), section)) start = i + 1;
+    }
+    if (start < 0) {
+        if (!lines.empty() && !ctl::trim(lines.back()).empty()) lines.push_back("");
+        lines.push_back("[" + section + "]");
+        lines.push_back(assign);
+        return;
+    }
+    for (int i = start; i < end; ++i)
+        if (iequal(lineKey(lines[i]), key)) { lines[i] = assign; return; }
+    int at = end;
+    while (at > start && ctl::trim(lines[at - 1]).empty()) --at;
+    lines.insert(lines.begin() + at, assign);
+}
+
+std::string docValue(const Doc &d, const std::string &section, const std::string &key)
+{
+    bool in = false;
+    for (const std::string &l : d.lines) {
+        if (isSection(l)) { in = iequal(sectionName(l), section); continue; }
+        if (in && iequal(lineKey(l), key)) return ctl::trim(l.substr(l.find('=') + 1));
+    }
+    return std::string();
+}
+
+int g_fault; // FzeroControlsTestFault: 1 fails writing the temporary file, 2 fails the replace
+
+// Writes text beside path, then moves it over path in one step: path holds either its old bytes or all the new ones.
+bool replaceFile(const char *path, const std::string &text)
+{
+    std::string tmp = std::string(path) + ".controls-tmp";
+    {
+        std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+        if (!out) return false;
+        if (g_fault == 1) {
+            out << text.substr(0, text.size() / 2);
+            out.close();
+            std::remove(tmp.c_str());
+            return false;
+        }
+        out << text;
+        out.flush();
+        if (!out) { out.close(); std::remove(tmp.c_str()); return false; }
+    }
+    bool moved = g_fault != 2;
+#ifdef _WIN32
+    moved = moved && MoveFileExA(tmp.c_str(), path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+#else
+    moved = moved && std::rename(tmp.c_str(), path) == 0;
+#endif
+    if (!moved) std::remove(tmp.c_str());
+    return moved;
+}
 // Body lines of [name], or false when the section is absent.
 bool readSection(const char *path, const char *name, std::vector<std::string> &body)
 {
@@ -198,6 +270,10 @@ extern "C" void FzeroControlsPlanLines(const char *const *lines, int count, Fzer
         if (e.action == "steer") continue;
         bool sameDevice = b.dev == steer->dev;
         if (e.action == "throttle" || e.action == "brake") {
+            if (b.kind != ctl::Kind::Axis) {
+                note(p, e.action, "a button pedal has no F-Zero setting (pedals are axes)");
+                continue;
+            }
             if (!sameDevice) { note(p, e.action, "on another device (F-Zero reads one controller)"); continue; }
             bool gas = e.action == "throttle";
             setKey(p, gas ? "AcceleratorAxis" : "BrakeAxis", b.index);
@@ -241,49 +317,44 @@ extern "C" int FzeroControlsPending(const char *config_path, const FzeroControls
 
 extern "C" int FzeroControlsIniSet(const char *path, const char *section, const char *key, const char *value)
 {
-    std::vector<std::string> lines;
-    bool crlf = false;
-    readLines(path, lines, crlf); // a missing file starts empty
-    std::string assign = std::string(key) + " = " + (value ? value : "");
-    int start = -1, end = (int)lines.size();
-    for (int i = 0; i < (int)lines.size(); ++i) {
-        if (!isSection(lines[i])) continue;
-        if (start >= 0) { end = i; break; }
-        if (iequal(sectionName(lines[i]), section)) start = i + 1;
-    }
-    if (start < 0) {
-        if (!lines.empty() && !ctl::trim(lines.back()).empty()) lines.push_back("");
-        lines.push_back("[" + std::string(section) + "]");
-        lines.push_back(assign);
-        return writeLines(path, lines, crlf);
-    }
-    for (int i = start; i < end; ++i)
-        if (iequal(lineKey(lines[i]), key)) { lines[i] = assign; return writeLines(path, lines, crlf); }
-    int at = end;
-    while (at > start && ctl::trim(lines[at - 1]).empty()) --at;
-    lines.insert(lines.begin() + at, assign);
-    return writeLines(path, lines, crlf);
+    Doc d;
+    readLines(path, d.lines, d.crlf); // a missing file starts empty
+    setInDoc(d, section, key, value ? value : "");
+    return replaceFile(path, render(d));
 }
 
+extern "C" void FzeroControlsTestFault(int fault) { g_fault = fault; }
+
+// One transaction: the backup first (once), then every key, GuidP1 and the [ControlsApplied] record in a single
+// document that is read back before it replaces config.ini. A failure at any step leaves config.ini's bytes as they were.
 extern "C" int FzeroControlsWrite(const char *config_path, const char *guid, const FzeroControlsPlan *p)
 {
     if (!p->ok || !guid || !guid[0]) return 0;
+    Doc d;
+    if (!readLines(config_path, d.lines, d.crlf)) return 0;
+    const std::string original = render(d);
     std::string backup = std::string(config_path) + ".before-profile-controls";
     if (!std::ifstream(backup, std::ios::binary)) {
         std::ifstream in(config_path, std::ios::binary);
-        if (in) {
-            std::ofstream out(backup, std::ios::binary);
-            out << in.rdbuf();
-            if (!out) return 0;
-        }
+        std::stringstream bytes;
+        bytes << in.rdbuf();
+        if (!in || !replaceFile(backup.c_str(), bytes.str())) return 0;
     }
-    std::string section = std::string("Controller.") + guid;
+    const std::string section = std::string("Controller.") + guid;
     char number[16];
     for (int i = 0; i < p->nkeys; ++i) {
         snprintf(number, sizeof(number), "%d", p->keys[i].value);
-        if (!FzeroControlsIniSet(config_path, section.c_str(), p->keys[i].key, number)) return 0;
+        setInDoc(d, section, p->keys[i].key, number);
     }
-    return FzeroControlsIniSet(config_path, "Controller", "GuidP1", guid) &&
-           FzeroControlsIniSet(config_path, "ControlsApplied", "Revision", p->revision) &&
-           FzeroControlsIniSet(config_path, "ControlsApplied", "Device", guid);
+    setInDoc(d, "Controller", "GuidP1", guid);
+    setInDoc(d, "ControlsApplied", "Revision", p->revision);
+    setInDoc(d, "ControlsApplied", "Device", guid);
+    for (int i = 0; i < p->nkeys; ++i) {
+        snprintf(number, sizeof(number), "%d", p->keys[i].value);
+        if (docValue(d, section, p->keys[i].key) != number) return 0;
+    }
+    if (docValue(d, "Controller", "GuidP1") != guid || docValue(d, "ControlsApplied", "Revision") != p->revision)
+        return 0;
+    const std::string text = render(d);
+    return text == original || replaceFile(config_path, text);
 }

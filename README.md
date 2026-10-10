@@ -358,6 +358,18 @@ DirectInput instance GUID), or when the wheel is not one whose SDL numbering was
 checked against DirectInput's. So far that is only the MOZA R12 Base (346e:0006);
 any other device is refused.
 
+Limits, by design:
+- The apply runs once per revision. After that, a launcher edit, a different
+  wheel or a hand edit stands until the profile's `Revision` changes; the
+  applied keys are not re-checked against the profile at each start.
+- A pedal binding is a pedal *axis*: a button pedal is not applied.
+- The profile's pedal rest and range are not translated. F-Zero's pedals are
+  digital: pressed once the SDL value passes `PedalThreshold` (the owner's
+  setting, 0 = mid travel), whatever the captured rest.
+- The whole edit (backup once, keys, `GuidP1`, `[ControlsApplied]`) is one
+  transaction. The new file is read back, then moved over `config.ini` in one
+  step, so a failure leaves the old bytes.
+
 ### Where states are kept
 
 Stock *F-Zero* and BS F-Zero Deluxe keep separate states, because they are

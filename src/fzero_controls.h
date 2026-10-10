@@ -42,12 +42,17 @@ int FzeroControlsPlanFile(const char *config_path, FzeroControlsPlan *plan);
 int FzeroControlsPending(const char *config_path, const FzeroControlsPlan *plan);
 
 /* Sets "key = value" inside [section], preserving every other line; creates the file, section or key when absent.
- * Returns 1 on success. */
+ * The file is replaced atomically (temporary file, then one move). Returns 1 on success. */
 int FzeroControlsIniSet(const char *path, const char *section, const char *key, const char *value);
 
-/* Writes the plan for the joystick with this SDL GUID: backs config_path up once (<config>.before-profile-controls),
- * sets the [Controller.<guid>] keys and [Controller] GuidP1, then records [ControlsApplied]. Returns 1 on success. */
+/* Writes the plan for the joystick with this SDL GUID in one transaction: backs config_path up once
+ * (<config>.before-profile-controls), then the [Controller.<guid>] keys, [Controller] GuidP1 and [ControlsApplied] are
+ * set in one document, read back, and moved over config.ini in one step. On any failure config.ini keeps its bytes.
+ * Returns 1 on success. */
 int FzeroControlsWrite(const char *config_path, const char *guid, const FzeroControlsPlan *plan);
+
+/* Tests only: 1 makes the next writes fail while writing their temporary file, 2 at the final replace; 0 restores. */
+void FzeroControlsTestFault(int fault);
 
 /* Startup (before the launcher): applies a pending [Controls] revision to the attached joystick whose vendor/product
  * matches the profile's steering device. Opens SDL's joystick subsystem only for the scan. Returns 1 when keys were

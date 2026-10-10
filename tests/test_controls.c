@@ -109,6 +109,11 @@ static void plan_tests(void) {
   CHECK(key(&p, "AcceleratorAxis") == -1000 && noted(&p, "throttle: on another device"));
   plan_one("navRight = hat 1 9000 " WHEEL, &p);
   CHECK(key(&p, "ButtonRight") == 133);
+  plan_one("throttle = button 31 " WHEEL, &p); /* STD-033 allows button pedals; F-Zero's pedals are axes */
+  CHECK(key(&p, "AcceleratorAxis") == -1000 && key(&p, "AcceleratorInvert") == -1000 &&
+        noted(&p, "throttle: a button pedal"));
+  plan_one("brake = button 7 " WHEEL, &p);
+  CHECK(key(&p, "BrakeAxis") == -1000 && noted(&p, "brake: a button pedal"));
   plan_one("select =", &p);
   CHECK(key(&p, "ButtonSelect") == -1);
   plan_one("brake =", &p);
@@ -161,6 +166,54 @@ static void ini_tests(void) {
   CHECK(text && !strcmp(text, "[Controls]\nSchema = 1\n"));
   free(text);
   remove(path);
+}
+
+static int exists(const char *path) {
+  FILE *f = fopen(path, "rb");
+  if (f) fclose(f);
+  return f != NULL;
+}
+
+/* A failed write leaves config.ini's bytes as they were and no temporary file behind. */
+static void fault_tests(void) {
+  const char *path = "controls-fault-test.ini";
+  const char *backup = "controls-fault-test.ini.before-profile-controls";
+  const char *tmp = "controls-fault-test.ini.controls-tmp";
+  const char *original = "[Controller]\nSourceP1 = 1\n\n[Controller.abc]\nButtonX = 33\n";
+  FzeroControlsPlan plan;
+  FzeroControlsPlanLines(kProfile, kProfileLines, &plan);
+  CHECK(plan.ok);
+  remove(backup);
+  for (int pass = 0; pass < 2; ++pass) {   /* without a backup yet (the backup step fails), then with one */
+    if (pass) write_file(backup, original);
+    for (int fault = 1; fault <= 2; ++fault) {
+      write_file(path, original);
+      FzeroControlsTestFault(fault);
+      CHECK(FzeroControlsWrite(path, "abc", &plan) == 0);
+      CHECK(FzeroControlsIniSet(path, "Controller", "GuidP1", "abc") == 0);
+      FzeroControlsTestFault(0);
+      char *now = slurp(path);
+      CHECK(now && !strcmp(now, original));
+      free(now);
+      CHECK(!exists(tmp));
+      CHECK(exists(backup) == pass);
+    }
+  }
+  CHECK(FzeroControlsWrite(path, "abc", &plan) == 1);
+  char *applied = slurp(path);
+  int v = 0;
+  CHECK(FzeroIniReadInt(path, "Controller.abc", "ButtonStart", &v) && v == 35);
+  CHECK(FzeroIniReadInt(path, "Controller.abc", "ButtonX", &v) && v == 33);
+  char value[64];
+  CHECK(FzeroIniReadString(path, "ControlsApplied", "Revision", value, sizeof(value)) && !strcmp(value, "rev-1"));
+  CHECK(FzeroControlsWrite(path, "abc", &plan) == 1); /* the same plan again changes nothing */
+  char *again = slurp(path);
+  CHECK(applied && again && !strcmp(applied, again));
+  free(applied);
+  free(again);
+  CHECK(!exists(tmp));
+  remove(path);
+  remove(backup);
 }
 
 #if SNESRECOMP_SDL3
@@ -295,6 +348,7 @@ static void startup_tests(void) {
 int main(void) {
   plan_tests();
   ini_tests();
+  fault_tests();
 #if SNESRECOMP_SDL3
   startup_tests();
 #endif
