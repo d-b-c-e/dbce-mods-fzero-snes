@@ -68,3 +68,11 @@ continuous readback. 06ef443 adds the toolkit 65c686d header (one-line bindings)
 `controls-transaction` (backup `deployment-backups\2026-10-10-controls-transaction`). Launch check 01:07: nothing
 pending, `config.ini` unchanged, the R12 opened with steering 0 / accelerator 2 / brake 5, the other 98 owner files
 byte-exact. Evidence: `E:\Source\_archive\2026-10-10\fzero-controls-transaction-010755`.
+
+## 02:01: Astra's capability receipt installed (e82a669)
+
+Clean reconfigure and Deluxe rebuild in `build-claude-merge` (source stamp `v1.8.3-178-ge82a6692f127` in the header and
+the image), 18/18 suites. `Install-StreamDeck.ps1 -Label controls-capability`. The receipt now declares
+`controlsProfileSchema 1`, `controlsProfileAdapter fzero-raw-wheel-1`, the launcher (`4DA28F9D...`) and native hashes,
+and source `e82a669`. Launch check 02:01: nothing pending, the R12 opened with steering 0 / accelerator 2 / brake 5,
+and the other 98 owner files were byte-exact. Evidence: `E:\Source\_archive\2026-10-10\fzero-controls-capability-020158`.
