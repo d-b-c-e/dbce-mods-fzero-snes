@@ -155,6 +155,7 @@ void FzeroGamepadRefresh(SDL_GameController **pad) {
   if (*pad) return;
   if (s_raw && !SDL_JoystickGetAttached(s_raw)) {
     SDL_JoystickClose(s_raw);
+    FzeroInjectDeviceClosed();
     s_raw = NULL;
   }
   if (s_raw) return;
@@ -232,6 +233,7 @@ void FzeroGamepadEvent(SDL_GameController **pad, const SDL_Event *event) {
     load_profile(*pad);
   if (s_raw && !SDL_JoystickGetAttached(s_raw)) {
     SDL_JoystickClose(s_raw);
+    FzeroInjectDeviceClosed();
     s_raw = NULL;
     FzeroAnalogSteeringReset(&s_steering);
     FzeroGamepadRefresh(pad);
@@ -352,6 +354,7 @@ void FzeroGamepadShutdown(SDL_GameController **pad) {
   }
   if (s_raw) {
     SDL_JoystickClose(s_raw);
+    FzeroInjectDeviceClosed();
     s_raw = NULL;
   }
   FzeroAnalogSteeringReset(&s_steering);

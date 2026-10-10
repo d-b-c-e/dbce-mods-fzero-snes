@@ -192,6 +192,7 @@ add_executable(FZeroSNESRecompHeadless
     src/headless_main.c
     src/fzero_playthrough.c
     src/fzero_ffb.cpp
+    src/fzero_output_latch.c
     src/fzero_hotkeys.c
     src/fzero_runtime.c)
 
@@ -214,7 +215,8 @@ add_executable(FZeroSNESRecomp
     src/fzero_analog.c
     src/fzero_controls.cpp
     src/fzero_controls_sdl.c
-  src/fzero_inject.cpp
+    src/fzero_inject.cpp
+    src/fzero_output_latch.c
     src/fzero_telemetry.cpp
     src/fzero_ffb.cpp
     src/fzero_playthrough.c
@@ -258,7 +260,7 @@ snesrecomp_target_glsl_shader(FZeroSNESRecomp)
 snesrecomp_target_sdl(FZeroSNESRecomp)
 
 if(BUILD_TESTING AND SNESRECOMP_SDL_BACKEND STREQUAL "SDL3")
-    add_executable(fzero_gamepad_tests tests/test_gamepad.c src/fzero_gamepad.c src/fzero_hotkeys.c src/fzero_inject.cpp src/fzero_controls.cpp)
+    add_executable(fzero_gamepad_tests tests/test_gamepad.c src/fzero_gamepad.c src/fzero_hotkeys.c src/fzero_inject.cpp src/fzero_controls.cpp src/fzero_output_latch.c)
     target_sources(fzero_gamepad_tests PRIVATE src/fzero_analog.c)
     target_compile_features(fzero_gamepad_tests PRIVATE cxx_std_17)   # fzero_inject.cpp, fzero_controls.cpp
     target_include_directories(fzero_gamepad_tests PRIVATE "${CMAKE_SOURCE_DIR}/src" "${RECOMP_UI_ROOT}/src/common" ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
@@ -267,7 +269,7 @@ if(BUILD_TESTING AND SNESRECOMP_SDL_BACKEND STREQUAL "SDL3")
 
     # STD-033 rig-profile controls: [Controls] -> [Controller.<GUID>] at startup, read back by the game's reader.
     add_executable(fzero_controls_tests tests/test_controls.c src/fzero_controls.cpp src/fzero_controls_sdl.c src/fzero_inject.cpp
-        src/fzero_gamepad.c src/fzero_analog.c src/fzero_hotkeys.c)
+        src/fzero_gamepad.c src/fzero_analog.c src/fzero_hotkeys.c src/fzero_output_latch.c)
     target_include_directories(fzero_controls_tests PRIVATE "${CMAKE_SOURCE_DIR}/src" "${RECOMP_UI_ROOT}/src/common" ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
     target_compile_features(fzero_controls_tests PRIVATE cxx_std_17)
     snesrecomp_target_sdl(fzero_controls_tests)
@@ -321,8 +323,12 @@ if(BUILD_TESTING)
     if(WIN32)
         # Fake Win32 loader/exports: no real DLL or device is accessed.
         add_executable(fzero_ffb_lifecycle_tests tests/test_ffb_lifecycle.cpp
-            src/fzero_hotkeys.c)
+            src/fzero_hotkeys.c src/fzero_output_latch.c src/fzero_inject.cpp src/fzero_controls.cpp)
+        target_compile_features(fzero_ffb_lifecycle_tests PRIVATE cxx_std_17)   # fzero_inject.cpp, fzero_controls.cpp
         add_test(NAME fzero_ffb_lifecycle COMMAND fzero_ffb_lifecycle_tests)
+        # The no-force latch is process-wide: each order is its own process.
+        add_test(NAME fzero_ffb_injection_latch COMMAND fzero_ffb_lifecycle_tests --injection-latch)
+        add_test(NAME fzero_ffb_force_first COMMAND fzero_ffb_lifecycle_tests --force-first)
     endif()
 endif()
 recomp_target_launcher_ui(FZeroSNESRecomp CONSOLE snes)

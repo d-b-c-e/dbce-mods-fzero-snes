@@ -343,6 +343,51 @@ static void startup_tests(void) {
   CHECK(FzeroGamepadRead(pad) == 0x0002u);                        /* the physical brake still works when armed */
   CHECK(SDL_SetJoystickVirtualAxis(wheel, 5, -32768));
   SDL_UpdateJoysticks();
+
+  /* The command file: this session's nonce first, then at most 32 commands in at most 4096 bytes; else unread. */
+  static const char kFile[] = "nonce=test\r\ninject action throttle 1 ms=500\r\n";
+  CHECK(FzeroInjectTestFile(kFile, strlen(kFile), why, sizeof why) == 1 && !why[0]);
+  CHECK(FzeroGamepadRead(pad) == 0x0001u);
+  static const char kStale[] = "nonce=other1234\ninject action brake 1 ms=500\n";
+  CHECK(FzeroInjectTestFile(kStale, strlen(kStale), why, sizeof why) == 0 && strstr(why, "nonce"));
+  static const char kBare[] = "inject action brake 1 ms=500\n";
+  CHECK(FzeroInjectTestFile(kBare, strlen(kBare), why, sizeof why) == 0 && strstr(why, "nonce"));
+  CHECK(FzeroGamepadRead(pad) == 0x0001u);                        /* neither reached the reader */
+  {
+    static char big[4200];
+    size_t len = (size_t)snprintf(big, sizeof big, "nonce=test\n");
+    for (int i = 0; i < 33; ++i) len += (size_t)snprintf(big + len, sizeof big - len, "inject action confirm 1 ms=100\n");
+    CHECK(FzeroInjectTestFile(big, len, why, sizeof why) == 32 && strstr(why, "32 commands"));
+    memset(big, ' ', 4097);
+    memcpy(big, "nonce=test\n", 11);
+    CHECK(FzeroInjectTestFile(big, 4097, why, sizeof why) == 0 && strstr(why, "4096"));
+  }
+
+  /* A closed wheel drops its running samples: reopening the same stick (same GUID) starts clean. */
+  CHECK(FzeroInjectTestCommand("inject action brake 1 ms=5000", why, sizeof why));
+  CHECK((FzeroGamepadRead(pad) & 0x0002u) == 0x0002u);
+  FzeroGamepadShutdown(&pad);
+  FzeroGamepadRefresh(&pad);
+  SDL_UpdateJoysticks();
+  CHECK(FzeroInjectArmed() && FzeroGamepadRead(pad) == 0);
+
+  /* The session ends at its expiry: samples dropped, injection off, later commands refused. */
+  CHECK(FzeroInjectTestCommand("inject action throttle 1 ms=5000", why, sizeof why));
+  FzeroInjectTestExpire(2400);
+  FzeroInjectTestClock(2300);
+  CHECK(FzeroGamepadRead(pad) == 0x0001u);
+  FzeroInjectTestClock(2400);
+  CHECK(FzeroGamepadRead(pad) == 0 && !FzeroInjectArmed());
+  CHECK(!FzeroInjectTestCommand("inject action throttle 1 ms=500", why, sizeof why) && strstr(why, "session"));
+
+  /* inject.on names the session: a letters/digits nonce and an expiry within the next hour. */
+  CHECK(FzeroInjectTestSession("nonce=abcd1234\r\nexpires=1900\r\n", 1000, why, sizeof why) && !strcmp(why, "abcd1234"));
+  CHECK(!FzeroInjectTestSession("nonce=abcd1234\nexpires=1000\n", 1000, why, sizeof why) && strstr(why, "expired"));
+  CHECK(!FzeroInjectTestSession("nonce=abcd1234\nexpires=4601\n", 1000, why, sizeof why) && strstr(why, "hour"));
+  CHECK(!FzeroInjectTestSession("nonce=abc\nexpires=1900\n", 1000, why, sizeof why) && strstr(why, "nonce"));
+  CHECK(!FzeroInjectTestSession("nonce=abcd-1234\nexpires=1900\n", 1000, why, sizeof why) && strstr(why, "nonce"));
+  CHECK(!FzeroInjectTestSession("nonce=abcd1234\n", 1000, why, sizeof why) && strstr(why, "expires"));
+  CHECK(!FzeroInjectTestSession("unattended test run (Claude)\n", 1000, why, sizeof why));   /* the 8930d45 format */
   FzeroGamepadShutdown(&pad);
 
   /* A new revision is applied again; launcher edits in between are overwritten only for the profile's keys. */

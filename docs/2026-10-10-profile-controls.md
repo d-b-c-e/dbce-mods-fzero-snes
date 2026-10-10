@@ -98,3 +98,31 @@ First run, 04:03-04:06, on the owner's applied profile with FFB off:
 - owner files were restored byte-exact.
 
 Evidence: `E:\Source\_archive\2026-10-10\fzero-inject-040316\RESULT.md`.
+
+What that run shows, and what it does not (Astra's review, 2026-10-10 04:09). It shows the game reading the applied
+`[Controller.<guid>]` keys, driven through action commands. It is not a Wheelkit Apply closed loop:
+- the profile was applied earlier (owner-provisioned at 00:50), not by production Wheelkit Apply in the run;
+- `inject action` resolves through the same applied `[Controls]` store the game reads, so it cannot catch a wrong
+  translation.
+The next run applies with Wheelkit prepare-live/apply-live. It sends raw samples generated independently from the
+original saved profile (Wheelkit `raw-workload`).
+
+### Review fixes (after 8930d45)
+
+- **No force for the whole process.** `inject.on` present at start latches "no force" before any other check
+  (`src/fzero_output_latch.c`). It holds even when the session then refuses to arm. `FzeroFfbInit` refuses after that
+  latch, even if `config.ini` says `Enabled = 1` by then (the launcher writes it between the two). The latch works
+  the other way too: once force output has started, a test request is refused.
+  - `fzero_ffb_injection_latch` covers the 0 -> 1 order, with a fake WheelFfb: nothing loads.
+  - `fzero_ffb_force_first` covers the reverse order.
+  - Each is a separate ctest process. A mutant without the `FzeroFfbInit` check aborts.
+- **A bounded, one-session command file.**
+  - `inject.on` must name the session: `nonce=` (8-64 letters/digits) and `expires=` (unix seconds, at most an hour
+    ahead).
+  - The first line of `inject.txt` must be `nonce=<that nonce>`. A file over 4096 bytes is not read. Only the first
+    32 commands of a file are read, and a session accepts at most 2000.
+  - Each version of the file is read once.
+  - At expiry the running samples are dropped and injection is off.
+- **No stale samples across a reconnect.** Every close of the raw wheel drops its running samples: detach, refresh
+  and shutdown alike. So a reopened stick with the same SDL GUID starts clean.
+- `fzero_controls` ctest: 187 checks, covering the file caps, the nonce, reopening, expiry and the `inject.on` grammar.

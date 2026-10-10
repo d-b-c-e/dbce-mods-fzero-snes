@@ -3,6 +3,7 @@
 extern "C" {
 #include "fzero_hotkeys.h"
 }
+#include "fzero_output_latch.h"
 
 #include <algorithm>
 #include <cmath>
@@ -168,6 +169,12 @@ void FzeroFfbInit(const char *config_path, void *native_window) {
   s_impact_strength = std::max(0, std::min(s_impact_strength, 100));
 
 #if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
+  /* A test injection requested at start (fzero_inject.h) holds for the whole process: config.ini may say Enabled=1
+   * by now (the launcher writes it), but no force runs alongside injected input. */
+  if (!FzeroLatchForceOutput()) {
+    std::fprintf(stderr, "[fzero-ffb] a test injection was requested in this process (inject.on); no force output\n");
+    return;
+  }
   char impact_type[32] = "Constant";
   FzeroIniReadString(config_path, "ForceFeedback", "ImpactType", impact_type,
                      sizeof(impact_type));

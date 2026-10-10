@@ -28,6 +28,9 @@ static BOOL WINAPI fake_unload(HMODULE);
 #undef GetModuleFileNameW
 #undef GetProcAddress
 #undef FreeLibrary
+#include "../src/fzero_inject.h"
+#include "../src/fzero_output_latch.h"
+#include <ctime>
 
 #define CHECK(x) do { if (!(x)) { std::fprintf(stderr,"%d: %s\n",__LINE__,#x); std::abort(); } } while (0)
 static std::mutex events_mutex;
@@ -101,7 +104,53 @@ static BOOL WINAPI fake_unload(HMODULE) {
 static size_t event_count() {
   std::lock_guard<std::mutex> lock(events_mutex); return events.size();
 }
-int main() {
+static void write_text(const char *path, const char *text) {
+  FILE *f=std::fopen(path,"wb"); CHECK(f); std::fputs(text,f); std::fclose(f);
+}
+/* The no-force latch is process-wide and permanent, so each order runs as its own process (two ctest entries).
+ * --injection-latch: inject.on at start latches "no force" even though the session then refuses to arm (no
+ * [Controls]); config.ini says Enabled=1 by FfbInit (0 -> 1, as the launcher can write it) and still nothing loads.
+ * --force-first: force already started, so a later inject.on is refused and the latch stays with force. */
+static int latch_test(bool force_first) {
+  char dir[MAX_PATH];
+  CHECK(GetFullPathNameA("fake-latch-appdata",MAX_PATH,dir,nullptr));
+  const std::string base=dir, dbce=base+"\\dbce", fzero=dbce+"\\fzero", on=fzero+"\\inject.on";
+  CreateDirectoryA(base.c_str(),nullptr); CreateDirectoryA(dbce.c_str(),nullptr); CreateDirectoryA(fzero.c_str(),nullptr);
+  CHECK(_putenv_s("LOCALAPPDATA",base.c_str())==0);
+  char session[96];
+  std::snprintf(session,sizeof(session),"nonce=latchtest01\nexpires=%lld\n",(long long)std::time(nullptr)+600);
+  const char *cfg="fake-ffb-latch.ini";
+  if (force_first) {
+    write_text(cfg,"[ForceFeedback]\nEnabled=1\nDevice=FAKE WHEEL\nImpactType=Sine\n");
+    FzeroFfbInit(cfg,nullptr);
+    CHECK(s_active && loads==1);
+    write_text(on.c_str(),session);
+    write_text(cfg,"[ForceFeedback]\nEnabled=0\n");
+    FzeroInjectInit(cfg);
+    CHECK(!FzeroInjectArmed() && !FzeroNoForceLatched());
+    release_shutdown=true;
+    FzeroFfbShutdown();
+    CHECK(!s_active && unloads==1);
+  } else {
+    write_text(on.c_str(),session);
+    write_text(cfg,"[ForceFeedback]\nEnabled=0\nDevice=FAKE WHEEL\n");
+    FzeroInjectInit(cfg);
+    CHECK(!FzeroInjectArmed() && FzeroNoForceLatched());
+    write_text(cfg,"[ForceFeedback]\nEnabled=1\nDevice=FAKE WHEEL\nImpactType=Sine\n");
+    FzeroFfbInit(cfg,nullptr);
+    CHECK(!s_active && loads==0 && event_count()==0);
+    FzeroFfbFrame(nullptr,0,0); FzeroFfbSilence();
+    CHECK(loads==0 && event_count()==0);
+  }
+  std::remove(cfg); std::remove(on.c_str());
+  RemoveDirectoryA(fzero.c_str()); RemoveDirectoryA(dbce.c_str()); RemoveDirectoryA(base.c_str());
+  std::puts(force_first ? "Force first: a later test injection request is refused (fake backend only)"
+                        : "Test injection request latches no force before a 0 -> 1 config change (fake backend only)");
+  return 0;
+}
+int main(int argc, char **argv) {
+  if (argc>1 && !std::strcmp(argv[1],"--injection-latch")) return latch_test(false);
+  if (argc>1 && !std::strcmp(argv[1],"--force-first")) return latch_test(true);
   char names[2][256]{};
   missing_export=true;
   CHECK(FzeroFfbListDevices(names,2)==0 && loads==1 && unloads==1);
