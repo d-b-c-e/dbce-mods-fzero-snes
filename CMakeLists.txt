@@ -212,11 +212,14 @@ add_executable(FZeroSNESRecomp
     src/fzero_hotkeys.c
     src/fzero_gamepad.c
     src/fzero_analog.c
+    src/fzero_controls.cpp
+    src/fzero_controls_sdl.c
     src/fzero_telemetry.cpp
     src/fzero_ffb.cpp
     src/fzero_playthrough.c
     src/fzero_runtime.c)
 target_compile_definitions(FZeroSNESRecomp PRIVATE FZERO_RENDER_TIMINGS=1)
+target_compile_features(FZeroSNESRecomp PRIVATE cxx_std_17) # fzero_controls.cpp: the toolkit's C++17 header
 
 function(configure_fzero_target target)
     target_sources(${target} PRIVATE src/fzero_deluxe.c src/fzero_state_mode.c src/fzero_msu.c)
@@ -259,6 +262,14 @@ if(BUILD_TESTING AND SNESRECOMP_SDL_BACKEND STREQUAL "SDL3")
     target_include_directories(fzero_gamepad_tests PRIVATE "${CMAKE_SOURCE_DIR}/src" "${RECOMP_UI_ROOT}/src/common" ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
     snesrecomp_target_sdl(fzero_gamepad_tests)
     add_test(NAME fzero_gamepad COMMAND fzero_gamepad_tests)
+
+    # STD-033 rig-profile controls: [Controls] -> [Controller.<GUID>] at startup, read back by the game's reader.
+    add_executable(fzero_controls_tests tests/test_controls.c src/fzero_controls.cpp src/fzero_controls_sdl.c
+        src/fzero_gamepad.c src/fzero_analog.c src/fzero_hotkeys.c)
+    target_include_directories(fzero_controls_tests PRIVATE "${CMAKE_SOURCE_DIR}/src" "${RECOMP_UI_ROOT}/src/common" ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
+    target_compile_features(fzero_controls_tests PRIVATE cxx_std_17)
+    snesrecomp_target_sdl(fzero_controls_tests)
+    add_test(NAME fzero_controls COMMAND fzero_controls_tests)
 
     add_executable(fzero_analog_tests tests/test_analog.c src/fzero_analog.c)
     target_include_directories(fzero_analog_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")

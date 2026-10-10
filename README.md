@@ -328,6 +328,33 @@ Available button keys are `ButtonA`, `ButtonB`, `ButtonX`, `ButtonY`,
 `ButtonL`, `ButtonR`, `ButtonSelect`, `ButtonStart`, `ButtonUp`, `ButtonDown`,
 `ButtonLeft`, `ButtonRight`, `ButtonSaveStateMenu`, and `ButtonRewind`.
 
+### Rig-profile controls
+
+Wheelkit can write a rig profile's bindings into `config.ini` as a `[Controls]`
+section (toolkit STD-033, `docs/controls-contract.md`). At start, before the
+launcher opens, the game translates a new revision into the keys above:
+
+| Profile action | Key |
+| --- | --- |
+| steer | `SteeringAxis` |
+| throttle / brake | `AcceleratorAxis` + `AcceleratorInvert` / `BrakeAxis` + `BrakeInvert` |
+| confirm / back | `ButtonA` / `ButtonB` |
+| start / select | `ButtonStart` / `ButtonSelect` |
+| navUp / navDown / navLeft / navRight | `ButtonUp` / `ButtonDown` / `ButtonLeft` / `ButtonRight` (hat directions as 128 and up) |
+
+The wheel is found by the USB vendor and product of the profile's steering
+device. Its SDL GUID becomes `[Controller] GuidP1`, and `[ControlsApplied]`
+records the revision, so later edits on the launcher's wheel page stand until
+the profile changes. The first apply backs `config.ini` up as
+`config.ini.before-profile-controls`. Keys the profile does not name are left
+as they are: X, Y, L, R, the save-state and rewind buttons, dead zone, steering
+range and response, and the pedal threshold. Clutch, handbrake, shifts, gears,
+camera, look back, reset and horn have no F-Zero control, and a binding on a
+second device (F-Zero reads one controller) is not applied. Each skipped entry
+is logged as `[fzero-controls] not applied: ...`. A diagonal hat, an inverted
+steering axis and two identical wheels (SDL shows no DirectInput instance GUID)
+are reported too, never approximated.
+
 ### Where states are kept
 
 Stock *F-Zero* and BS F-Zero Deluxe keep separate states, because they are
