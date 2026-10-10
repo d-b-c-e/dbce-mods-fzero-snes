@@ -303,6 +303,16 @@ extern "C" int FzeroControlsPlanFile(const char *config_path, FzeroControlsPlan 
 {
     memset(p, 0, sizeof(*p));
     std::vector<std::string> body;
+    // A UTF-8 BOM hides the first section from the game's reader and the launcher's writer alike (FzeroIniReadString,
+    // launcher_ini_kv_write): refuse rather than edit a file the game reads differently from this code.
+    if (config_path) {
+        std::ifstream in(config_path, std::ios::binary);
+        char head[3] = {0, 0, 0};
+        if (in.read(head, 3) && (unsigned char)head[0] == 0xEF && (unsigned char)head[1] == 0xBB && (unsigned char)head[2] == 0xBF) {
+            snprintf(p->error, sizeof(p->error), "config.ini starts with a UTF-8 BOM, which the game's reader does not skip; remove it");
+            return 1;
+        }
+    }
     if (!config_path || !readSection(config_path, "Controls", body)) return 0;
     std::vector<const char *> ptrs;
     for (const std::string &l : body) ptrs.push_back(l.c_str());

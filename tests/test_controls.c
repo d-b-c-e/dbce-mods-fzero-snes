@@ -161,6 +161,11 @@ static void ini_tests(void) {
                               "GuidP1 = abc\r\n\r\n[Sound]\r\nVolume = 100\r\n\r\n[Controller.abc]\r\nButtonA = 31\r\n"));
   free(text);
   remove(path);
+  /* A UTF-8 BOM hides the first section from the game's own reader: the profile is refused, not applied. */
+  write_file(path, "\xEF\xBB\xBF[Controls]\nSchema = 1\nsteer = axis 0 " WHEEL " range=0..65535 rest=32768 travel=-1\n");
+  FzeroControlsPlan bom;
+  CHECK(FzeroControlsPlanFile(path, &bom) == 1 && !bom.ok && strstr(bom.error, "BOM"));
+  remove(path);
   CHECK(FzeroControlsIniSet(path, "Controls", "Schema", "1")); /* a missing file is created */
   text = slurp(path);
   CHECK(text && !strcmp(text, "[Controls]\nSchema = 1\n"));
