@@ -49,3 +49,12 @@ Direct start with the ROM (no launcher), no input, force feedback off for the ru
 - Observed input on the real wheel: F-Zero reads the wheel through SDL inside the process, where the toolkit's
   DirectInput injection does not reach. So "observed" rests on the virtual-wheel ctest, and owner acceptance is the
   next step.
+
+## 00:54: reinstall with Astra's review fixes (95d34e4)
+
+Two attached devices with the profile's vendor/product are refused, and only qualified devices (so far the R12)
+carry DirectInput indexes over to SDL (`fzero_controls`: 108 checks; 18/18 suites). Installed with label
+`profile-controls-refusals` (backup `deployment-backups\2026-10-10-profile-controls-refusals`). Launch check 00:54:
+the revision was already recorded, so nothing was rewritten (`config.ini` byte-identical across the run). The game
+opened the R12 with steering 0, accelerator 2, brake 5, and the other 98 owner files were byte-exact. Evidence:
+`E:\Source\_archive\2026-10-10\fzero-controls-refusals-005400`.
