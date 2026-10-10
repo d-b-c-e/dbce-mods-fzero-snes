@@ -18,13 +18,14 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$BuildDir = (Join-Path (Split-Path $PSScriptRoot -Parent) 'build-merge'),
+    [string]$BuildDir,
     [string]$Target = 'E:\Source\toolkits\launchbox\Launchbox-Racing\Games\Windows\F-Zero (SNES Recomp)',
     [ValidatePattern('^[a-z0-9][a-z0-9-]*$')][string]$Label,
     [string]$Rollback
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
+if (!$BuildDir) { $BuildDir = Join-Path $repo 'build-merge' }
 $launcher = 'FZeroSNESRecomp-wheel-launcher.exe'
 $owned = @($launcher, 'WheelFfb.dll')
 $receiptName = 'install-receipt.json'
