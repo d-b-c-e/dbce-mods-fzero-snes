@@ -1,6 +1,7 @@
 #include "fzero_controls.h"
 #include "fzero_gamepad.h"
 #include "fzero_hotkeys.h"
+#include "fzero_inject.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -308,6 +309,40 @@ static void startup_tests(void) {
     CHECK(FzeroGamepadReadOverlay(pad) == kHats[i].bits);
   }
   CHECK(SDL_SetJoystickVirtualHat(wheel, 0, SDL_HAT_CENTERED));
+
+  /* Test injection (fzero_inject.h) through the same reader: raw and action samples on the profile's wheel replace
+   * SDL's values before the applied keys turn them into SNES bits; they end on time; another device is refused. */
+  SDL_UpdateJoysticks();
+  CHECK(!FzeroInjectArmed());
+  CHECK(FzeroGamepadRead(pad) == 0);
+  CHECK(FzeroInjectTestArm("not-this-wheel", kProfile, kProfileLines));   /* armed for another stick: */
+  FzeroInjectTestClock(1000);
+  CHECK(FzeroInjectTestCommand("inject raw button 31 dev={11111111-2222-3333-4444-555555555555} value=1 ms=500", NULL, 0));
+  SDL_UpdateJoysticks();
+  CHECK(FzeroGamepadReadOverlay(pad) == 0);                      /* ...the opened wheel's GUID differs: untouched */
+  CHECK(FzeroInjectTestArm(guid, kProfile, kProfileLines) && FzeroInjectArmed());
+  char why[160];
+  CHECK(!FzeroInjectTestCommand("inject raw button 1 dev={66666666-7777-8888-9999-aaaaaaaaaaaa} value=1 ms=500", why, sizeof why) &&
+        strstr(why, "one controller"));                          /* the shifter: F-Zero reads the wheel only */
+  CHECK(FzeroInjectTestCommand("inject raw axis 0 dev={11111111-2222-3333-4444-555555555555} value=65535 ms=500", why, sizeof why));
+  SDL_UpdateJoysticks();
+  CHECK(FzeroGamepadRead(pad) == 0x0080u);                        /* injected full right lock, physical axis centred */
+  CHECK(FzeroInjectTestCommand("inject action throttle 1 ms=500", why, sizeof why));
+  CHECK(FzeroGamepadRead(pad) == 0x0081u);                        /* plus the accelerator, through [Controls] */
+  CHECK(FzeroInjectTestCommand("inject action confirm 1 ms=500", why, sizeof why));
+  CHECK((FzeroGamepadReadOverlay(pad) & 0x0100u) == 0x0100u);     /* confirm -> SNES A */
+  CHECK(FzeroInjectTestCommand("inject action navUp 1 ms=500", why, sizeof why));
+  CHECK((FzeroGamepadReadOverlay(pad) & 0x0010u) == 0x0010u);     /* hat up -> SNES up */
+  FzeroInjectTestClock(1600);                                     /* every sample has ended */
+  CHECK(FzeroGamepadRead(pad) == 0 && FzeroGamepadReadOverlay(pad) == 0);
+  CHECK(FzeroInjectTestCommand("inject action brake 1 ms=200", why, sizeof why));
+  CHECK(FzeroGamepadRead(pad) == 0x0002u);                        /* brake -> SNES Y, the captured rest honoured */
+  FzeroInjectTestClock(2000);
+  CHECK(SDL_SetJoystickVirtualAxis(wheel, 5, 32767));
+  SDL_UpdateJoysticks();
+  CHECK(FzeroGamepadRead(pad) == 0x0002u);                        /* the physical brake still works when armed */
+  CHECK(SDL_SetJoystickVirtualAxis(wheel, 5, -32768));
+  SDL_UpdateJoysticks();
   FzeroGamepadShutdown(&pad);
 
   /* A new revision is applied again; launcher edits in between are overwritten only for the profile's keys. */

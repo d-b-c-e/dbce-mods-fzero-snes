@@ -1,6 +1,7 @@
 #include "fzero_gamepad.h"
 #include "fzero_analog.h"
 #include "fzero_hotkeys.h"
+#include "fzero_inject.h"
 #include "raw_hat_binding.h"
 
 #include <stdio.h>
@@ -237,12 +238,45 @@ void FzeroGamepadEvent(SDL_GameController **pad, const SDL_Event *event) {
   }
 }
 
+/* Test injection (fzero_inject.h): when armed, every raw read is one snapshot of the stick with the running samples
+ * substituted, and all lookups below come from it. Otherwise the reads are SDL's own, as always. */
+typedef struct { int16_t axes[8]; unsigned char buttons[128]; uint8_t hats[4]; int axis_count, button_count, hat_count; } RawSnapshot;
+static void raw_snapshot(RawSnapshot *s) {
+  memset(s, 0, sizeof(*s));
+#if SNESRECOMP_SDL3
+  s->axis_count = SDL_GetNumJoystickAxes(s_raw); s->button_count = SDL_GetNumJoystickButtons(s_raw);
+  s->hat_count = SDL_GetNumJoystickHats(s_raw);
+#else
+  s->axis_count = SDL_JoystickNumAxes(s_raw); s->button_count = SDL_JoystickNumButtons(s_raw);
+  s->hat_count = SDL_JoystickNumHats(s_raw);
+#endif
+  if (s->axis_count < 0) s->axis_count = 0; if (s->axis_count > 8) s->axis_count = 8;
+  if (s->button_count < 0) s->button_count = 0; if (s->button_count > 128) s->button_count = 128;
+  if (s->hat_count < 0) s->hat_count = 0; if (s->hat_count > 4) s->hat_count = 4;
+  for (int i = 0; i < s->axis_count; ++i) s->axes[i] = SDL_JoystickGetAxis(s_raw, i);
+  for (int i = 0; i < s->button_count; ++i) s->buttons[i] = SDL_JoystickGetButton(s_raw, i) ? 1 : 0;
+#if SNESRECOMP_SDL3
+  for (int i = 0; i < s->hat_count; ++i) s->hats[i] = SDL_GetJoystickHat(s_raw, i);
+#else
+  for (int i = 0; i < s->hat_count; ++i) s->hats[i] = SDL_JoystickGetHat(s_raw, i);
+#endif
+  char guid[40];
+  joystick_guid(s_raw, guid);
+  FzeroInjectPoll();
+  FzeroInjectRawRead(guid, s->axes, s->axis_count, s->buttons, s->button_count, s->hats, s->hat_count);
+}
+static int snap_axis(const RawSnapshot *s, int axis) { return axis >= 0 && axis < s->axis_count ? s->axes[axis] : 0; }
+static int snap_button(const RawSnapshot *s, int button) { return button >= 0 && button < s->button_count && s->buttons[button]; }
+static int snap_hat(const RawSnapshot *s, int hat) { return hat >= 0 && hat < s->hat_count ? s->hats[hat] : 0; }
 static uint32_t gamepad_read(SDL_GameController *pad, bool include_pedals) {
   if ((!pad || !SDL_GameControllerGetAttached(pad)) &&
       (!s_raw || !SDL_JoystickGetAttached(s_raw))) return 0;
   if (!pad) {
     uint32_t input = 0;
-    int x = SDL_JoystickGetAxis(s_raw, s_raw_axis);
+    RawSnapshot snap;
+    const int injecting = FzeroInjectArmed();
+    if (injecting) raw_snapshot(&snap);
+    int x = injecting ? snap_axis(&snap, s_raw_axis) : SDL_JoystickGetAxis(s_raw, s_raw_axis);
     if (s_analog_steering)
       input |= FzeroAnalogSteeringReadTuned(&s_steering, x, s_deadzone,
                                            s_range_percent, s_response_percent);
@@ -251,19 +285,21 @@ static uint32_t gamepad_read(SDL_GameController *pad, bool include_pedals) {
       if (x > s_deadzone) input |= 0x0080u;
     }
     if (include_pedals && s_gas_axis >= 0) {
-      int value = SDL_JoystickGetAxis(s_raw, s_gas_axis);
+      int value = injecting ? snap_axis(&snap, s_gas_axis) : SDL_JoystickGetAxis(s_raw, s_gas_axis);
       if (s_gas_invert) value = -value;
       if (value > s_pedal_threshold) input |= 0x0001u;
     }
     if (include_pedals && s_brake_axis >= 0) {
-      int value = SDL_JoystickGetAxis(s_raw, s_brake_axis);
+      int value = injecting ? snap_axis(&snap, s_brake_axis) : SDL_JoystickGetAxis(s_raw, s_brake_axis);
       if (s_brake_invert) value = -value;
       if (value > s_pedal_threshold) input |= 0x0002u;
     }
     for (int i = 0; i < 14; ++i) {
       int binding = s_raw_buttons[i];
       int hat = recomp_raw_hat_index(binding);
-      if (hat >= 0) {
+      if (hat >= 0 && injecting) {
+        if (snap_hat(&snap, hat) & recomp_raw_hat_value(binding)) input |= 1u << s_raw_input_bits[i];
+      } else if (hat >= 0) {
 #if SNESRECOMP_SDL3
         if (hat < SDL_GetNumJoystickHats(s_raw) &&
             (SDL_GetJoystickHat(s_raw, hat) & recomp_raw_hat_value(binding)))
@@ -272,7 +308,7 @@ static uint32_t gamepad_read(SDL_GameController *pad, bool include_pedals) {
             (SDL_JoystickGetHat(s_raw, hat) & recomp_raw_hat_value(binding)))
 #endif
           input |= 1u << s_raw_input_bits[i];
-      } else if (binding >= 0 && binding <= 127 && SDL_JoystickGetButton(s_raw, binding)) {
+      } else if (binding >= 0 && binding <= 127 && (injecting ? snap_button(&snap, binding) : SDL_JoystickGetButton(s_raw, binding))) {
         input |= 1u << s_raw_input_bits[i];
       }
     }

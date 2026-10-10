@@ -10,6 +10,7 @@
 #include "fzero_hotkeys.h"
 #include "fzero_gamepad.h"
 #include "fzero_controls.h"
+#include "fzero_inject.h"
 #include "fzero_telemetry.h"
 #include "fzero_ffb.h"
 #include "fzero_msu.h"
@@ -2028,6 +2029,7 @@ int main(int argc, char **argv) {
   /* STD-033: a rig profile's [Controls] become the raw-wheel keys before the launcher shows or the game reads them.
    * Validation replays stay device-free. */
   if (!FzeroReplayHasInput()) FzeroControlsApplyAtStartup(g_config_path);
+  if (!FzeroReplayHasInput()) FzeroInjectInit(g_config_path);   /* dev only: inject.on, no force, applied profile */
   host_report_init(kWindowTitle, kBuildVersion);
   char rom_path[1024] = {0};
   RecompLauncherCSettings launcher_settings;
