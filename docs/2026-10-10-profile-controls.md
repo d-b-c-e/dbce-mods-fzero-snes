@@ -76,3 +76,25 @@ the image), 18/18 suites. `Install-StreamDeck.ps1 -Label controls-capability`. T
 `controlsProfileSchema 1`, `controlsProfileAdapter fzero-raw-wheel-1`, the launcher (`4DA28F9D...`) and native hashes,
 and source `e82a669`. Launch check 02:01: nothing pending, the R12 opened with steering 0 / accelerator 2 / brake 5,
 and the other 98 owner files were byte-exact. Evidence: `E:\Source\_archive\2026-10-10\fzero-controls-capability-020158`.
+
+## Test injection and the closed loop (2026-10-10, 8930d45)
+
+F-Zero reads the wheel through SDL, so the DirectInput proxies' fence cannot inject into it. `src/fzero_inject.cpp`
+substitutes samples in our own reader (`gamepad_read`), before the applied `[Controller.<guid>]` keys turn them into
+SNES bits. It uses the toolkit's grammar and injection table. It arms only when all three hold, and is a no-op
+otherwise:
+
+- `%LOCALAPPDATA%\dbce\fzero\inject.on` exists;
+- `config.ini [ForceFeedback] Enabled = 0`, so no force runs in the process;
+- the `[Controls]` profile is applied to the opened wheel.
+
+Commands come from `inject.txt`, raw or action (resolved through the applied `[Controls]`). `dev=` must be the profile's
+wheel. `fzero_controls` ctest checks it through the real reader on an SDL virtual wheel (166 checks).
+
+First run, 04:03-04:06, on the owner's applied profile with FFB off:
+- the wheel's start, hat and confirm drove the menus to a Practice race;
+- throttle, steer ± and brake were observed in the game's input word, with speed 72 -> 378 km/h and 231 -> 10 km/h,
+  in F-Zero's Forza packet (5 of 7; start is not in the packet);
+- owner files were restored byte-exact.
+
+Evidence: `E:\Source\_archive\2026-10-10\fzero-inject-040316\RESULT.md`.
