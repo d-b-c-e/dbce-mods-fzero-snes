@@ -98,9 +98,10 @@ if ((Get-FileHash -LiteralPath $sources['WheelFfb.dll']).Hash -ine $nativeHash) 
 # executable behind. Require the same clean revision in the linked image too.
 $description = (git -C $repo describe --always --dirty --abbrev=12).Trim()
 $header = Join-Path $BuildDir 'generated/fzero_build.h'
+$linkedText = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($built))
 if (!(Test-Path -LiteralPath $header) -or
     (Get-Content -LiteralPath $header -Raw) -notmatch ('(?m)^#define FZERO_SOURCE_REVISION "' + [regex]::Escape($description) + '"\r?$') -or
-    ![Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($built)).Contains($description + [char]0)) {
+    !$linkedText.Contains($description + [char]0) -or !$linkedText.Contains('[fzero-controls]')) {
     throw 'Build source stamp is stale or absent; reconfigure and rebuild from this clean commit. Nothing changed.'
 }
 $changes = @($owned | Where-Object { (HashOrNull $sources[$_]) -cne (HashOrNull (Join-Path $Target $_)) })

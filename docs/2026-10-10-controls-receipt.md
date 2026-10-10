@@ -2,7 +2,7 @@
 
 The Stream Deck installer now requires the clean checkout's `git describe` stamp
 both in `generated/fzero_build.h` and as a NUL-terminated string in the linked
-launcher. Reconfiguration without relinking is refused. The existing native pin
+launcher, plus the linked `[fzero-controls]` startup tag. Reconfiguration without relinking is refused. The existing native pin
 check remains. These are build provenance checks, not a security signature.
 
 `install-receipt.json` retains its existing fields and adds schemaVersion 1,

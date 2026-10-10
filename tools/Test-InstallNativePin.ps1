@@ -50,6 +50,10 @@ foreach ($kind in 'missing-header','stale-header','stale-image') {
 }
 [IO.File]::WriteAllText($exe, 'Non-executable stamped fixture ' + $description + [char]0)
 $log = Invoke-Installer -BuildDir $build -Target $target -Label fixture 2>&1
+Check ($installerExitCode -ne 0 -and ($log -join "`n") -match 'Build source stamp') 'Pre-adapter image accepted'
+Check ((Snapshot) -ceq $before) 'Pre-adapter refusal changed target'
+[IO.File]::AppendAllText($exe, '[fzero-controls]')
+$log = Invoke-Installer -BuildDir $build -Target $target -Label fixture 2>&1
 Check ($installerExitCode -eq 0) ('Exact native install failed: ' + ($log -join "`n"))
 Check ((Get-FileHash (Join-Path $target 'WheelFfb.dll')).Hash -ceq (Get-FileHash (Join-Path $build 'WheelFfb.dll')).Hash) 'Native copy differs'
 Check ((Get-FileHash (Join-Path $target 'config.ini')).Hash -ceq $configHash) 'Config changed'
