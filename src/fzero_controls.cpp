@@ -1,5 +1,5 @@
 // Rig-profile controls -> F-Zero's raw-wheel keys (see fzero_controls.h). The [Controls] parser is the toolkit's
-// shared one (src/vendor/controls/dbce_controls.hpp, toolkit e4502a6), so this file holds only the F-Zero mapping
+// shared one (src/vendor/controls/dbce_controls.hpp, toolkit 6b4e25a), so this file holds only the F-Zero mapping
 // and the config.ini edits.
 //
 // Index mapping: the profile names DirectInput objects (axis 0 X, 2 Z, 5 Rz ...; button n = DIJOYSTATE button n);
