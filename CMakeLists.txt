@@ -13,6 +13,32 @@ if(NOT MSVC)
     target_link_libraries(fzero_video PUBLIC m)
 endif()
 if(BUILD_TESTING)
+    add_executable(fzero_shim_map_tests tests/test_shim_map.c src/fzero_shim_map.c
+        src/fzero_analog.c src/fzero_playthrough.c)
+    target_include_directories(fzero_shim_map_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+    if(NOT MSVC)
+        target_link_libraries(fzero_shim_map_tests PRIVATE m)
+        target_compile_options(fzero_shim_map_tests PRIVATE -Wall -Wextra -Werror)
+    endif()
+    add_test(NAME fzero_shim_map COMMAND fzero_shim_map_tests)
+    if(WIN32)
+        enable_language(CXX)
+        # Keep the fake DLL away from the game's real vendored runtime.
+        add_library(fzero_shim_fake SHARED tests/fake_shim.cpp)
+        set_target_properties(fzero_shim_fake PROPERTIES OUTPUT_NAME dbce_shim
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/shim-fixture")
+        target_compile_features(fzero_shim_fake PRIVATE cxx_std_17)
+        add_executable(fzero_shim_host_tests tests/test_shim_host.cpp src/fzero_shim.cpp
+            src/fzero_shim_map.c src/fzero_analog.c src/fzero_hotkeys.c src/fzero_output_latch.c)
+        target_compile_features(fzero_shim_host_tests PRIVATE cxx_std_17)
+        target_include_directories(fzero_shim_host_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+        set_target_properties(fzero_shim_host_tests PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/shim-fixture")
+        add_dependencies(fzero_shim_host_tests fzero_shim_fake)
+        foreach(mode off args replay normal abi pending record stop)
+            add_test(NAME fzero_shim_host_${mode} COMMAND fzero_shim_host_tests ${mode})
+        endforeach()
+    endif()
     add_executable(fzero_hdma_tests tests/test_hdma.c)
     target_link_libraries(fzero_hdma_tests PRIVATE fzero_video)
     add_test(NAME fzero_hdma COMMAND fzero_hdma_tests)
@@ -216,6 +242,8 @@ add_executable(FZeroSNESRecomp
     src/fzero_controls.cpp
     src/fzero_controls_sdl.c
     src/fzero_inject.cpp
+    src/fzero_shim.cpp
+    src/fzero_shim_map.c
     src/fzero_output_latch.c
     src/fzero_telemetry.cpp
     src/fzero_ffb.cpp
@@ -295,6 +323,19 @@ if(WIN32)
             "$<TARGET_FILE_DIR:FZeroSNESRecomp>/WheelFfb.dll"
         COMMENT "Staging WheelFfb runtime"
         VERBATIM)
+    # Provisional private dependency, not a default player-package payload.
+    set(FZERO_SHIM_DLL "" CACHE FILEPATH "Reviewed ABI2 DLL for private shim diagnostics only")
+    if(FZERO_SHIM_DLL)
+        file(SHA256 "${FZERO_SHIM_DLL}" FZERO_SHIM_SHA)
+        if(NOT FZERO_SHIM_SHA STREQUAL "9b8a036f664cf8f45cccf82b98e5e4376f93215b60eac50b6db965bf498015d8")
+            message(FATAL_ERROR "FZERO_SHIM_DLL is not the reviewed f49cfc5 runtime")
+        endif()
+        set_property(TARGET FZeroSNESRecomp APPEND PROPERTY LINK_DEPENDS "${FZERO_SHIM_DLL}")
+        add_custom_command(TARGET FZeroSNESRecomp POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${FZERO_SHIM_DLL}"
+                "$<TARGET_FILE_DIR:FZeroSNESRecomp>/dbce_shim.dll"
+            COMMENT "Staging diagnostic-only shared input shim" VERBATIM)
+    endif()
 endif()
 
 if(BUILD_TESTING)

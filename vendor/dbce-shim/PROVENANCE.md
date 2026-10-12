@@ -1,0 +1,27 @@
+# Shared input shim: private diagnostic dependency
+
+The byte-exact ABI 2 header is pinned to `d-b-c-e/outrun2-decomp`,
+`codex/shim-device-path`, **f49cfc559f065b778967a7c94068a75df538ec69**.
+This is the same reviewed native build used by DRIVE; it includes the exact
+owned-handle HID interface-path report on top of `eea0660`.
+
+| File | SHA-256 |
+|---|---|
+| `dbce_shim.h` | `3c63b472fc78770e8b9fc90ae92debbf979eedd7f8c68800f56b8690f4f65b74` |
+| private `dbce_shim.dll` | `9b8a036f664cf8f45cccf82b98e5e4376f93215b60eac50b6db965bf498015d8` |
+
+The DLL is **not tracked or included by default**. For a private candidate,
+pass `-DFZERO_SHIM_DLL=<reviewed DLL>`; CMake verifies that hash and stages it
+beside the graphical executable. The loader checks ABI, struct sizes and every
+action name before opening. A diagnostic launch without the DLL refuses.
+Ordinary launches do not load it.
+
+The target builds `windows/shim` and `windows/host` with the shared controls and
+session headers, independently of OutRun's reconstructed runtime. Its reviewed
+build used Visual Studio 2022 ClangCL x64, Release, `-DOR2_XBOX=ON`, target
+`dbce_shim`. Shared native checks at the pin: Core 163, provider 106, ABI 132.
+
+No redistribution grant for this provisional target is asserted. F-Zero's root
+license does not license this dependency. Extraction into the reusable toolkit
+and complete source/license notices remain required before public distribution.
+Do not add this DLL to the public player-package allowlist on this evidence.
