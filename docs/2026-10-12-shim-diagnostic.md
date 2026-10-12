@@ -544,8 +544,9 @@ Read-only decoding of that exact private cartridge identified these seams:
 - Bank 7F words `$4C84/$4C8A/$4C92/$4C98` expose car/rival/panel/acceptance;
   byte `$4C27` selects the course. `$60` must finish its transition before input.
 - `$00:8AC0` dispatches Practice course selection; `$1E:BBF7` confirms it.
-  Player route proof requires `$58=1`, `$5B=0`, observed 2/2/0 or 2/2/1
-  countdown, then 2/3/0 with the expected car/league/course, not `ffb.racing` alone.
+  Player route proof requires `$58=1`, `$5B=0`, observed 2/2/2 native countdown
+  (`$00:8CBD`), then 2/3/0 with the expected car/league/course, not `ffb.racing`
+  alone. Substates 2/2/0 and 2/2/1 prepare the line; attract skips substate 2.
 
 The only route is Practice → Blue Falcon → Yes → default rival → Knight League
 → Mute City I. Before every positive batch the runner waits for the exact state

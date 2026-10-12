@@ -43,6 +43,8 @@ class RouteChecks(unittest.TestCase):
         # A live-looking attract/race flag is insufficient without countdown.
         self.assertFalse(self.ready(route, (2, 3, 0)))
         route.observe(sample(route.sequence + 1, route.elapsed + .1, (2, 2, 1)))
+        self.assertFalse(self.ready(route, (2, 3, 0)))
+        route.observe(sample(route.sequence + 1, route.elapsed + .1, (2, 2, 2)))
         self.assertTrue(self.ready(route, (2, 3, 0)))
         self.assertEqual(route.sent(), ("inject action throttle 1 ms=2000",))
         self.assertFalse(self.ready(route, (2, 3, 0)))

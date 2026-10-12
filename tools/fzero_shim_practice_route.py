@@ -33,7 +33,7 @@ class PracticeRoute:
         {(1, 1, 1), (1, 1, 3)},
         {(1, 1, 3), (1, 1, 4)},
         {(1, 1, 4), (1, 7, 4), (2, 1, 0), (2, 1, 1)},
-        {(2, 1, 1), (2, 2, 0), (2, 2, 1), (2, 3, 0)},
+        {(2, 1, 1), (2, 2, 0), (2, 2, 1), (2, 2, 2), (2, 3, 0)},
         {(2, 3, 0)},
         {(2, 3, 0)},
     )
@@ -73,7 +73,9 @@ class PracticeRoute:
         # All post-title states must be explicitly Practice/player, not attract.
         if state[0] != 0 and (c["game.menu.training"] != 1 or c["game.menu.state5b"] != 0):
             raise Refused("not the selected player Practice route")
-        if self.step >= 7 and state in ((2, 2, 0), (2, 2, 1)):
+        # The real player countdown is substate 2 ($00:8CBD); attract can
+        # leave substate 1 directly. Require the player path's actual countdown.
+        if self.step >= 7 and state == (2, 2, 2):
             self.countdown = True
         if self.step >= 8 and self.countdown and state == (2, 3, 0) and c["game.telemetry.speedMps"] > 1:
             self.moving = True
