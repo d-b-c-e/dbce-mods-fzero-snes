@@ -92,6 +92,10 @@ See `vendor/dbce-shim/PROVENANCE.md`.
 
 ## Next private muted Deluxe qualification
 
+This first-slice plan is retained for context. The **staged first latched pilot**
+below supersedes its ordinary-launch and capture-only steps; no extra baseline
+launch or private tune rewrite is needed for that pilot.
+
 1. Stage a **fresh private copy**, retaining the accepted config/video/keyboard
    settings and private ROM/music/save inputs. Use this candidate graphical
    executable, matching headless executable, existing WheelFfb and the pinned
@@ -131,7 +135,7 @@ claim follows from these source/offline checks.
 
 Set all three additional variables before launch to opt in:
 
-- `FZERO_SHIM_SESSION_NONCE`: exact 8–64 letter/digit nonce.
+- `FZERO_SHIM_SESSION_NONCE`: exact 8â€“64 letter/digit nonce.
 - `FZERO_SHIM_SESSION_FILE`: absolute path to an existing `inject.on`.
 - `FZERO_SHIM_BATCH_FILE`: absolute path to a distinct existing `inject.txt`.
 
@@ -279,3 +283,90 @@ headless save root, has a bounded child deadline and rehashes the artifacts
 again after replay. The actual game still has to match every WRAM checksum.
 A real moving producer, shared final-consumed-word equality, cold WRAM proof,
 rendered Deluxe replay and complete SNES controls remain unqualified.
+
+## Staged first latched pilot (not launched)
+
+`tools/Invoke-ShimDiagnosticCopy.ps1` prepares and supervises one fresh private
+copy. The staged instance is `E:/fz-probe-1012a`, with 70 app files, 16 copied
+helper files and 77 original-install file/absence pins in `prepared.json`.
+The installed config, controls, video geometry, FFB tuning and music are copied
+unchanged. Saves and old recordings are excluded. The private Deluxe data is
+copied from the source archive; the installed build embeds its own data and
+does not have that file. Nothing is written in the owner install.
+
+Candidate binaries remain the clean `4f43f1a7a2224d06c4d3020a624f371dd89d2579`
+build, tree `3561a32c32deaae879ded0f435746e8c49fd4615`:
+
+| File | SHA-256 |
+| --- | --- |
+| FZeroSNESRecomp.exe | `0a37843731a672e305040ef673fc4c7618ce81f61637017ba54b55f840b2cef5` |
+| FZeroSNESRecompHeadless.exe | `e55c48f39cc43fb5c9d7a832698d97a67a24e4ad41f7a8a5d740426574e01103` |
+| dbce_shim.dll | `9b8a036f664cf8f45cccf82b98e5e4376f93215b60eac50b6db965bf498015d8` |
+| WheelFfb.dll | `3f6cc51444879d01feb900098b2de94242594d093f523e3c34bd511d69c0d946` |
+| mods/bs-deluxe.dat | `a9e31fd3a32103cc6591e70c31e4a182b631989b7ab31b21cb5aec6c5c1bc02b` |
+| P21Finalizer.dll | `dbc88857794be0b6f1ce5afa3c356497533abe4b2f43578cf57f71f4acb4d08e` |
+
+After the coordinator grants the rig slot, start **Run in a separate supervised
+PowerShell 7 process/tool session**, so the reviewer can capture and inspect
+frames while it runs:
+
+```powershell
+$runner = 'E:/Source/games/.worktrees/fzero-shim-source/tools/Invoke-ShimDiagnosticCopy.ps1'
+$probe = 'E:/fz-probe-1012a'
+pwsh -NoProfile -File $runner -Action Check -Probe $probe # read-only
+pwsh -NoProfile -File $runner -Action Run -Probe $probe
+```
+
+Run requires five owner-idle minutes and acquires the shared lease itself. It
+never changes display topology or sends OS input. `process.json` identifies the
+exact child. The run starts with an empty batch file; **no menu route is built
+in**. In the reviewer's other tool session:
+
+```powershell
+& $runner -Action Status -Probe $probe
+& $runner -Action Capture -Probe $probe # lists this child's windows
+& $runner -Action Capture -Probe $probe -WindowHandle <centre-window-decimal-handle>
+# Inspect the returned PNG before sending one scene-appropriate action:
+& $runner -Action Command -Probe $probe -Commands 'inject action start 1 ms=250' `
+  -InspectedFrame '<returned-PNG-path>'
+# Repeat Capture + visual inspection before each subsequent action.
+# Only after a race is actually visible, a bounded moving diagnostic may use:
+& $runner -Action Command -Probe $probe `
+  -Commands @('inject action throttle 0.65 ms=1000','inject action steer 0.10 ms=1000') `
+  -InspectedFrame '<fresh-returned-PNG-path>'
+& $runner -Action Command -Probe $probe -Commands 'end'
+```
+
+Command admission requires the same leased child and a capture receipt less
+than 30 seconds old. It checks the PNG hash, PID and creation time, bounds each
+command to three seconds, and publishes one nonce-matched monotonic batch by
+atomic rename. Commands go only to production Core's existing action injector,
+then through the production F-Zero mapper/PDM and actual emulated game frames.
+There is no synthetic guest-input or WRAM write path in this runner.
+
+Run sends only `end` automatically at 75 seconds. At 90 seconds it requests
+normal window close from the exact child if needed; at 100 seconds an unresolved
+child is reported and its lease retained. The outer budget is 220 seconds,
+including bounded journal validation and P21 helpers. A helper timeout also
+retains its identity and the lease; neither a helper nor game is killed. The
+coordinator must resolve such a process before releasing that lease. Nonzero
+exit, missing Completed, unresolved host or rejected P21 is a failed pilot.
+Sealing happens only after actual observed exit 0, valid Completed journal,
+resolved host and unchanged owner pins. `result.json` still labels
+`runtimeQualified=false`: a seal alone does not establish moving gameplay or
+cold WRAM equality. Finalizer validation output is `validated.tsv`; raw original
+and initial WRAM are `run/original.fzpt` and `run/original.fzpt.state`.
+
+Keyboard audit: the diagnostic KEYDOWN guard runs before save/rewind, pause,
+reset, F-key save/load, video/FPS and fullscreen shortcuts. The latched guest
+keyboard lane is also suppressed. **Escape and window-close are deliberate
+emergency exits**; an unfinished latched run then fails rather than becoming a
+successful recording.
+
+Offline wrapper validation (`tests/Test-ShimDiagnosticCopy.ps1 -Probe ...`)
+exercised production Check: exact pins pass, changed private config and helper
+bytes refuse, an extra runtime file refuses, and restored bytes pass. Harmless
+PowerShell helper children verified normal output and timeout/identity retention.
+No game, device, lease or desktop input was involved. The copied finalizer also
+read an already sealed shared fake-provider fixture: five rows, 217 checks.
+That fixture result is tool compatibility evidence, not F-Zero runtime evidence.
