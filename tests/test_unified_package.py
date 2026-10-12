@@ -175,6 +175,31 @@ class PackageTests(unittest.TestCase):
                 stage.stage(build, self.base / "must-not-exist", private_shared_input=True)
             self.assertFalse((self.base / "must-not-exist").exists())
 
+    def test_private_header_pin_survives_fresh_windows_checkout(self):
+        # Read Git's actual index, not this potentially stale CRLF worktree.
+        name = "vendor/dbce-shim/dbce_shim.h"
+        stored = subprocess.check_output(["git", "-C", str(pack.ROOT), "show", ":" + name])
+        pin = json.loads((pack.ROOT / "vendor/dbce-shim/PIN.json").read_text())
+        expected = pin["files"]["dbce_shim.h"]
+        self.assertEqual(pack.digest(stored), expected)
+        source = self.base / "fresh-source"
+        source.mkdir()
+        def git(*args):
+            return subprocess.check_output(["git", "-C", str(source), *args], stderr=subprocess.DEVNULL)
+        git("init", "-q")
+        git("config", "core.autocrlf", "true")
+        (source / ".gitattributes").write_bytes((pack.ROOT / ".gitattributes").read_bytes())
+        path = source / name
+        path.parent.mkdir(parents=True)
+        path.write_bytes(stored)
+        git("add", ".gitattributes", name)
+        self.assertEqual(pack.digest(git("show", ":" + name)), expected)
+        checkout = self.base / "fresh-checkout"
+        checkout.mkdir()
+        git("checkout-index", "--prefix=" + checkout.as_posix() + "/", "--", name)
+        self.assertEqual((checkout / name).read_bytes(), stored)
+        self.assertEqual(pack.digest((checkout / name).read_bytes()), expected)
+
     def test_canonical_preview_identity_and_rejected_legacy_or_mismatched_metadata(self):
         product=json.loads((pack.ROOT/'game-product.json').read_text())
         identity,archive=pack.preview_identity(product,'1.8.3','1'*40)

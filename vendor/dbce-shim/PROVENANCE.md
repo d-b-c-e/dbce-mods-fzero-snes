@@ -1,6 +1,6 @@
 # Shared input shim: private diagnostic dependency
 
-The byte-exact ABI 2 header is pinned to `d-b-c-e/outrun2-decomp`,
+The ABI 2 header source is pinned to `d-b-c-e/outrun2-decomp`,
 `codex/shim-device-path`, **f49cfc559f065b778967a7c94068a75df538ec69**.
 This is the same reviewed native build used by DRIVE; it includes the exact
 owned-handle HID interface-path report on top of `eea0660`.
@@ -9,6 +9,13 @@ owned-handle HID interface-path report on top of `eea0660`.
 |---|---|
 | `dbce_shim.h` | `3c63b472fc78770e8b9fc90ae92debbf979eedd7f8c68800f56b8690f4f65b74` |
 | private `dbce_shim.dll` | `9b8a036f664cf8f45cccf82b98e5e4376f93215b60eac50b6db965bf498015d8` |
+
+The header byte pin is the reviewed Windows **CRLF** representation (8,698
+bytes), retained exactly in Git with `-text`; fresh Windows checkouts must keep
+the same hash. The upstream Git blob uses LF (8,573 bytes, SHA256
+`ce9c25b9d5c9386b5eacc4763cfbcbdc1d8af9d6326b524a009cb1eee2f7b5e3`).
+Normalizing CRLF to LF yields that upstream blob exactly; no declarations differ.
+This byte-reproducibility note supplies no additional license or distribution grant.
 
 The DLL is **not tracked or included by default**. For a private candidate,
 pass `-DFZERO_SHIM_DLL=<reviewed DLL>`; CMake verifies that hash and stages it
