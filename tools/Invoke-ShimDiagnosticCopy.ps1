@@ -70,6 +70,11 @@ function Copy-Tree([string]$Source,[string]$Destination) {
     Copy-Item -LiteralPath $Source -Destination $Destination -Recurse
 }
 function Read-Json($Path) { Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json }
+function New-NeutralBatch([string]$Nonce) {
+    # Core refuses an existing empty file. A released Start is a real, bounded
+    # zero command through the same mapper; it cannot press Start or navigate.
+    return "nonce=$Nonce`nbatch=1`ninject action start 0 ms=50`n"
+}
 function Lease-Script { Join-Path $Toolkit 'tools/playback/Stage-RigLease.ps1' }
 function Assert-Child($Identity) {
     $child = Get-Process -Id $Identity.pid -ErrorAction Stop
@@ -124,7 +129,7 @@ function Publish-Batch([string[]]$Lines,[string]$Frame,[switch]$DeadlineEnd) {
             foreach ($line in $Lines) {
                 if ($line -notmatch '^inject action (steer|throttle|brake|confirm|back|start|select|navUp|navDown|navLeft|navRight) (-?[0-9]+(?:\.[0-9]+)?) ms=([0-9]+)$') { throw "Unsupported command: $line" }
                 $name=$Matches[1]; $value=[double]::Parse($Matches[2],[Globalization.CultureInfo]::InvariantCulture); $ms=[int]$Matches[3]
-                if (!$profile.Contains($name+' =') -or ![double]::IsFinite($value) -or $value -gt 1 -or $value -lt $(if($name -eq 'steer'){-1}else{0}) -or $ms -lt 1 -or $ms -gt 3000) { throw 'Unbound action or out-of-range command' }
+                if (!$profile.Contains($name+' =') -or ![double]::IsFinite($value) -or $value -gt 1 -or $value -lt $(if($name -eq 'steer'){-1}else{0}) -or $ms -lt 50 -or $ms -gt 3000) { throw 'Unbound action or out-of-range command' }
             }
         }
         $last = [int]([IO.File]::ReadAllText((Join-Path $control 'batch-sequence.txt')))
@@ -229,9 +234,10 @@ try {
     Check-Owner $manifest
     $nonce=[guid]::NewGuid().ToString('N'); $control=Join-Path $Probe 'control'
     [IO.File]::WriteAllText((Join-Path $control 'nonce.txt'),$nonce,$utf8)
-    [IO.File]::WriteAllText((Join-Path $control 'batch-sequence.txt'),'0',$utf8)
+    [IO.File]::WriteAllText((Join-Path $control 'batch-sequence.txt'),'1',$utf8)
     [IO.File]::WriteAllText((Join-Path $control 'inject.on'),"nonce=$nonce`nexpires=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds()+210)`n",$utf8)
-    [IO.File]::WriteAllText((Join-Path $control 'inject.txt'),'',$utf8)
+    [IO.File]::WriteAllText((Join-Path $control 'inject.txt'),(New-NeutralBatch $nonce),$utf8)
+    Write-Json (Join-Path $control 'batch-001.json') @{batch=1;utc=[DateTimeOffset]::UtcNow.ToString('O');commands=@('inject action start 0 ms=50');purpose='neutral startup; no navigation';inspectedFrame=$null}
     $info=[Diagnostics.ProcessStartInfo]::new([IO.Path]::GetFullPath((Join-Path $Probe 'app/FZeroSNESRecomp.exe')))
     $info.WorkingDirectory=Join-Path $Probe 'app'; $info.UseShellExecute=$false
     $info.ArgumentList.Add((Join-Path $Probe 'app/fzero.sfc'))

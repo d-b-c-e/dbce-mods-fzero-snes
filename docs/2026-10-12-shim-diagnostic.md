@@ -216,7 +216,7 @@ nonce=<the exact nonce>
 expires=<current Unix seconds plus 210>
 ```
 
-Start with an empty `inject.txt`; once Core is waiting, publish batches with a
+Start with the neutral batch below; once Core is ready, publish batches with a
 temporary sibling followed by atomic replace. The first command file is:
 
 ```text
@@ -287,7 +287,7 @@ rendered Deluxe replay and complete SNES controls remain unqualified.
 ## Staged first latched pilot (not launched)
 
 `tools/Invoke-ShimDiagnosticCopy.ps1` prepares and supervises one fresh private
-copy. The staged instance is `E:/fz-probe-1012a`, with 70 app files, 16 copied
+copy. The fresh retry is `E:/fz-probe-1012b`, with 70 app files, 16 copied
 helper files and 77 original-install file/absence pins in `prepared.json`.
 The installed config, controls, video geometry, FFB tuning and music are copied
 unchanged. Saves and old recordings are excluded. The private Deluxe data is
@@ -312,14 +312,14 @@ frames while it runs:
 
 ```powershell
 $runner = 'E:/Source/games/.worktrees/fzero-shim-source/tools/Invoke-ShimDiagnosticCopy.ps1'
-$probe = 'E:/fz-probe-1012a'
+$probe = 'E:/fz-probe-1012b'
 pwsh -NoProfile -File $runner -Action Check -Probe $probe # read-only
 pwsh -NoProfile -File $runner -Action Run -Probe $probe
 ```
 
 Run requires five owner-idle minutes and acquires the shared lease itself. It
 never changes display topology or sends OS input. `process.json` identifies the
-exact child. The run starts with an empty batch file; **no menu route is built
+exact child. The run starts with neutral batch 1 (`inject action start 0 ms=50`); **no menu route is built
 in**. In the reviewer's other tool session:
 
 ```powershell
@@ -370,3 +370,24 @@ PowerShell helper children verified normal output and timeout/identity retention
 No game, device, lease or desktop input was involved. The copied finalizer also
 read an already sealed shared fake-provider fixture: five rows, 217 checks.
 That fixture result is tool compatibility evidence, not F-Zero runtime evidence.
+
+### First pilot and neutral-start correction
+
+Private pilot `E:/fz-probe-1012a` launched PID 77464 and exited 9 after two
+emulated frames. The exact R12 was admitted in epoch 1 with 11 usable bindings,
+but Core correctly refused the existing empty `inject.txt`. The invalid original
+and unresolved host report remain untouched and unsealed; no menu action was
+sent. The supervisor observed exit and rechecked all owner pins before releasing
+the lease. Current 2560x1440 display produced the logged stock-view fallback;
+no display or geometry was changed.
+
+The wrapper now publishes nonce-matched batch 1 with only
+`inject action start 0 ms=50`, then manual commands start at batch 2. The actual
+pinned production parser requires at least 50 ms (a 1 ms proposal was refused by
+the offline fixture before retry). `tests/shim_neutral_batch.cpp`, linked against
+f49cfc5 production Core/parse and its fake provider, consumes the wrapper's exact
+emitted bytes. Nine checks show admission with a physically held fake Start,
+zero value and no down/up edge on activation and expiry, a working press/release
+positive control, and explicit Completed. No DirectInput or game is in that test.
+The existing wrapper test can run it using `-NativeCoreFixture <neutral.exe>`.
+Private compile evidence is `E:/fz-neutral-check` (build.cmd, neutral.txt, exe).

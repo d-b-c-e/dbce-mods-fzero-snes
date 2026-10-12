@@ -1,6 +1,6 @@
 #Requires -Version 7.0
 # Exercises actual Check on an already prepared private copy. No lease/game/device.
-param([Parameter(Mandatory)][string]$Probe)
+param([Parameter(Mandatory)][string]$Probe,[string]$NativeCoreFixture)
 $ErrorActionPreference='Stop'
 $Probe=[IO.Path]::GetFullPath($Probe)
 if($Probe -notmatch '^[A-Za-z]:[\\/]fz-probe-[a-zA-Z0-9-]+$'){throw 'Only a private probe can be used'}
@@ -31,11 +31,14 @@ try {
 $syntaxErrors=$null
 $ast=[Management.Automation.Language.Parser]::ParseFile($runner,[ref]$null,[ref]$syntaxErrors)
 if($syntaxErrors){throw $syntaxErrors[0]}
-foreach($name in @('Write-Json','Invoke-BoundedHelper')){
+foreach($name in @('Write-Json','Invoke-BoundedHelper','New-NeutralBatch')){
     $definition=$ast.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name},$false)
     . ([scriptblock]::Create($definition.Extent.Text))
 }
 $utf8=[Text.UTF8Encoding]::new($false)
+$neutral=Join-Path $Probe 'offline-neutral-batch.txt'
+[IO.File]::WriteAllText($neutral,(New-NeutralBatch 'FzeroNeutralFixture'),$utf8)
+if($NativeCoreFixture){& $NativeCoreFixture $neutral;if($LASTEXITCODE -ne 0){throw 'Production Core neutral-start fixture failed'}}
 $retainedBefore=$script:retain
 try {
     $script:retain=$false
