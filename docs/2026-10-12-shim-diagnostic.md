@@ -450,3 +450,39 @@ then the same cold equality checks. Independent SNES X/Y/L/R remain unsupported
 by generic ABI 2. The current desktop was 2560x1440; the accepted span-only triple
 setting deliberately fell back to stock view. This run does not qualify triples,
 physical wheel feel, FFB normalization, complete controls, or a public release.
+
+### Navigation evidence and next private pilot
+
+Read-only analysis of the sealed 1012b source resolves the apparent Start issue:
+Start reached the guest and returned the demo to the title. The black screenshot
+was the transition, not evidence of a missed binding. The existing legacy mapper
+and the shared mapper both assign Start to bit 3 and NavDown to bit 5.
+
+| Frame | Capture seconds | State `$54/$55/$56` | Observed meaning |
+| --- | ---: | --- | --- |
+| 131 | 2.175 | 0/1/0 | Title; later screenshot shows Grand Prix/Practice |
+| 1459 | 24.272 | 2/3/0 | Attract race begins without any pressed input |
+| 1931 | 32.129 | 2/3/0 | Seven consumed NavDown frames, already in attract |
+| 3277 | 54.523 | 2/4/0 | First of nine consumed Start frames |
+| 3278 | 54.540 | 3/4/0 | Race exit transition |
+| 3309 | 55.056 | 0/0/0 | Title initialization |
+| 3348 | 55.704 | 0/1/0 | Title again through the end of the recording |
+
+`game.ffb.racing` is 1 during the attract race too: its existing predicate is
+`$54 == 2 && $55 >= 3`. This channel indicates a race scene, **not player control**.
+The next pilot must prove selection, countdown and input-responsive movement from
+inspected frames and consumed words; that flag alone cannot qualify live driving.
+
+The next copy uses the same reviewed executable and 75-second automatic end.
+Capture the title promptly, publish one NavDown while that scene is fresh, then
+inspect the selection before Start. Inspect each subsequent menu before a single
+appropriate action. If the title has already timed out, Start returns from attract;
+wait for the title to be visible before choosing Practice. Never apply throttle to
+an attract demo or infer player control solely from a moving picture. Only after
+observed player selection/countdown may short bounded throttle and steering use
+the same Core mapper. Each action still needs an owned-window capture receipt;
+no pre-timed menu macro, OS input, focus change, reset, or saved-state edit is used.
+
+Keep failed/incomplete attempts and the existing sealed 1012b original unchanged.
+Any next moving original needs its own completed journal, P21 seal, owner-pin
+readback, exact final-consumed-word comparison and cold per-frame WRAM check.
