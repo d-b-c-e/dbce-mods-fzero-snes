@@ -4,6 +4,24 @@ The DBCE source fork is already public at [dbce-mods-fzero-snes](https://github.
 
 ## Recommended player package
 
+October 12 delivery follow-up: packages now include `tools/Recording.ps1` and
+[the recording quickstart](RECORDING-QUICKSTART.md) for the existing direct-ROM
+CLI and REC/Saved/Replay status. No input default or owner setting is changed.
+The helper is also the straightforward command boundary for a future Wheelkit
+entry; Wheelkit discovery/integration is not implemented here.
+
+The provisional Shared DLL has a **separate distribution blocker** from Deluxe.
+Its exact pin and private-only boundary are in
+`vendor/dbce-shim/{PIN.json,PROVENANCE.md}`. For private stock-only staging,
+`stage_unified.py --private-shared-input` explicitly copies the build's pinned
+dynamic DLL and its header/provenance, and marks the build receipt private.
+Normal staging omits it even when the DLL is beside the executable.
+`package_unified.py` refuses that receipt and the DLL by name: a nearby DLL or
+self-consistent hash list does not grant redistribution rights. Complete source
+and license notices/extraction are required before admitting a public Shared
+payload. This option does not relax the stock-only/embedded-Deluxe refusal;
+the qualified Deluxe copies and original recordings remain private evidence.
+
 Publish one Windows x64 portable ZIP with a distinct DBCE preview version, rather than several wheel/triple DLL downloads. The modifications are compiled into this native application and its launcher; they are not a plugin that can simply be dropped into an arbitrary upstream executable.
 
 The ZIP should contain the graphical executable, matching headless replay executable, pinned WheelFfb.dll, exact required runtime DLLs, approved launcher assets/shaders, Setup.cmd, short setup/recovery instructions, complete third-party notices, a file manifest and an external SHA-256 checksum. Setup opens the existing launcher. Players extract to a new folder and select their own verified USA ROM. Keep updates separate until tested; preserve config.ini, fzero-video.ini, keybinds.ini, rom.cfg, wheel profiles and saves.

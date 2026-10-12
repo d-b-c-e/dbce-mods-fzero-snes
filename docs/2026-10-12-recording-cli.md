@@ -74,15 +74,18 @@ Back, Start, Select and menu navigation. ABI2 has no independent SNES X/Y/L/R or
 host save/rewind actions, so those wheel actions are explicitly unsupported
 here; they are not aliased onto unrelated generic actions. Existing keyboard
 SNES bindings remain usable in this preview. This action-vocabulary limitation
-is separate from the unimplemented ordinary shared backend. Multi-device
+also applies to the current ordinary Shared candidate. Multi-device
 normalization is provided by Core, but a real owner wheel+button-device drive
 has not yet qualified this consumer.
 
 These diagnostic restrictions are **not permanent product requirements**.
-The [ordinary shared-backend source candidate](2026-10-12-ordinary-shared-input.md)
-now separates input ownership from preview persistence/deadline policy and retains
-legacy SNES extras through a documented digital supplement. It is not runtime
-qualified, and Shared+FFB remains refused pending device-ownership integration.
+The [ordinary Shared candidate](2026-10-12-ordinary-shared-input.md) separates
+input ownership from preview persistence/deadline policy. Its first SDL
+supplement experiment hung during device acquisition. Corrected `7187c57`
+removes SDL wheel reading entirely from Shared; a private direct-ROM 900-frame
+at-rest original and fresh graphical replay passed at 07:03–07:05 CT. Legacy
+wheel extras remain explicitly unavailable, and Shared+FFB remains refused
+pending device-ownership integration. No installed backend or tune changed.
 A real unlatched owner gameplay recording and cold replay are still needed.
 Launcher/Wheelkit record/replay buttons are also unimplemented; the CLI gives
 them a direct entry point.

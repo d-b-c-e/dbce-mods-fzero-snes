@@ -2,7 +2,9 @@
 
 Run immediately after a clean source build. Reads only that build and its
 verified dependency roots; never launches binaries, copies configs or ROMs,
-or modifies a source/install folder. Use package_unified.py afterward.
+or modifies a source/install folder. Use package_unified.py afterward for normal
+staging. --private-shared-input adds the provisional DLL and a private receipt;
+the public packager deliberately refuses it. Neither route admits Deluxe data.
 """
 import argparse
 import json
@@ -46,7 +48,30 @@ def font_notice(data, name):
     return notice
 
 
-def stage(build, output):
+def private_shared_files(build, root=ROOT):
+    """Explicit private add-on only; never infer permission from a nearby DLL."""
+    vendor = root / "vendor/dbce-shim"
+    pin_bytes = (vendor / "PIN.json").read_bytes()
+    pin = json.loads(pin_bytes)
+    if pin.get("schema") != "dbce.fzero-shared-input-pin" or pin.get("version") != 1 or \
+            pin.get("abi") != 2 or pin.get("distribution") != "private-only" or \
+            not re.fullmatch(r"[0-9a-f]{40}", pin.get("sourceRevision", "")) or \
+            set(pin.get("files", {})) != {"dbce_shim.dll", "dbce_shim.h"}:
+        raise ValueError("Invalid private shared-input source pin")
+    files = {"dbce_shim.dll": (build / "dbce_shim.dll").read_bytes(),
+             "shared-input/dbce_shim.h": (vendor / "dbce_shim.h").read_bytes(),
+             "shared-input/PIN.json": pin_bytes,
+             "shared-input/PROVENANCE.md": (vendor / "PROVENANCE.md").read_bytes()}
+    for name, expected in pin["files"].items():
+        key = name if name.endswith(".dll") else "shared-input/" + name
+        if not isinstance(expected, str) or not re.fullmatch(r"[0-9a-f]{64}", expected) or digest(files[key]) != expected:
+            raise ValueError(f"Private shared-input bytes differ from source pin: {name}")
+    return files, {"abi": 2, "distribution": "private-only",
+                   "sourceRevision": pin["sourceRevision"],
+                   "runtimeSha256": pin["files"]["dbce_shim.dll"]}
+
+
+def stage(build, output, private_shared_input=False):
     cache = {}
     for line in (build / "CMakeCache.txt").read_text().splitlines():
         match = re.match(r"([^:#]+):[^=]+=(.*)", line)
@@ -95,7 +120,11 @@ def stage(build, output):
                 raise ValueError("Unpinned launcher image")
     for name in git(ROOT, "ls-files", "assets/shaders").splitlines():
         files[name] = (ROOT / name).read_bytes()
-    pending = ["FZeroSNESRecomp.exe", "FZeroSNESRecompHeadless.exe", "WheelFfb.dll"]
+    shared = None
+    if private_shared_input:
+        extra, shared = private_shared_files(build)
+        files.update(extra)
+    pending = [n for n in files if n.lower().endswith((".exe", ".dll"))]
     while pending:
         name = pending.pop()
         for imported in pe_imports(files[name]):
@@ -116,6 +145,8 @@ def stage(build, output):
                "sourceRevision": revision, "sourceTree": tree, "dirty": False,
                "bsDeluxe": False, "dependencies": links,
                "files": {n: digest(d) for n, d in sorted(files.items())}}
+    if shared is not None:
+        receipt["privateSharedInput"] = shared
     output.mkdir(parents=True, exist_ok=False)
     for name, data in files.items():
         path = output / "payload" / name
@@ -129,8 +160,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--private-shared-input", action="store_true",
+                        help="Stage pinned private-only input DLL; public packager refuses this receipt")
     args = parser.parse_args()
     try:
-        print(stage(args.build.resolve(), args.output.resolve()))
+        print(stage(args.build.resolve(), args.output.resolve(), args.private_shared_input))
     except (ValueError, OSError, KeyError, struct.error, subprocess.CalledProcessError) as error:
         raise SystemExit(str(error))

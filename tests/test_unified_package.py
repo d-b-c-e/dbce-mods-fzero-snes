@@ -114,6 +114,67 @@ class PackageTests(unittest.TestCase):
     def test_complete_runtime_and_dynamic_wheel(self):
         self.assertEqual(self.read(), self.files)
 
+    def test_private_shared_receipt_and_runtime_are_not_public_payload(self):
+        for value in (None, False, {}, {"distribution": "private-only"}):
+            self.receipt["privateSharedInput"] = value
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "Private shared-input receipt"):
+                self.read()
+        del self.receipt["privateSharedInput"]
+        for name in ("dbce_shim.dll", "DBCE_SHIM.DLL"):
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, "Private shared-input runtime"):
+                pack.approved(name)
+        self.files["dbce_shim.dll"] = pe()
+        self.write_payload()
+        with self.assertRaisesRegex(ValueError, "Private shared-input runtime"):
+            self.read()
+
+    def test_private_staging_pins_exact_header_dll_and_keeps_provenance(self):
+        vendor = self.root / "vendor/dbce-shim"
+        vendor.mkdir(parents=True)
+        build = self.base / "private-build"
+        build.mkdir()
+        dll, header, notice = pe(["dinput8.dll"]), b"ABI2 fixture", b"Private only. No distribution grant."
+        (build / "dbce_shim.dll").write_bytes(dll)
+        (vendor / "dbce_shim.h").write_bytes(header)
+        (vendor / "PROVENANCE.md").write_bytes(notice)
+        pin = {"schema": "dbce.fzero-shared-input-pin", "version": 1, "abi": 2,
+               "sourceRevision": "5" * 40, "distribution": "private-only",
+               "files": {"dbce_shim.dll": pack.digest(dll), "dbce_shim.h": pack.digest(header)}}
+        (vendor / "PIN.json").write_text(json.dumps(pin))
+        files, receipt = stage.private_shared_files(build, self.root)
+        self.assertEqual(files["dbce_shim.dll"], dll)
+        self.assertEqual(files["shared-input/dbce_shim.h"], header)
+        self.assertEqual(files["shared-input/PROVENANCE.md"], notice)
+        self.assertEqual(json.loads(files["shared-input/PIN.json"]), pin)
+        self.assertEqual(receipt["distribution"], "private-only")
+        self.assertEqual(receipt["runtimeSha256"], pack.digest(dll))
+        for path, original in ((build / "dbce_shim.dll", dll), (vendor / "dbce_shim.h", header)):
+            path.write_bytes(original + b"changed")
+            with self.subTest(path=path.name), self.assertRaisesRegex(ValueError, "differ from source pin"):
+                stage.private_shared_files(build, self.root)
+            path.write_bytes(original)
+        (build / "dbce_shim.dll").unlink()
+        with self.assertRaises(FileNotFoundError):
+            stage.private_shared_files(build, self.root)
+
+    def test_private_pin_agrees_with_compiled_pin_and_no_public_grant(self):
+        vendor = pack.ROOT / "vendor/dbce-shim"
+        pin = json.loads((vendor / "PIN.json").read_text())
+        self.assertEqual(pin["distribution"], "private-only")
+        self.assertEqual(pin["files"]["dbce_shim.h"], pack.digest((vendor / "dbce_shim.h").read_bytes()))
+        self.assertIn(pin["files"]["dbce_shim.dll"], (pack.ROOT / "CMakeLists.txt").read_text())
+        for value in pin["files"].values():
+            self.assertIn(value, (vendor / "PROVENANCE.md").read_text())
+
+    def test_private_stage_option_does_not_bypass_embedded_deluxe_refusal(self):
+        build = self.base / "deluxe-build"
+        build.mkdir()
+        for name in ("FZERO_DELUXE_GEN_DIR", "FZERO_DELUXE_DATA_FILE"):
+            (build / "CMakeCache.txt").write_text(name + ":PATH=private-cartridge-data\n")
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, "Stock-only build required"):
+                stage.stage(build, self.base / "must-not-exist", private_shared_input=True)
+            self.assertFalse((self.base / "must-not-exist").exists())
+
     def test_canonical_preview_identity_and_rejected_legacy_or_mismatched_metadata(self):
         product=json.loads((pack.ROOT/'game-product.json').read_text())
         identity,archive=pack.preview_identity(product,'1.8.3','1'*40)
@@ -318,6 +379,9 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(result["build"]["sourceRevision"], self.receipt["sourceRevision"])
         with zipfile.ZipFile(first) as archive:
             self.assertEqual(archive.read("Setup.cmd"), pack.SETUP)
+            self.assertIn("tools/Recording.ps1", archive.namelist())
+            self.assertIn("docs/RECORDING-QUICKSTART.md", archive.namelist())
+            self.assertNotIn("dbce_shim.dll", archive.namelist())
             self.assertNotIn("config.ini", archive.namelist())
             self.assertNotIn('assets/img/boxart.tga',archive.namelist())
             self.assertFalse(any(n.startswith('docs/screenshots/') for n in archive.namelist()))

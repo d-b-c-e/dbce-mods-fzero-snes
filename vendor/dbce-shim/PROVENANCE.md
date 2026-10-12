@@ -14,9 +14,16 @@ The DLL is **not tracked or included by default**. For a private candidate,
 pass `-DFZERO_SHIM_DLL=<reviewed DLL>`; CMake verifies that hash and stages it
 beside the graphical executable. The loader checks ABI, struct sizes and every
 action name before opening. A diagnostic launch without the DLL refuses.
-Default Native launches do not load it. The source-only ordinary Shared option
+Default Native launches do not load it. The opt-in ordinary Shared option
 also loads this pinned ABI, without capture or injection. Shared+FFB remains
 refused until force/read ownership is integrated and qualified.
+
+`PIN.json` provides the same exact hashes for private staging. The stock-only
+stager admits it only with `--private-shared-input`, retains this provenance and
+the header, and marks the receipt private. The public packager refuses both
+that receipt and `dbce_shim.dll`. The ordinary Shared runtime has narrow private
+at-rest recording/replay proof, not full owner-control or force qualification;
+see `docs/2026-10-12-ordinary-shared-input.md`.
 
 The target builds `windows/shim` and `windows/host` with the shared controls and
 session headers, independently of OutRun's reconstructed runtime. Its reviewed
