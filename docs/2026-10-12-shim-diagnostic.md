@@ -605,3 +605,64 @@ Exclusive lease creation/replacement/release remain unchanged. The actual held-r
 fixture passes with correct ownership, still refuses wrong tokens and ownership
 mutations, and fails with the original sharing mode. The next private copy keeps
 the exact same game/router pins and starts a fresh original after that helper fix.
+
+### 1012e: player Practice and exact cold replay pass
+
+Fresh copy `E:/fz-probe-1012e` ran at 10:08:44 UTC (05:08:44 Central), PID 30188,
+with the same `91b6f40`/`AD78B6B0...D3C0E` graphical candidate and router
+`a3f285d`. The canonical lease helper included the read-sharing fix as `0930a42`.
+It followed all seven selected menu actions, observed the real player countdown,
+then delivered two seconds of throttle and one second of throttle plus 0.25
+steering. A fresh WGC frame preceded each command; batch 11 ended the original.
+
+The route evidence separates three results:
+
+1. **Player route:** `$58=1`, `$5B=0`; countdown 2/2/2 at frame 1636, then
+   live state 2/3/0 at frame 1816. The recording contains 535 player frames
+   (8.889 seconds). Every nonzero driving action belongs to that confirmed
+   Practice context. It is a labelled injected original, not an owner drive.
+2. **Consumed input and response:** all 2,351 final input words and frame indexes
+   equal the shared recorder's 2,351 valid game rows, plus one shutdown row;
+   zero mismatches. Throttle is Live/injected for 182 frames, steering for 61;
+   the existing PDM emits 30 right-steering guest pulses. Observed telemetry
+   starts at zero speed, peaks at 95.376 m/s and advances about 495 m. These are
+   the game's reported values, not a real-distance calibration.
+3. **Cold replay:** the pinned Deluxe headless runner replays all 2,351 per-frame
+   WRAM checksums exactly from the immutable original/state. This is actual
+   input replay through emulation, not pose playback or guest-state correction.
+
+The final inspected window frame is
+`E:/fz-probe-1012e/frames/100923521.png`: Blue Falcon is moving on Mute City I,
+with the player timer/HUD. The pre-throttle frame is
+`E:/fz-probe-1012e/frames/100916510.png`. Full per-step state/frame/batch receipts
+are in `route.json`; independent comparison is in `consumed-input-check.json`.
+
+Normal exit 0, resolved recorder/control workers, Completed journal and P21 seal
+(2,352 rows / 37,911 checks) pass. All 77 owner file/absence pins are unchanged;
+the lease is released. The diagnostic no-force/software-telemetry fences remained
+active; recorded settings remained steering 12, impact 50 Constant. No physical
+force/telemetry delivery, tune change, owner install or display change was made.
+The supervisor's broad `runtimeQualified` stays false: this evidence qualifies
+this short diagnostic Practice route and replay, not the whole game/mod.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Original `.fzpt` | `4955c7ef6a6887c86d8de060bb99f64ebcfa8c3bc4e3e4da09ab2ea3712870d3` |
+| Initial state | `18bda07046cd36c3dceca4ca26d38fa0d7317ed325ff29390af34c54dc8042db` |
+| Shared source JSONL | `49894b58c125b1780a36e29c9f59f2056e2149993b28f2b013fe9be9de9a0529` |
+| `E:/fz-cold-1012e/case.json` | `9685fcb63230d529a9f4792652af17cc948107162abc5a6ab7e74549154715d6` |
+
+Re-run the already-created cold case only into a **new** output:
+
+```powershell
+py -3 tools/fzero_replay_adapter.py observe --case E:/fz-cold-1012e/case.json `
+  --toolkit E:/Source/toolkits/dbce-wheel-mod-toolkit `
+  --runner E:/fz-probe-1012e/app/FZeroSNESRecompHeadless.exe `
+  --rom E:/fz-cold-1012e/fzero.sfc --output <fresh-force-jsonl> --timeout 60
+```
+
+Remaining product gaps are ordinary non-latched shared-profile entry,
+record/play UI and status, unsupported independent SNES X/Y/L/R/host extras,
+representative owner driving, and physical/output/triple-screen acceptance.
+The successful diagnostic does not silently enable the shared backend or replace
+the owner's normal launcher. Earlier failed/unsealed originals remain intact.
