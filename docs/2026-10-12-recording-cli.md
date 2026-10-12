@@ -1,10 +1,12 @@
 # Recording controls and shared-profile preview
 
-Source candidate, October 12. No owner install or launch for this UI change yet.
+Private-copy CLI checks passed October 12, 05:53–05:59 CT. Nothing was installed
+in the owner's game or promoted as its default input backend.
 The [earlier player Practice original](2026-10-12-shim-diagnostic.md) remains
 immutable: all 2,351 final consumed input words matched its shared capture,
 and the pinned headless runner matched all 2,351 WRAM checkpoints. That proof
-uses the earlier runtime; it does not qualify these new UI paths.
+uses the earlier original runtime. The new graphical CLI also replayed that
+unchanged tape with all 2,351 WRAM checkpoints matching.
 
 ## Explicit launch options
 
@@ -84,7 +86,7 @@ recording and its cold replay. It must not silently replace current bindings
 with this partial preview. Launcher/Wheelkit record/replay buttons are also
 still unimplemented; the new CLI gives them a direct entry point.
 
-## Source validation and next runtime check
+## Source validation
 
 `fzero_session_ui` exercises the production parser and real `.fzpt` recorder:
 108 checks cover CLI ambiguity, unchanged F11, clean nonempty sealing, verified
@@ -94,10 +96,95 @@ that never invokes the live input/host-action callback (including at EOF). The t
 recorder/shared-provider suite and the graphical build pass. The only compiler
 warning is the existing Windows `HIBYTE` macro redefinition.
 
-Next qualification is a fresh private candidate copy under the usual lease:
-brief physical-at-rest `--shared-profile-preview`, window-captured REC and Saved,
-then its explicit `--replay`, recorded input/WRAM verification and unchanged
-owner file hashes. A separate ordinary attended `--record` checks Ctrl+F11
-continuing normal play. No synthetic title/attract capture can establish wheel
-driving acceptance. Rendering, Ctrl+F11 routing and the new CLI startup path
-remain source/test evidence until those actual runs occur.
+## Private CLI and rendered-status qualification
+
+All five runs used frozen clean source `26a3f0e239b03ac970654ec99c1f9f57bee0900f`
+(tree `5ef43de2f4752b02bc84f2e0dfc2687513c65bb9`). Runtime SHA256:
+
+```text
+FZeroSNESRecomp.exe 5973ac8e49263915c39840081501e212fda6c112842ebd6e950b4b184eb88735
+dbce_shim.dll      9b8a036f664cf8f45cccf82b98e5e4376f93215b60eac50b6db965bf498015d8
+WheelFfb.dll       3f6cc51444879d01feb900098b2de94242594d093f523e3c34bd511d69c0d946
+```
+
+The wrapper `E:/fz-cli-research/Invoke-CliCopy.ps1` uses the actual CLI, the shared
+lease and idle check, an exact owned child, copied game/assets/config and read-only
+owner pins. Every game exited normally with code 0, its active recorders resolved,
+77 owner file/absence pins unchanged and the lease released. Preview/replay use
+the pre-initialization no-force/no-transport latches; ordinary recording used
+only a **private copy** with ForceFeedback/Enabled and Telemetry/Enabled set to 0.
+No session/batch injection or OS input was used in these five runs.
+
+| Private evidence folder | Actual result |
+|---|---|
+| `E:/fz-probe-cli-01` | Capture-only shared-profile preview sealed 900 frames; P21 14,679 checks passed. |
+| `E:/fz-probe-cli-old` | Existing Practice tape replayed graphically; all 2,351 WRAM checkpoints match. Original hashes/config preserved. |
+| `E:/fz-probe-cli-record` | Ordinary backend recorded 900 frames; rendered REC and Saved captured. |
+| `E:/fz-probe-cli-fresh` | Preview-01 replayed all 900 WRAM checkpoints; rendered REPLAY and Replay verified captured. |
+| `E:/fz-probe-cli-02` | Fresh capture-only preview sealed 900 frames; P21 passed; rendered MUTED PREVIEW–REC and Saved captured. |
+
+The two fresh previews each contain exactly 900 shared `game.valid=1` rows, with
+simulation frames 0–899. Every final consumed `game.inputWord` equals its `.fzpt`
+word, and no action is marked injected. Capture-only mode has no extra terminal
+game row; its successful shutdown is recorded in `host-shutdown.json`. The earlier
+latched Practice original retains its extra non-game terminal row. Both fresh
+preview tapes have identical bytes, as expected for this at-rest/menu workload.
+
+```text
+old Practice .fzpt 4955c7ef6a6887c86d8de060bb99f64ebcfa8c3bc4e3e4da09ab2ea3712870d3
+fresh preview      0142307c378f6a9c09a193c99d33e0876d465937e1ac066d79a14287fc568880
+ordinary record    1b8e68cdbff92f4572e15e49907f9e423052750d862799b31b88d10d551510d8
+all initial states 18bda07046cd36c3dceca4ca26d38fa0d7317ed325ff29390af34c54dc8042db
+preview-02 source  92d0d23e1347b3d3f46e16f0eddbbb82150aeff20ff451cba9b3c68a4e4db706
+```
+
+The independent retained `E:/fz-cli-research/verify-cli-evidence.py` verifies the
+old 2,351 and both fresh 900 consumed-word sequences plus all five results.
+Its report is `cli-evidence.json`, SHA256
+`62ba33e306b8c9a96b92c829498b9b1dfc50a76b6de0788d3c744060de05535e`.
+The old original, its sealed capture and its prior headless comparison were not
+rewritten. The current graphical replay provides an additional regression check.
+
+Inspected game-window frames (private, retained at these paths):
+
+- Ordinary REC: `E:/fz-probe-cli-record/frames/burst/frame-0001.png`.
+- Ordinary Saved: `E:/fz-probe-cli-record/frames/burst/frame-0158.png`.
+- Preview REC and Saved: `E:/fz-probe-cli-02/frames/burst/frame-0001.png`
+  and `frame-0160.png`.
+- Fresh REPLAY and Replay verified: `E:/fz-probe-cli-fresh/frames/burst/frame-0001.png`
+  and `frame-0144.png`.
+- Old Practice tape at frame 1,441/2,351: `E:/fz-probe-cli-old/frames/105453928.png`.
+
+The first preview and old-replay burst helper rejected `--duration`: the toolkit's
+existing built executable was older than its source. Those failed helper receipts
+remain. The old replay's one-shot frame succeeded. Later copies use the current
+read-only source built privately at `E:/fz-cli-research/wgc`; their PNGs are valid,
+but WGC exit 4 means the target closed before the requested burst ended. That is
+partial image evidence, not a successful full-duration capture. Final wrapper SHA:
+`6738bf0fc5916b4d64bede0f0920fb37c0dac035d3167730b83b2521ebc620ec`.
+
+**Scope:** the new recordings are title/menu, physical-at-rest checks. The old
+Practice original supplies player-drive replay coverage. Normal closure used a
+900-frame bound, so **actual Ctrl+F11 event routing remains untested**. The images
+prove the current SDL presentation; they do not separately qualify OpenGL or
+triple views. No new owner wheel drive, physical FFB acceptance or normalization
+claim follows from these checks.
+
+## Next owner-facing integration
+
+1. **Wheelkit discovery and commands:** declare the CLI capability only for a
+   receipt-pinned build that contains it. Play with Recording needs a fresh `.fzpt`
+   destination plus explicit installed ROM; Play Recording keeps the `.state`
+   sibling and matches original Deluxe/MSU/config identities. Discover complete
+   tapes separately from incomplete/error recordings; retain originals and show
+   the runtime's success/failure. The existing pinned replay-case adapter already
+   describes these extra identities; do not make a second recording container.
+2. **Ordinary shared input:** the installed launch still uses its existing raw
+   backend. The shared preview is opt-in and muted. Separate backend selection
+   from diagnostic fences, support the owner's SNES extras without aliases or
+   dropped bindings, and qualify actual unlatched wheel/menu gameplay. Never
+   silently promote the preview to an ordinary default.
+3. **Release and owner checks:** retain the reviewed source/ABI pins, build the
+   proper installer and distribution variant, then verify installed CLI discovery,
+   an attended Ctrl+F11 stop and a real owner recording/replay. Deluxe embeds
+   cartridge data: the existing public-packaging boundary still applies.

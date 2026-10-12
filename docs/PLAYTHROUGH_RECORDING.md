@@ -4,7 +4,9 @@
 2,351-frame consumed-input and cold WRAM replay proof; see the
 [diagnostic evidence](2026-10-12-shim-diagnostic.md). New explicit CLI recording,
 replay and muted shared-profile preview entry points, plus REC/Saved/Error UI,
-are a [source-tested candidate](2026-10-12-recording-cli.md), not installed yet.
+passed [private CLI/rendered-status checks](2026-10-12-recording-cli.md), including
+the unchanged Practice replay and a fresh 900-frame preview replay. Not installed
+yet; Ctrl+F11 routing and an ordinary owner shared-input drive remain unqualified.
 
 **Current verified example (October 8):** the [fresh stock capture and three
 steering trials](2026-10-08-stock-replay-proof.md) each pass all 3,600 recorded
