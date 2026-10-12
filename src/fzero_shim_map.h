@@ -37,6 +37,11 @@ int FzeroShimMapFrame(FzeroShimMap *s, const dbce_shim_frame *frame, uint32_t *w
 /* The two game channels passed to dbce_shim_record AFTER RtlRunFrame. The input
  * is the final word after host filters, not an earlier adapter preview. */
 void FzeroShimConsumedValues(uint64_t simulation_frame, uint32_t input, double out[2]);
+/* Read-only post-frame menu evidence. Raw guest state is not a player-driving
+ * verdict; a route must also establish its own expected transitions. */
+enum { FZERO_SHIM_MENU_VALUES = 12 };
+int FzeroShimMenuValues(const uint8_t *ram, size_t ram_size,
+                       double out[FZERO_SHIM_MENU_VALUES]);
 /* RtlRunFrame clears opposing direction pairs before consumption. Apply that
  * exact reduction before both diagnostic recorders see the final word. */
 uint32_t FzeroShimGuestWord(uint32_t input);

@@ -68,7 +68,8 @@ int main(int argc,char **argv) {
    if(mode=="abi" || mode=="fences") CHECK(!started && !FzeroShimStop());
    else {
      CHECK(started); CHECK(read(run/"profile.spy")==profile);
-     uint8_t ram[0x0be2]{}; ram[0x54]=2; ram[0x55]=3; ram[0xca]=4;
+     uint8_t ram[0x20000]{}; ram[0x54]=2; ram[0x55]=3; ram[0xca]=4;
+     ram[0x5a]=1; ram[0x58]=1; ram[0x14c92]=0x87;
      FzeroFfbState force{}; FzeroFfbOutput expected_force{};
      FzeroTelemetryState telemetry{}; uint8_t packet[324];
      if(mode=="expired") _putenv_s("FZERO_FAKE_EXPIRED","1");
@@ -88,7 +89,7 @@ int main(int argc,char **argv) {
        CHECK(FzeroShimConsumed(0,consumed,ram,sizeof(ram)));
        FzeroFfbComputeSteering(&force,ram,sizeof(ram),consumed,12,12,&expected_force);
        CHECK(FzeroTelemetryBuild(&telemetry,ram,sizeof(ram),consumed,packet)==324);
-       { std::istringstream values(read(run/"signals.spy")); double v[15];
+       { std::istringstream values(read(run/"signals.spy")); double v[27];
          for(auto &n:v) CHECK(bool(values>>n));
          CHECK(v[0]==2 && v[1]==3 && v[2]==0 && v[3]==expected_force.constant_force);
          CHECK(v[4]==expected_force.spring_coefficient && v[5]==expected_force.damper_coefficient);
@@ -96,6 +97,7 @@ int main(int argc,char **argv) {
          CHECK(v[8]==expected_force.collision_pulse && v[9]==expected_force.racing);
          CHECK(v[10]==telemetry.speed_mps && v[11]==telemetry.total_distance_m);
          CHECK(v[13]==120 && v[14]==0);
+         CHECK(v[15]==1 && v[16]==1 && v[23]==0x87 && v[24]==0);
        }
        std::ostringstream expected; expected<<"1 0 "<<consumed<<"\n";
        CHECK(read(run/"consumed.spy")==expected.str());

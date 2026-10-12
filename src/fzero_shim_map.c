@@ -60,6 +60,21 @@ void FzeroShimConsumedValues(uint64_t frame, uint32_t input, double out[2]) {
   out[0] = (double)frame;
   out[1] = (double)input;
 }
+int FzeroShimMenuValues(const uint8_t *ram, size_t ram_size,
+                       double out[FZERO_SHIM_MENU_VALUES]) {
+  if (!out) return 0;
+  memset(out, 0, sizeof(double) * FZERO_SHIM_MENU_VALUES);
+  if (!ram || ram_size < 0x14c9a) return 0;
+  /* Native title/course state in bank 7E and the pinned Deluxe selector in
+   * bank 7F. No guesses/default filling for captures without full WRAM. */
+  static const unsigned bytes[] = {0x5a,0x58,0x60,0x52,0x53,0x90};
+  static const unsigned words[] = {0x14c84,0x14c8a,0x14c92,0x14c98};
+  for (unsigned i=0;i<6;++i) out[i]=ram[bytes[i]];
+  for (unsigned i=0;i<4;++i)
+    out[6+i]=(unsigned)ram[words[i]] | ((unsigned)ram[words[i]+1]<<8);
+  out[10]=ram[0x14c27]; out[11]=ram[0x5b];
+  return 1;
+}
 uint32_t FzeroShimGuestWord(uint32_t input) {
   const uint32_t pairs[] = {0x30u, 0xc0u, 0x30000u, 0xc0000u};
   for (unsigned i = 0; i < 4; ++i)

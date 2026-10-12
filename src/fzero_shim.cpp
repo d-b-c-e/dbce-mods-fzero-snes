@@ -41,7 +41,9 @@ constexpr double kHz = 61; // 60.0988 emulated frames/s, independent of renderin
 constexpr const char *kChannels = "simulationFrame\ninputWord\nstate54\nstate55\nstate56\n"
   "ffb.constantFallback\nffb.spring\nffb.damper\nffb.road\nffb.roadFrequencyMilliHz\n"
   "ffb.collisionPulse\nffb.racing\ntelemetry.speedMps\ntelemetry.distanceM\nffb.impactMagnitude\n"
-  "ffb.impactDurationMs\nffb.impactFrequencyMilliHz";
+  "ffb.impactDurationMs\nffb.impactFrequencyMilliHz\n"
+  "menu.selection\nmenu.training\nmenu.transition\nmenu.car\nmenu.course\nmenu.league\n"
+  "menu.deluxeCar\nmenu.deluxeRival\nmenu.deluxePanel\nmenu.deluxeAccept\nmenu.deluxeTrack\nmenu.state5b";
 using Int = int32_t (*)();
 using Name = const char *(*)(int32_t);
 using Open = int32_t (*)(const dbce_shim_open_args *, void **, char *, int32_t);
@@ -206,7 +208,7 @@ int FzeroShimStart(void *window, const char *legacy_guid) {
     a.game_id = "fzero-snes"; a.game_channels = kChannels;
     a.context = latched ? "diagnostic-injected-original; keyboard suppressed; software signals only; partial SNES actions" :
                          "diagnostic-owner-original; keyboard retained; software signals only; partial SNES actions";
-    a.adapter_version = "fzero-shim-diagnostic-2"; a.hz = kHz; a.seconds = kSeconds;
+      a.adapter_version = "fzero-shim-diagnostic-3"; a.hz = kHz; a.seconds = kSeconds;
     char why[512]{};
     if (open2(&a, &handle, why, sizeof(why)) != DBCE_SHIM_OK || !handle) return refuse(why);
     int range = 100, response = 50, threshold = 0;
@@ -267,7 +269,9 @@ int FzeroShimConsumed(uint64_t simulation_frame, uint32_t input, const uint8_t *
   FzeroFfbComputeSteering(&force_state, ram, ram_size, input, strength, steering_strength, &f);
   if (FzeroTelemetryBuild(&telemetry_state, ram, ram_size, input, packet) != sizeof(packet))
     return refuse("software telemetry observation failed");
-  double values[17]; FzeroShimConsumedValues(simulation_frame, input, values);
+  double values[17+FZERO_SHIM_MENU_VALUES]; FzeroShimConsumedValues(simulation_frame, input, values);
+  if (!FzeroShimMenuValues(ram, ram_size, values+17))
+    return refuse("post-frame menu WRAM unavailable");
   values[2]=ram[0x54]; values[3]=ram[0x55]; values[4]=ram[0x56];
   values[5]=f.constant_force; values[6]=f.spring_coefficient; values[7]=f.damper_coefficient;
   values[8]=f.road_magnitude; values[9]=f.road_frequency_millihz; values[10]=f.collision_pulse;
@@ -275,7 +279,7 @@ int FzeroShimConsumed(uint64_t simulation_frame, uint32_t input, const uint8_t *
   values[14]=f.collision_pulse ? impact_strength*100 : 0;
   values[15]=sine_impact ? 140 : 120; values[16]=sine_impact ? 32000 : 0;
   pending = false;
-  return record(handle, frame.seq, values, 17) == DBCE_SHIM_OK || refuse("consumed-input record failed");
+  return record(handle, frame.seq, values, 17+FZERO_SHIM_MENU_VALUES) == DBCE_SHIM_OK || refuse("consumed-input record failed");
 }
 void FzeroShimNeutral(void) { FzeroShimMapNeutral(&map); }
 int FzeroShimStop(void) {

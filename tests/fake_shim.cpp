@@ -50,7 +50,7 @@ int32_t dbce_shim_tick(void *handle,dbce_shim_frame *out) {
 }
 int32_t dbce_shim_record(void *handle,uint64_t seq,const double *v,int32_t count) {
  auto f=static_cast<Fake *>(handle);
- if (flag("FZERO_FAKE_BAD_RECORD") || !f || seq!=f->seq || count!=17) return -5;
+ if (flag("FZERO_FAKE_BAD_RECORD") || !f || seq!=f->seq || count!=29) return -5;
  std::ofstream row(f->folder/"consumed.spy",std::ios::app|std::ios::binary);
  row<<seq<<" "<<(uint64_t)v[0]<<" "<<(uint32_t)v[1]<<"\n";
  std::ofstream signals(f->folder/"signals.spy",std::ios::app|std::ios::binary);

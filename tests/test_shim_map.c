@@ -92,6 +92,22 @@ int main(void) {
   f.seq=121; f.action[0].value=.1f;
   CHECK(FzeroShimMapFrame(&map,&f,&word));
   FzeroShimMapNeutral(&map); CHECK(map.steering.phase==0 && map.steering.direction==0);
+  /* Read-only evidence uses exact widths and refuses truncated bank 7F. */
+  static uint8_t menu_ram[0x20000]; double menu[FZERO_SHIM_MENU_VALUES];
+  menu_ram[0x5a]=1; menu_ram[0x58]=1; menu_ram[0x60]=2;
+  menu_ram[0x52]=3; menu_ram[0x53]=4; menu_ram[0x90]=5;
+  menu_ram[0x14c84]=0x34; menu_ram[0x14c85]=0x12;
+  menu_ram[0x14c8a]=0xcd; menu_ram[0x14c8b]=0xab;
+  menu_ram[0x14c92]=0x87; menu_ram[0x14c98]=1;
+  menu_ram[0x14c27]=24; menu_ram[0x5b]=1;
+  CHECK(FzeroShimMenuValues(menu_ram,sizeof(menu_ram),menu));
+  CHECK(menu[0]==1 && menu[1]==1 && menu[2]==2 && menu[3]==3 && menu[4]==4 && menu[5]==5);
+  CHECK(menu[6]==0x1234 && menu[7]==0xabcd && menu[8]==0x87 && menu[9]==1 && menu[10]==24 && menu[11]==1);
+  CHECK(menu_ram[0x14c84]==0x34 && menu_ram[0x14c85]==0x12 && menu_ram[0x5a]==1);
+  CHECK(!FzeroShimMenuValues(menu_ram,0x14c99,menu));
+  for(int i=0;i<FZERO_SHIM_MENU_VALUES;++i) CHECK(menu[i]==0);
+  CHECK(!FzeroShimMenuValues(NULL,sizeof(menu_ram),menu));
+  CHECK(!FzeroShimMenuValues(menu_ram,sizeof(menu_ram),NULL));
   printf("F-Zero shared shim mapper: %u checks passed\n",checks);
   return 0;
 }

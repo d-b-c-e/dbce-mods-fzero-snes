@@ -523,3 +523,53 @@ a fresh owned-window capture, and publish only the expected offline action.
 Unknown state must stop. This must not freeze emulation, edit guest state, change
 the owner configuration or turn a repeated timed button sequence into a claimed
 state-checked test. The original 1012b and 1012c captures remain unchanged.
+
+### Source-checked Practice route (candidate, not yet run)
+
+Adapter `fzero-shim-diagnostic-3` adds twelve read-only post-frame guest fields.
+It changes no input, force, telemetry model, geometry or owner configuration.
+`tools/fzero_shim_practice_route.py` reads these from the ordinary shared source
+stream. It never attaches a memory reader or writes guest state. This private
+route requires the original tape's effective cartridge SHA-256 to be exactly
+`419eed641cfa20013d1e9b8270062d90155051a441441a2118bf23846ac8d747`
+(the existing pinned Deluxe data plus the owner's MSU patch). Other ROMs are
+refused rather than assumed to share menu state.
+
+Read-only decoding of that exact private cartridge identified these seams:
+
+- `$03:8127` title handler selects `$5A`; Confirm copies it to `$58` and clears
+  `$5B`. Selection 1 means Practice. Attract mode does not establish that route.
+- Deluxe `$1E:DD55` dispatches scene 1 / phase 1 by `$56`: 0 car, 1 Yes/No,
+  3 Practice rival, 4 league. Substate 2 is the GP branch and is refused.
+- Bank 7F words `$4C84/$4C8A/$4C92/$4C98` expose car/rival/panel/acceptance;
+  byte `$4C27` selects the course. `$60` must finish its transition before input.
+- `$00:8AC0` dispatches Practice course selection; `$1E:BBF7` confirms it.
+  Player route proof requires `$58=1`, `$5B=0`, observed 2/2/0 or 2/2/1
+  countdown, then 2/3/0 with the expected car/league/course, not `ffb.racing` alone.
+
+The only route is Practice → Blue Falcon → Yes → default rival → Knight League
+→ Mute City I. Before every positive batch the runner waits for the exact state
+and selected item, records a fresh owned-window WGC frame, rereads advancing
+source data, and rechecks the guard. It requires a 150 ms neutral consumed-word
+interval between commands. Unexpected state, stale source, missing provenance,
+wrong cartridge or lost ownership ends the session; no blind retries are sent.
+Nine positive batches at most: seven selection actions, two seconds of throttle,
+then one second of throttle plus 0.25 steering, only after player countdown and
+movement are observed. The route has a 70-second deadline; the existing supervisor
+still ends at 75 seconds and retains its normal-close/owner-pin/lease behavior.
+
+Launch the reviewed copy supervisor and this route concurrently in separate
+hidden child processes during an approved shared rig slot:
+
+```powershell
+pwsh -NoProfile -File tools/Invoke-ShimDiagnosticCopy.ps1 -Action Run -Probe E:/fz-probe-<fresh>
+py -3 tools/fzero_shim_practice_route.py --probe E:/fz-probe-<fresh>
+```
+
+`route.json` retains each exact source snapshot, frame and command receipt,
+including the final observation on refusal. Its player-drive result is separate
+from a successful journal seal and from a cold WRAM comparison. Existing sealed
+originals retain their older adapter version and are never rewritten to fit it.
+ROM-free router tests exercise the production guard, route, refusal paths and
+incremental source reader; native fixtures cover exact-width read-only RAM
+extraction and all recorded channels. No new player capability is advertised.
