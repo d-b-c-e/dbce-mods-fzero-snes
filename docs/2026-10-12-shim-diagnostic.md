@@ -495,3 +495,31 @@ both readers. This is background for interpreting a fresh frame, not permission
 to replay that sequence blindly. Fresh copy `E:/fz-probe-1012c` was staged at
 09:11:55 UTC with the same runtime pins, 70 app files, 16 tool files and 77 owner
 file/absence pins; no launch yet. It waits for the coordinated rig queue.
+
+### 1012c result: cold replay passes; Practice entry still unqualified
+
+The staged copy ran at 09:27:15 UTC (PID 70036) with the same executable and
+wrapper. Each screenshot-to-command round trip took about 11–14 seconds; both
+NavDown attempts landed after the title had timed out. Start again exited the
+attract scene. No throttle or steering was sent. This is a navigation-workflow
+limit, not a qualified Practice route or evidence of a missed input mapping.
+
+The 75-second automatic end was batch 5. Normal exit 0, completed journal,
+resolved host, all 77 owner pins unchanged and lease released are recorded in
+`E:/fz-probe-1012c/result.json`. P21 sealed 4,474 rows (71,863 checks).
+`consumed-input-check.json` matches all 4,473 valid frame indexes and final input
+words to the original tape, with one separate shutdown row: 4,450 neutral words,
+13 NavDown words, 10 Start words, zero mismatches. Cold case
+`E:/fz-cold-1012c/case.json` replayed all 4,473 per-frame WRAM checksums exactly.
+
+- Original SHA-256: `ecd455c03c00e8998f668854ba9aaad386dedafd88d67a750d529879e4a35d2d`
+- Initial-state SHA-256: `18bda07046cd36c3dceca4ca26d38fa0d7317ed325ff29390af34c54dc8042db`
+- Shared-source SHA-256: `e30b6aa275577de3a48dd3441790c934253ecf82aa84aab8f6b30643385cbd24`
+- Cold-case SHA-256: `b46ded21863fbb16c3eba65c50a09693c1d769d1fcf35c017d95300ce94fd431`
+
+Before another launch, replace the manual round-trip route with a bounded
+state-driven route: identify exact native menu state and selected item, retain
+a fresh owned-window capture, and publish only the expected offline action.
+Unknown state must stop. This must not freeze emulation, edit guest state, change
+the owner configuration or turn a repeated timed button sequence into a claimed
+state-checked test. The original 1012b and 1012c captures remain unchanged.
