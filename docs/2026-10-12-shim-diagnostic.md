@@ -475,7 +475,7 @@ inspected frames and consumed words; that flag alone cannot qualify live driving
 
 The next copy uses the same reviewed executable and 75-second automatic end.
 Capture the title promptly, publish one NavDown while that scene is fresh, then
-inspect the selection before Start. Inspect each subsequent menu before a single
+inspect the selection before Confirm. Inspect each subsequent menu before a single
 appropriate action. If the title has already timed out, Start returns from attract;
 wait for the title to be visible before choosing Practice. Never apply throttle to
 an attract demo or infer player control solely from a moving picture. Only after
@@ -486,3 +486,12 @@ no pre-timed menu macro, OS input, focus change, reset, or saved-state edit is u
 Keep failed/incomplete attempts and the existing sealed 1012b original unchanged.
 Any next moving original needs its own completed journal, P21 seal, owner-pin
 readback, exact final-consumed-word comparison and cold per-frame WRAM check.
+
+The prior legacy-reader pilot's inspected frames
+(`E:/Source/_archive/2026-10-10/fzero-inject-040316`) provide menu context:
+Practice → Blue Falcon → Yes → rival → Knight League → Mute City I.
+They used Confirm after the Practice selection, which maps to SNES A / bit 8 in
+both readers. This is background for interpreting a fresh frame, not permission
+to replay that sequence blindly. Fresh copy `E:/fz-probe-1012c` was staged at
+09:11:55 UTC with the same runtime pins, 70 app files, 16 tool files and 77 owner
+file/absence pins; no launch yet. It waits for the coordinated rig queue.
