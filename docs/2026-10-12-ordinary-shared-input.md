@@ -1,8 +1,9 @@
 # Ordinary shared input candidate
 
-Source and offline fixtures only; not installed or launched. This builds on the
-private CLI proof at `26a3f0e`, not a claim that the new backend has already passed
-an owner drive. The default backend, owner configuration, FFB model/tunes and
+The first private ordinary run at `9790788` FAILED during legacy SDL device
+startup on October 12. Do not install, repeat this path, or claim ordinary Shared
+qualification until the supplemental reader is replaced. The earlier private CLI
+proof at `26a3f0e` remains intact; the new backend has not passed an owner drive. The default backend, owner configuration, FFB model/tunes and
 display geometry remain unchanged.
 
 ## Opt-in and ownership
@@ -131,3 +132,54 @@ The latter needs snapshots from the actual force-owned handle, not another read
 slot. Identity generation, loss/reopen, stop ordering and unresolved ownership
 need native fixtures before choosing the backend. No F-Zero model or tuning change
 is required by that seam.
+
+
+## First private runtime: blocked by legacy SDL acquisition
+
+`E:/fz-probe-ordinary-01` retained the exact `9790788` candidate, game SHA256
+`78e58c341689a6ea6e60eb39e02d09fae85cee41ae6ed1c001c14236f97ec8ed`.
+The copied configuration selected Shared, FFB off and telemetry off. At 06:43:26 CT
+PID 72244 created the game window and original snapshot, but never presented a
+game/REC frame. The tape remained zero bytes. WGC retained one black frame then
+reported no new frames. The exact child ignored normal close at 70 seconds; the
+90-second supervisor retained the lease and marked the original unsealed.
+
+The preserved minidump is `startup-hang.dmp`, SHA256
+`a93c817b6ac944c03d7f93ad2c7a2793061dc623c84281c4883c34ed84cc39dc`.
+No shared or WheelFfb module had loaded, and no shared host directory existed.
+Main-thread stack candidates plus a private symbol map from the same frozen
+objects locate `main -> FzeroGamepadRefresh -> SDL_OpenJoystick_REAL ->
+SDL_DINPUT_JoystickOpen+0x379`. The original executable's return address
+`+0x488179` follows a DirectInput vtable `+0x38` call: `Acquire`, retried after
+`Poll` returns input-lost/not-acquired. All 128-byte instruction windows around
+the relevant return addresses match the privately relinked symbol-map binary.
+The entire relink is not hash-identical (13 data-reference bytes differ), so it
+is supporting symbol evidence, not a replacement runtime. Files are under
+`E:/fz-ordinary-research/{map.rsp,fzero.map,map-hang.py,inspect-hang.py}`.
+
+Two source defects are now explicit:
+
+- `FzeroGamepadRefresh` opens candidates before checking their SDL GUID, so even
+  an unrelated device can be acquired during this selected-wheel scan.
+- The pinned SDL DirectInput backend requests **exclusive background** access.
+  Its joystick-open path can reset FFB actuators and enable auto-centering when
+  the device reports force capability. The mod's no-force latch does not fence
+  these SDL-internal calls. No physical torque was measured, and the dump does
+  not identify which device was being opened; do not infer that no hardware
+  output occurred merely from the disabled mod FFB setting.
+
+Therefore the digital supplement must use the existing Core-owned reader, with
+an additive raw button/POV observation seam and exact epoch identity, rather
+than a second SDL wheel handle. Preserve explicit legacy X/Y/L/R bindings and
+Native behavior. Do not patch the owner's SDL build, drop bindings, weaken the
+Shared+FFB refusal, or invent a separate force lease to bypass this failure.
+
+The parent authorized scoped termination after the dump and failed normal close.
+Only exact PID 72244 (creation time `134362790062457165`) was terminated after
+path/hash readback. At 06:50:48 CT both child and capture helper were gone, all
+77 owner pins independently matched, and the matching lease was released.
+`recovery.json` records `forced=true`, `runtimeQualified=false`; the initial
+failed `result.json` and incomplete original remain unchanged. No replay was
+started and no owner install/configuration changed. The wrapper also needs
+continuous file-backed stdout/stderr: its in-memory redirected output was lost
+when the supervisor exited while the child remained alive.
