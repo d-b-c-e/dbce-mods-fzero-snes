@@ -3,11 +3,12 @@
 Built from the active `dbce-mods-fzero-snes` source, starting at `e77d0f99`.
 This adds an **off-by-default diagnostic**, not a replacement player control
 backend. No installed file, accepted tune, geometry, binding or recording was
-changed. No game-window launch or physical device test was performed.
+changed. Private title/attract recording and cold replay are now checked below;
+no physical force test or player-controlled race is claimed.
 
-The capture-only first slice is `eca6ac4`. The follow-up below adds latched
-command admission and exact private Deluxe replay identities. Neither slice
-has been launched at the rig.
+The capture-only first slice is `eca6ac4`. The follow-up adds latched command
+admission and exact private Deluxe replay identities. Its first private
+title/attract runtime evidence is recorded below.
 
 ## First slice (eca6ac4)
 
@@ -284,7 +285,7 @@ again after replay. The actual game still has to match every WRAM checksum.
 A real moving producer, shared final-consumed-word equality, cold WRAM proof,
 rendered Deluxe replay and complete SNES controls remain unqualified.
 
-## Staged first latched pilot (not launched)
+## Reviewed private-copy wrapper
 
 `tools/Invoke-ShimDiagnosticCopy.ps1` prepares and supervises one fresh private
 copy. The fresh retry is `E:/fz-probe-1012b`, with 70 app files, 16 copied
@@ -391,3 +392,61 @@ zero value and no down/up edge on activation and expiry, a working press/release
 positive control, and explicit Completed. No DirectInput or game is in that test.
 The existing wrapper test can run it using `-NativeCoreFixture <neutral.exe>`.
 Private compile evidence is `E:/fz-neutral-check` (build.cmd, neutral.txt, exe).
+
+## Private runtime result: 1012b, 2026-10-12
+
+**PASS for the title/attract diagnostic and cold game replay only.** Graphical
+PID 73552 started at 08:57:48 UTC from the exact reviewed `4f43f1a` executable.
+The wrapper was `b35e100`; native runtime bytes did not change for the retry.
+It opened the actual R12 through Core, epoch 1, 11 usable bindings. Initial batch
+1 held Start at zero for 50 ms. The observed title offered Grand Prix/Practice;
+by the next frame the game had entered its attract demo. An inspected NavDown
+100 ms and Start 150 ms reached Core and the final game input. No throttle was
+sent and **no player-controlled race entry is established**. The final capture
+after Start was a black transition. Automatic batch 4 ended at the 75-second
+bound; the process exited 0, without forced close, and the host resolved.
+
+Evidence is private at `E:/fz-probe-1012b`:
+
+- `result.json`: exit observed, code 0, no errors, sealed, owner pins unchanged,
+  lease not retained; all 77 original-install file/absence pins checked.
+- `frames/085806781.png`, `085822205.png`, `085844507.png`: title, attract demo,
+  and transition respectively; each published user action has a recent exact
+  child/capture receipt. The menu timed out between screenshots, so these
+  commands are not a qualified navigation recipe.
+- `journal-result.json`: valid complete journal, exactly one terminal event,
+  `completed: end command in batch 4`. `run/host-shutdown.json` reports resolved,
+  recorder and control worker joined, input released, no unresolved entries.
+- `seal.log`: P21 validated 4,467 shared rows with 71,751 checks. A later strict
+  read after cold replay passed another 35,879 checks; the seal stayed intact.
+- `consumed-input-check.json`: **4,466 valid game rows match every simulation
+  index and final input word in `.fzpt` exactly**, zero mismatches. The extra
+  shared row is the explicit shutdown tick with `game.valid=0`; it is not an
+  emulated frame. Recorded words include seven NavDown frames and nine Start
+  frames, with the remaining 4,450 carrying no guest control button.
+- `runtime-observed.json`: during the owned process, WheelFfb was absent from
+  its module list and the process had no UDP endpoint. Admission required the
+  actual no-force and socket-absent latches; origin records software-only force
+  and telemetry. This is not a numeric delivery-call counter or torque test.
+- The source recording and state are unchanged after cold replay:
+  `.fzpt` SHA-256 `9935ba483eb61b284a60a6509dcbc5829a835127352ec03ac85ea15f8bbd4d26`;
+  state SHA-256 `18bda07046cd36c3dceca4ca26d38fa0d7317ed325ff29390af34c54dc8042db`.
+  Shared source SHA-256 is
+  `d9fb661c2445852fd05f2625e878cbfa626ef2e3c301138b41acc43950c1fae3`.
+
+Cold case `E:/fz-cold-1012b/case.json` copies the immutable original, state,
+config, video, stock ROM and music, pins the clean capture build receipt and
+exact Deluxe data/headless executable, and reconstructs the MSU-patched cartridge
+identity `419eed641cfa20013d1e9b8270062d90155051a441441a2118bf23846ac8d747`.
+`fzero_replay_adapter.py observe --timeout 60` exited 0 and verified **all 4,466
+per-frame WRAM checksums**, producing `force.jsonl`. Case SHA-256:
+`dd0af71ad733de8c26f984eccdaba2f494d76fa868bd369f9e05484d38b39c8d`.
+Both graphical and headless processes were gone and the lease absent before
+the explicit handoff to the next rig test.
+
+Remaining qualification: a fresh scene-inspected original that actually enters
+Practice and applies short throttle/steering while the player is in control,
+then the same cold equality checks. Independent SNES X/Y/L/R remain unsupported
+by generic ABI 2. The current desktop was 2560x1440; the accepted span-only triple
+setting deliberately fell back to stock view. This run does not qualify triples,
+physical wheel feel, FFB normalization, complete controls, or a public release.
