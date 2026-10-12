@@ -4,6 +4,11 @@
 #include <string.h>
 
 static unsigned checks;
+static bool live_input(void *context, uint32_t *word) {
+  ++*(unsigned *)context;
+  *word = 0xc0000804u; /* physical/host flags and a Select+R gesture */
+  return true;
+}
 #define CHECK(x) do { ++checks; if (!(x)) { fprintf(stderr, "%d: %s\n", __LINE__, #x); exit(1); } } while (0)
 static void parse(bool expected, bool env, int argc, char **argv, enum FzeroSessionMode mode) {
   FzeroSessionOptions o;
@@ -84,6 +89,23 @@ int main(void) {
   FzeroSessionBegin(&ui, 2, false);
   CHECK(!FzeroSessionFinish(&ui, &reader, true, 0)); /* early close cannot show verified */
   CHECK(ui.state == FZERO_SESSION_ERROR && ui.failed);
+  CHECK(remove(path) == 0);
+  /* Production dispatch must never call the physical reader/host-action path
+   * while a tape owns input, even on EOF. Gesture-shaped recorded words remain
+   * guest input: the host must not consume them as a live menu command. */
+  unsigned live_calls = 0;
+  CHECK(FzeroSessionReadInput(&p, live_input, &live_calls, &word));
+  CHECK(live_calls == 1 && word == 0xc0000804u);
+  CHECK(FzeroPlaythroughRecordOpen(&p, path, sha));
+  CHECK(FzeroPlaythroughRecordFrame(&p, 0x40000804u, ram, sizeof(ram)));
+  CHECK(FzeroPlaythroughClose(&p));
+  CHECK(FzeroPlaythroughPlaybackOpen(&reader, path, sha));
+  CHECK(FzeroSessionReadInput(&reader, live_input, &live_calls, &word));
+  CHECK(live_calls == 1 && word == 0x40000804u);
+  CHECK(FzeroPlaythroughVerifyFrame(&reader, ram, sizeof(ram)));
+  CHECK(!FzeroSessionReadInput(&reader, live_input, &live_calls, &word));
+  CHECK(live_calls == 1);
+  CHECK(FzeroPlaythroughClose(&reader));
   CHECK(remove(path) == 0);
 
   /* A shared capture failing after actual guest frames must not seal .fzpt. */

@@ -46,6 +46,13 @@ bool FzeroSessionParse(int argc, char *const argv[], bool conflicting_environmen
   return true;
 }
 
+bool FzeroSessionReadInput(FzeroPlaythrough *p, FzeroSessionLiveInput live,
+                           void *context, uint32_t *input) {
+  if (!p || !input) return false;
+  if (p->mode == 2) return FzeroPlaythroughNextInput(p, input);
+  return live && live(context, input);
+}
+
 void FzeroSessionBegin(FzeroSessionUi *ui, int mode, bool preview) {
   memset(ui, 0, sizeof(*ui));
   ui->preview = preview;

@@ -811,6 +811,44 @@ static uint32_t controller_input(SDL_GameController *pad) {
   return FzeroGamepadRead(pad);
 }
 
+#define FZERO_MENU_GESTURE (SNES_PAD_SELECT | SNES_PAD_R)
+
+typedef struct FzeroLiveInputContext {
+  SDL_GameController *pad;
+  uint32_t *held_wheel_host_buttons;
+} FzeroLiveInputContext;
+
+static bool session_live_input(void *context, uint32_t *word) {
+  FzeroLiveInputContext *ctx = (FzeroLiveInputContext *)context;
+  uint32_t input;
+  if (FzeroShimRequested()) {
+    uint32_t shim_word = 0;
+    if (!FzeroShimInput(&shim_word)) {
+      return false;
+    }
+    /* Diagnostic owns the controller lane; no SDL wheel, test injection
+     * or debug-server input is ORed back in. Capture-only keeps keyboard;
+     * a latched test owns it through admission, running and terminal. */
+    input = (FzeroShimLatched() ? 0 : keyboard_input()) | shim_word | (1u << 30);
+  } else {
+    input = keyboard_input() | controller_input(ctx->pad) |
+            debug_server_get_controller_inputs() | (1u << 30) |
+            debug_server_get_controller_active_mask();
+  }
+  uint32_t wheel_host_buttons = input & (FZERO_WHEEL_SAVE_MENU | FZERO_WHEEL_REWIND);
+  uint32_t wheel_host_pressed = wheel_host_buttons & ~*ctx->held_wheel_host_buttons;
+  *ctx->held_wheel_host_buttons = wheel_host_buttons;
+  input &= ~(FZERO_WHEEL_SAVE_MENU | FZERO_WHEEL_REWIND);
+  if (wheel_host_pressed & FZERO_WHEEL_SAVE_MENU) {
+    (void)snes_savestate_menu_poll_open(FZERO_MENU_GESTURE);
+  }
+  if (wheel_host_pressed & FZERO_WHEEL_REWIND) {
+    (void)snes_rewind_open();
+  }
+  *word = input;
+  return true;
+}
+
 /* The launcher's Volume slider, 0..100. Applied to the rendered block rather
  * than to the device, so it works identically on both SDL generations and on
  * whatever backend the player has. */
@@ -1679,7 +1717,6 @@ static uint32_t overlay_nav_inputs(SDL_GameController *pad) {
  * these bits. Select + L opens rewind, alongside it on the other shoulder.
  * Both take two buttons on purpose: one ordinary button in the middle of a
  * race is not a gesture, it is a boost. */
-#define FZERO_MENU_GESTURE (SNES_PAD_SELECT | SNES_PAD_R)
 #define FZERO_REWIND_GESTURE (SNES_PAD_SELECT | SNES_PAD_L)
 
 static int rewind_gesture_pressed(uint32_t input) {
@@ -2700,7 +2737,7 @@ int main(int argc, char **argv) {
         perform_state_action(window, 1, slot, &state_feedback_until);
     }
     double debug_wait_start = monotonic_seconds();
-    if (!FzeroShimRequested()) debug_server_wait_if_paused();
+    if (!FzeroShimRequested() && !recorded_replay) debug_server_wait_if_paused();
     if (monotonic_seconds() - debug_wait_start > 0.1)
       g_reset_presentation_clock = true;
     if (!running) break;
@@ -2747,12 +2784,12 @@ int main(int argc, char **argv) {
     /* Hotkeys act the moment they are pressed, not on the next simulation
      * boundary: the keyboard is polled every iteration and a request must not
      * wait for one. */
-    if (open_savestate_menu) {
+    if (!recorded_replay && open_savestate_menu) {
       open_savestate_menu = 0;
       if (!snes_savestate_menu_is_open())
         (void)snes_savestate_menu_poll_open(FZERO_MENU_GESTURE);
     }
-    if (open_rewind) {
+    if (!recorded_replay && open_rewind) {
       open_rewind = 0;
       if (!snes_rewind_open())
         set_title_message(window,
@@ -2761,22 +2798,22 @@ int main(int argc, char **argv) {
                               : "Rewind is off (enable it in the launcher)",
                           &state_feedback_until);
     }
-    if (snes_savestate_menu_is_open()) panel = 1;
-    else if (snes_rewind_is_open()) panel = 2;
+    if (!recorded_replay && snes_savestate_menu_is_open()) panel = 1;
+    else if (!recorded_replay && snes_rewind_is_open()) panel = 2;
 
     /* Viewport policy and input sampling change only at simulation boundaries. */
     for (unsigned batch = 0; !panel && batch < 4 &&
                              FzeroClockSimulationDue(&clock, now); ++batch) {
-      if (!FzeroShimRequested()) selftest_main_tick(frames);
-      if (frames == scripted_save.frame)
+      if (!FzeroShimRequested() && !recorded_replay) selftest_main_tick(frames);
+      if (!recorded_replay && !FzeroShimRequested() && frames == scripted_save.frame)
         (void)perform_state_action(window, 1, scripted_save.slot,
                                    &state_feedback_until);
-      if (frames == scripted_load.frame)
+      if (!recorded_replay && !FzeroShimRequested() && frames == scripted_load.frame)
         (void)perform_state_action(window, 0, scripted_load.slot,
                                    &state_feedback_until);
-      FzeroReplayViewport((unsigned)frames, &g_video);
+      if (!recorded_replay) FzeroReplayViewport((unsigned)frames, &g_video);
       int replay_width, replay_height;
-      if (!triple_separate &&
+      if (!recorded_replay && !triple_separate &&
           FzeroReplayWindow((unsigned)frames, &replay_width, &replay_height))
         SDL_SetWindowSize(window, replay_width, replay_height);
       if (use_gl_renderer)
@@ -2800,56 +2837,34 @@ int main(int argc, char **argv) {
         FzeroBeginDrawing(pixels, (size_t)logical_width * kBytesPerPixel);
       }
       uint32_t input;
-      if (FzeroShimRequested()) {
-        uint32_t shim_word = 0;
-        if (!FzeroShimInput(&shim_word)) {
-          abort_playthrough("shim input failed");
-          replay_failed = true; running = 0; break;
+      FzeroLiveInputContext live_input = {pad, &held_wheel_host_buttons};
+      if (!FzeroSessionReadInput(&g_playthrough, session_live_input, &live_input, &input)) {
+        abort_playthrough("live input or recorded input failed");
+        FzeroSessionFail(&g_session_ui, recorded_replay ? "Recorded input unavailable" : "Live input unavailable");
+        replay_failed = true; running = 0; break;
+      }
+      /* A verified tape is already the final consumed guest word. Never run
+       * physical host gestures, filters or debug/script providers over it. */
+      if (!recorded_replay) {
+        if (FzeroReplayHasInput()) input = FzeroReplayInput((unsigned)frames);
+        /* Seat 0's word, before the guest sees it: the overlays are a player-1
+         * facility, and the press that closed one must neither reach the game
+         * nor re-open the panel. */
+        input = overlay_filter_guest_input(
+            snes_savestate_menu_filter_guest_input(input));
+        if (!FzeroShimRequested() && (snes_savestate_menu_poll_open(input) ||
+            snes_savestate_menu_is_open())) {
+          panel = 1;
+          break; /* guest frozen: no frame to run or present */
         }
-        /* Diagnostic owns the controller lane; no SDL wheel, test injection
-         * or debug-server input is ORed back in. Capture-only keeps keyboard;
-         * a latched test owns it through admission, running and terminal. */
-        input = (FzeroShimLatched() ? 0 : keyboard_input()) | shim_word | (1u << 30);
-      } else {
-        input = keyboard_input() | controller_input(pad) |
-                debug_server_get_controller_inputs() | (1u << 30) |
-                debug_server_get_controller_active_mask();
-      }
-      uint32_t wheel_host_buttons = input & (FZERO_WHEEL_SAVE_MENU | FZERO_WHEEL_REWIND);
-      uint32_t wheel_host_pressed = wheel_host_buttons & ~held_wheel_host_buttons;
-      held_wheel_host_buttons = wheel_host_buttons;
-      input &= ~(FZERO_WHEEL_SAVE_MENU | FZERO_WHEEL_REWIND);
-      if (wheel_host_pressed & FZERO_WHEEL_SAVE_MENU) {
-        (void)snes_savestate_menu_poll_open(FZERO_MENU_GESTURE);
-      }
-      if (wheel_host_pressed & FZERO_WHEEL_REWIND) {
-        (void)snes_rewind_open();
-      }
-      if (FzeroReplayHasInput()) input = FzeroReplayInput((unsigned)frames);
-      if (g_playthrough.mode == 2 &&
-          !FzeroPlaythroughNextInput(&g_playthrough, &input)) {
-        fprintf(stderr, "[fzero-playthrough] missing input at frame %ld\n", frames);
-        replay_failed = true;
-        running = 0;
-        break;
-      }
-      /* Seat 0's word, before the guest sees it: the overlays are a player-1
-       * facility, and the press that closed one must neither reach the game
-       * nor re-open the panel. */
-      input = overlay_filter_guest_input(
-          snes_savestate_menu_filter_guest_input(input));
-      if (!FzeroShimRequested() && (snes_savestate_menu_poll_open(input) ||
-          snes_savestate_menu_is_open())) {
-        panel = 1;
-        break; /* guest frozen: no frame to run or present */
-      }
-      if (!FzeroShimRequested() && rewind_gesture_pressed(input) && snes_rewind_open()) {
-        panel = 2;
-        break;
-      }
-      if (snes_rewind_is_open()) {
-        panel = 2;
-        break;
+        if (!FzeroShimRequested() && rewind_gesture_pressed(input) && snes_rewind_open()) {
+          panel = 2;
+          break;
+        }
+        if (snes_rewind_is_open()) {
+          panel = 2;
+          break;
+        }
       }
       uint64_t diagnostic_start = FzeroDiagnosticsBegin();
       if (FzeroShimRequested()) input = FzeroShimGuestWord(input);

@@ -14,6 +14,12 @@ typedef struct {
 bool FzeroSessionParse(int argc, char *const argv[], bool conflicting_environment,
                       FzeroSessionOptions *out, const char **error);
 
+typedef bool (*FzeroSessionLiveInput)(void *context, uint32_t *input);
+/* Tape owns the input boundary before any physical read or live host-button
+ * side effect. The live callback is never invoked during recorded playback. */
+bool FzeroSessionReadInput(FzeroPlaythrough *p, FzeroSessionLiveInput live,
+                           void *context, uint32_t *input);
+
 enum FzeroSessionState { FZERO_SESSION_IDLE, FZERO_SESSION_REC,
   FZERO_SESSION_PLAYING, FZERO_SESSION_SAVED, FZERO_SESSION_VERIFIED,
   FZERO_SESSION_ERROR };

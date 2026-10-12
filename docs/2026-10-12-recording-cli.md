@@ -32,6 +32,8 @@ shows Error; this also makes the final process exit nonzero.
 `--replay` consumes the recorded final SNES word and checks every post-frame WRAM
 hash. Its REPLAY banner shows progress. It closes at the end and shows Replay
 verified only after a complete close. Closing early or diverging is an error.
+Recorded playback bypasses physical input, host gestures and overlay filters before
+reading the tape, and explicitly skips self-test/state/viewport script callbacks.
 It initializes neither the wheel-force device nor the telemetry transport and
 does not apply the controls profile, create missing keybinds, migrate SRAM or
 save video defaults. A CLI replay goes directly to its explicit ROM, so no
@@ -85,9 +87,10 @@ still unimplemented; the new CLI gives them a direct entry point.
 ## Source validation and next runtime check
 
 `fzero_session_ui` exercises the production parser and real `.fzpt` recorder:
-95 checks cover CLI ambiguity, unchanged F11, clean nonempty sealing, verified
+108 checks cover CLI ambiguity, unchanged F11, clean nonempty sealing, verified
 replay, early replay close, empty recordings, shared-provider failure, sticky
-invalidation and a real read-only stdio close failure. The targeted 16-test
+invalidation, a real read-only stdio close failure, and production tape dispatch
+that never invokes the live input/host-action callback (including at EOF). The targeted 16-test
 recorder/shared-provider suite and the graphical build pass. The only compiler
 warning is the existing Windows `HIBYTE` macro redefinition.
 
