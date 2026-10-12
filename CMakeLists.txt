@@ -29,13 +29,16 @@ if(BUILD_TESTING)
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/shim-fixture")
         target_compile_features(fzero_shim_fake PRIVATE cxx_std_17)
         add_executable(fzero_shim_host_tests tests/test_shim_host.cpp src/fzero_shim.cpp
-            src/fzero_shim_map.c src/fzero_analog.c src/fzero_hotkeys.c src/fzero_output_latch.c)
+            src/fzero_shim_map.c src/fzero_analog.c src/fzero_hotkeys.c src/fzero_output_latch.c
+            src/fzero_ffb.cpp src/fzero_telemetry.cpp)
+        target_compile_definitions(fzero_shim_host_tests PRIVATE FZERO_FFB_MODEL_ONLY)
+        target_link_libraries(fzero_shim_host_tests PRIVATE ws2_32)
         target_compile_features(fzero_shim_host_tests PRIVATE cxx_std_17)
         target_include_directories(fzero_shim_host_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
         set_target_properties(fzero_shim_host_tests PROPERTIES
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/shim-fixture")
         add_dependencies(fzero_shim_host_tests fzero_shim_fake)
-        foreach(mode off args replay normal abi pending record stop)
+        foreach(mode off args replay normal abi pending record stop fences latched expired provenance session)
             add_test(NAME fzero_shim_host_${mode} COMMAND fzero_shim_host_tests ${mode})
         endforeach()
     endif()

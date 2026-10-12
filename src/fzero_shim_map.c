@@ -60,6 +60,12 @@ void FzeroShimConsumedValues(uint64_t frame, uint32_t input, double out[2]) {
   out[0] = (double)frame;
   out[1] = (double)input;
 }
+uint32_t FzeroShimGuestWord(uint32_t input) {
+  const uint32_t pairs[] = {0x30u, 0xc0u, 0x30000u, 0xc0000u};
+  for (unsigned i = 0; i < 4; ++i)
+    if ((input & pairs[i]) == pairs[i]) input ^= pairs[i];
+  return input;
+}
 int FzeroControlsStartupMayWrite(int script, int replay, int shim) {
   return !script && !replay && !shim;
 }

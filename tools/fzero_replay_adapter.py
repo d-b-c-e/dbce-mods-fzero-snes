@@ -21,6 +21,8 @@ import tempfile
 
 MODEL_PROFILE = b"fzero-ffb@2:spring=present;damper=present;road=present;constant=fallback-only"
 MASTER_HZ = 21477272  # SNES NTSC master clock; raw ticks are actual master cycles.
+STOCK_ROM = "bf16c3c867c58e2ab061c70de9295b6930d63f29f81cc986f5ecae03e0ad18d2"
+DELUXE_ROM = "552159a19955e88a8337f7c473ccc53e5dcef15b87daab8e89e1894694542fe6"
 
 
 def sha256(path: Path) -> str:
@@ -66,6 +68,111 @@ def msu_patch(pack: Path, config: configparser.ConfigParser,
     return result
 
 
+def deluxe_effective_rom(rom: Path, data: Path, patch: Path | None) -> str:
+    """The pinned consumer's BSDELX1/IPS algorithms, used only for identity.
+
+    No generated code or payload is distributed by this adapter. The actual
+    headless consumer still verifies the ROM and every recorded WRAM checksum.
+    """
+    source = rom.read_bytes()
+    payload = data.read_bytes()
+    if (hashlib.sha256(source).hexdigest() != STOCK_ROM or
+            not 80 <= len(payload) <= 2 * 1024 * 1024 or payload[:8] != b"BSDELX1\0" or
+            payload[16:48].hex() != STOCK_ROM or payload[48:80].hex() != DELUXE_ROM):
+        raise ValueError("Deluxe stock ROM/data header identity mismatch")
+    size, count = struct.unpack_from("<II", payload, 8)
+    if size != 0x100000 or not 0 < count <= 0x100000 or len(source) > size:
+        raise ValueError("Deluxe data dimensions invalid")
+    result = bytearray(source) + bytearray(size - len(source))
+    cursor, previous_end = 80, 0
+    for _ in range(count):
+        if cursor + 8 > len(payload):
+            raise ValueError("Deluxe data record truncated")
+        offset, length = struct.unpack_from("<II", payload, cursor)
+        cursor += 8
+        if not length or offset < previous_end or offset + length > size or cursor + length > len(payload):
+            raise ValueError("Deluxe data record bounds invalid")
+        result[offset:offset + length] = payload[cursor:cursor + length]
+        cursor += length
+        previous_end = offset + length
+    if cursor != len(payload) or hashlib.sha256(result).hexdigest() != DELUXE_ROM:
+        raise ValueError("Deluxe reconstructed cartridge identity mismatch")
+    if patch:
+        ips = patch.read_bytes()
+        if ips[:5] != b"PATCH":
+            raise ValueError("MSU IPS header invalid")
+        cursor = 5
+        while ips[cursor:cursor + 3] != b"EOF":
+            if cursor + 5 > len(ips):
+                raise ValueError("MSU IPS truncated")
+            offset = int.from_bytes(ips[cursor:cursor + 3], "big")
+            length = int.from_bytes(ips[cursor + 3:cursor + 5], "big")
+            cursor += 5
+            if length:
+                block = ips[cursor:cursor + length]
+                cursor += length
+                if len(block) != length:
+                    raise ValueError("MSU IPS record truncated")
+            else:
+                if cursor + 3 > len(ips):
+                    raise ValueError("MSU IPS RLE truncated")
+                length = int.from_bytes(ips[cursor:cursor + 2], "big")
+                block = bytes([ips[cursor + 2]]) * length
+                cursor += 3
+            if not length or offset + length > size:
+                raise ValueError("MSU IPS bounds invalid")
+            result[offset:offset + length] = block
+        if cursor + 3 != len(ips):
+            raise ValueError("MSU IPS trailing bytes")
+    return hashlib.sha256(result).hexdigest()
+
+
+def pin_deluxe(args, root: Path, effective_rom: str, patch: Path | None) -> dict:
+    data, runner = getattr(args, "deluxe_data", None), getattr(args, "deluxe_runner", None)
+    expected_data = getattr(args, "deluxe_data_sha256", None)
+    expected_runner = getattr(args, "deluxe_runner_sha256", None)
+    if not data or not runner or not expected_data or not expected_runner:
+        raise ValueError("BS Deluxe requires explicit data and module paths and SHA-256 pins")
+    if sha256(data) != expected_data or sha256(runner) != expected_runner:
+        raise ValueError("Deluxe data/module SHA-256 pin mismatch")
+    if deluxe_effective_rom(args.rom, data, patch) != effective_rom:
+        raise ValueError("Deluxe effective cartridge differs from recorded original")
+    data_copy = root / "diagnostics" / (args.case.stem + ".bs-deluxe.dat")
+    with data_copy.open("xb") as stream:
+        stream.write(data.read_bytes())
+    if sha256(data_copy) != expected_data:
+        raise ValueError("Deluxe data changed while copying")
+    # The native Deluxe module is statically linked into each exact executable.
+    # This intentionally admits only this headless executable, not any build.
+    identity = {"schema": "fzero.deluxe-identity", "version": 1,
+                "stockRomSha256": sha256(args.rom), "dataSha256": sha256(data_copy),
+                "effectiveRomSha256": effective_rom, "runnerSha256": expected_runner,
+                "captureExecutableSha256": sha256(args.capture_exe)}
+    manifest = root / "diagnostics" / (args.case.stem + ".deluxe-module.json")
+    with manifest.open("x", encoding="utf-8") as stream:
+        json.dump(identity, stream, sort_keys=True)
+    return {"deluxeData": artifact(root, data_copy, "fzero-bsdelx1@1"),
+            "deluxeModule": artifact(root, manifest, "fzero-deluxe-identity@1")}
+
+
+def verify_deluxe(case: dict, root: Path, rom: Path, runner: Path, effective_rom: str,
+                  patch: Path | None) -> Path:
+    for key, format_name in (("deluxeData", "fzero-bsdelx1@1"), ("deluxeModule", "fzero-deluxe-identity@1")):
+        if key not in case["artifacts"] or case["artifacts"][key]["format"] != format_name:
+            raise ValueError("Deluxe replay missing exact data/module identity")
+    data = root / case["artifacts"]["deluxeData"]["path"]
+    module = root / case["artifacts"]["deluxeModule"]["path"]
+    identity = json.loads(module.read_text(encoding="utf-8"))
+    if identity != {"schema": "fzero.deluxe-identity", "version": 1,
+                    "stockRomSha256": sha256(rom), "dataSha256": sha256(data),
+                    "effectiveRomSha256": effective_rom, "runnerSha256": sha256(runner),
+                    "captureExecutableSha256": case["provenance"]["executableSha256"]}:
+        raise ValueError("Deluxe module/ROM/data identity mismatch")
+    if deluxe_effective_rom(rom, data, patch) != effective_rom:
+        raise ValueError("Deluxe effective cartridge mismatch")
+    return data
+
+
 def create_case(args: argparse.Namespace) -> None:
     root = args.case.resolve().parent
     if args.case.exists():
@@ -75,12 +182,12 @@ def create_case(args: argparse.Namespace) -> None:
     rom_digest, count = drive_header(args.drive)
     config = ini(args.config)
     video = ini(args.video)
-    if video.getboolean("FZeroVideo", "BSDeluxe", fallback=False):
-        raise ValueError("BS Deluxe replay needs a separately pinned Deluxe-data artifact")
-    configured_pack = (root / config.get("Sound", "Msu1Dir")).resolve()
+    configured_pack = (root / config.get("Sound", "Msu1Dir", fallback="")).resolve()
     if config.getboolean("Sound", "Msu1Enabled", fallback=False) and configured_pack != args.msu_pack.resolve():
         raise ValueError("MSU pack differs from recorded configuration")
     patch = msu_patch(args.msu_pack, config, video)
+    (root / "diagnostics").mkdir(exist_ok=True)
+    deluxe_artifacts = pin_deluxe(args, root, rom_digest, patch) if video.getboolean("FZeroVideo", "BSDeluxe", fallback=False) else {}
     config_copy = root / "diagnostics" / (args.case.stem + ".config.ini")
     video_copy = root / "diagnostics" / (args.case.stem + ".video.ini")
     for original, snapshot in ((args.config, config_copy), (args.video, video_copy)):
@@ -91,6 +198,7 @@ def create_case(args: argparse.Namespace) -> None:
         "video": artifact(root, video_copy, "fzero-video-ini@1"),
         "rom": artifact(root, args.rom, "snes-rom@1"),
     }
+    artifacts.update(deluxe_artifacts)
     if patch:
         # The preview's music directory may be a junction into LaunchBox.
         # Toolkit case artifacts cannot escape the case root, so pin a tiny
@@ -234,6 +342,9 @@ def requests(rows, strength: int, impact_strength: int = 20,
 
 
 def observe(args: argparse.Namespace) -> None:
+    timeout = getattr(args, "timeout", 300)
+    if not isinstance(timeout, int) or not 1 <= timeout <= 600:
+        raise ValueError("replay deadline must be 1..600 seconds")
     toolkit = load_toolkit(args.toolkit)
     identity = toolkit.validate_case(args.case)
     with args.case.open("rb") as stream:
@@ -242,11 +353,9 @@ def observe(args: argparse.Namespace) -> None:
         raise ValueError("not a compatible F-Zero replay case")
     root = args.case.resolve().parent
     source, _ = verified_source_and_state(case, root)
-    _, frame_count = drive_header(source)
+    effective_rom, frame_count = drive_header(source)
     config = ini(root / case["artifacts"]["config"]["path"])
     video = ini(root / case["artifacts"]["video"]["path"])
-    if video.getboolean("FZeroVideo", "BSDeluxe", fallback=False):
-        raise ValueError("BS Deluxe replay needs a separately pinned Deluxe-data artifact")
     if sha256(args.rom) != case["artifacts"]["rom"]["sha256"]:
         raise ValueError("ROM differs from case")
     if video.getboolean("FZeroVideo", "TripleScreen", fallback=False) and video.get("FZeroVideo", "Aspect") == "Fit":
@@ -255,13 +364,18 @@ def observe(args: argparse.Namespace) -> None:
         aspect = video.get("FZeroVideo", "Aspect")
     if aspect not in ("16:9", "4:3"):
         raise ValueError(f"unsupported recorded center viewport: {aspect}")
-    pack = (root / config.get("Sound", "Msu1Dir")).resolve()
+    pack = (root / config.get("Sound", "Msu1Dir", fallback="")).resolve()
     patch = msu_patch(pack, config, video)
     if patch:
         if "msuPatch" not in case["artifacts"] or sha256(patch) != case["artifacts"]["msuPatch"]["sha256"]:
             raise ValueError("MSU patch differs from case")
     elif "msuPatch" in case["artifacts"]:
         raise ValueError("MSU mode differs from case")
+    deluxe_data = None
+    if video.getboolean("FZeroVideo", "BSDeluxe", fallback=False):
+        deluxe_data = verify_deluxe(case, root, args.rom, args.runner, effective_rom, patch)
+    elif "deluxeData" in case["artifacts"] or "deluxeModule" in case["artifacts"]:
+        raise ValueError("Deluxe identity present in a stock case")
     strength = args.strength if args.strength is not None else config.getint("ForceFeedback", "Strength")
     if not 0 <= strength <= 100:
         raise ValueError("strength out of range")
@@ -306,15 +420,22 @@ def observe(args: argparse.Namespace) -> None:
             "FZERO_ASPECT": aspect,
             "FZERO_FFB_MODEL_STRENGTH": str(strength),
             "FZERO_FFB_OBSERVATION_RAW": str(raw),
+            "SNESRECOMP_SAVE_ROOT": str(Path(temporary) / "s"),
         })
         if steering_strength is not None:
             environment["FZERO_FFB_MODEL_STEERING_STRENGTH"] = str(steering_strength)
         if patch:
             environment["SNESRECOMP_MSU1"] = str(pack)
+        if deluxe_data:
+            environment["FZERO_DELUXE_DATA"] = str(deluxe_data.resolve())
         run = subprocess.run([str(args.runner), str(args.rom)], env=environment,
-                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                             timeout=timeout)
         if run.returncode != 0:
             raise ValueError(f"verified headless replay failed ({run.returncode}): {run.stderr[-2000:]}")
+        toolkit.validate_case(args.case) # all artifacts must remain immutable across replay.
+        if deluxe_data:
+            verify_deluxe(case, root, args.rom, args.runner, effective_rom, patch)
         # Pass one validates the complete game/model trace before opening any
         # observation file; pass two emits only validated model requests.
         for _ in raw_rows(raw, frame_count, strength, steering_strength):
@@ -336,6 +457,10 @@ def main() -> int:
     create.add_argument("--source-revision", required=True)
     create.add_argument("--capture-receipt", type=Path,
                         help="build-time clean receipt; without it provenance.dirty=true")
+    create.add_argument("--deluxe-data", type=Path)
+    create.add_argument("--deluxe-data-sha256")
+    create.add_argument("--deluxe-runner", type=Path)
+    create.add_argument("--deluxe-runner-sha256")
     run = sub.add_parser("observe", help="verified game replay to toolkit force observations")
     for name in ("case", "toolkit", "runner", "rom", "output"):
         run.add_argument("--" + name, type=Path, required=True)
@@ -347,10 +472,11 @@ def main() -> int:
                      help="independent software crash strength, 0-100; no torque is applied")
     run.add_argument("--impact-type", choices=("Constant", "Sine"),
                      help="requested cue model; hardware support is not inferred")
+    run.add_argument("--timeout", type=int, default=300, help="headless replay process deadline in seconds")
     args = parser.parse_args()
     try:
         (create_case if args.command == "create" else observe)(args)
-    except (ValueError, OSError, KeyError, configparser.Error) as error:
+    except (ValueError, OSError, KeyError, configparser.Error, subprocess.TimeoutExpired) as error:
         print(f"fzero replay adapter: {error}", file=sys.stderr)
         return 2
     return 0

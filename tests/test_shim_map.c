@@ -16,6 +16,9 @@ static dbce_shim_frame frame(void) {
 int main(void) {
   CHECK(sizeof(dbce_shim_frame) == 296);
   CHECK(sizeof(dbce_shim_open_args) == 128);
+  CHECK(FzeroShimGuestWord(0x400000f1u)==0x40000001u);
+  CHECK(FzeroShimGuestWord(0x400f00f1u)==0x40000001u);
+  CHECK(FzeroShimGuestWord(0x40040041u)==0x40040041u);
   for (int script=0; script<2; ++script)
     for (int replay=0; replay<2; ++replay)
       for (int shim=0; shim<2; ++shim)
@@ -73,7 +76,7 @@ int main(void) {
     int axis=(int)roundf(f.action[0].value*(n<60 ? 32767.f : 32768.f));
     uint32_t steering = FzeroAnalogSteeringReadTuned(&legacy,axis,0,100,50);
     CHECK(word==(steering|1u));
-    expected[n] = word | (1u<<30) | ((n%9)==0 ? 1u<<11 : 0); // final keyboard+active bit
+    expected[n] = FzeroShimGuestWord(word | (1u<<30) | ((n%9)==0 ? 0x30u | 1u<<11 : 0));
     double values[2]; FzeroShimConsumedValues((uint64_t)n,expected[n],values);
     CHECK(values[0]==n && values[1]==expected[n]);
     ram[0]=(uint8_t)n;

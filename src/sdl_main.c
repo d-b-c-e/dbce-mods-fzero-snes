@@ -2023,7 +2023,6 @@ int main(int argc, char **argv) {
   if (!snesrecomp_exe_dir_path("config.ini", g_config_path,
                                sizeof(g_config_path)))
     snprintf(g_config_path, sizeof(g_config_path), "config.ini");
-  FzeroTelemetryInit(g_config_path);
   if (!FzeroReplayConfigure(getenv("SNESRECOMP_INPUT_SCRIPT"), getenv("FZERO_VIEWPORT_SCRIPT"))) {
     fprintf(stderr, "[fzero] Invalid validation replay\n");
     return 2;
@@ -2036,6 +2035,7 @@ int main(int argc, char **argv) {
   if (!FzeroShimPrepare(g_config_path, explicit_rom && !force_launcher,
                         recorded_replay, FzeroReplayHasInput(), early_record && *early_record))
     return 2;
+  FzeroTelemetryInit(g_config_path); // diagnostic delivery latch is already held.
   if (FzeroControlsStartupMayWrite(FzeroReplayHasInput(), recorded_replay, FzeroShimRequested())) {
     FzeroControlsApplyAtStartup(g_config_path);
     FzeroInjectInit(g_config_path);   /* dev only: inject.on, no force, applied profile */
@@ -2048,7 +2048,7 @@ int main(int argc, char **argv) {
   if (resolve_result <= 0) return resolve_result == 0 ? 0 : 2;
   if (!g_video.enhanced) {
     g_video.aspect = launcher_aspect(launcher_settings.aspect_index);
-    if (!FzeroVideoSave(&g_video, kVideoConfig))
+    if (!FzeroShimRequested() && !FzeroVideoSave(&g_video, kVideoConfig))
       fprintf(stderr, "[fzero] Unable to save video settings\n");
   }
   g_config.linear_filtering = launcher_settings.linear_filter != 0;
@@ -2109,14 +2109,18 @@ int main(int argc, char **argv) {
   /* Load (or generate) keybinds.ini next to the executable (cwd is
    * exe-anchored; the config-exe-anchoring convention shared by every SNES
    * recomp in this family). Must precede the first keyboard_input() call. */
-  keybinds_init(NULL);
+  /* Avoid keybinds_init's missing-file writer during diagnostics. Static
+   * defaults still work in capture-only mode if no keybinds.ini exists. */
+  FILE *existing_keybinds = FzeroShimRequested() ? fopen("keybinds.ini", "rb") : NULL;
+  if (!FzeroShimRequested() || existing_keybinds) keybinds_init(NULL);
+  if (existing_keybinds) fclose(existing_keybinds);
 
   RtlRegisterGame(FzeroGameInfo());
   if (!SnesInit(rom, (int)rom_size))
     Die("SNESRecomp rejected the F-Zero cartridge");
   cpu_trace_init();
   debug_server_set_ram(g_snes->ram, 0x20000);
-  {
+  if (!FzeroShimRequested()) {
     int debug_port = 4385;
     const char *port_value = getenv("SNESRECOMP_DEBUG_PORT");
     if (port_value && port_value[0]) {
@@ -2130,10 +2134,13 @@ int main(int argc, char **argv) {
     }
   }
   const char *save_root = getenv("SNESRECOMP_SAVE_ROOT");
+  if (FzeroShimRequested()) save_root = FzeroShimSaveRoot();
   if (save_root && *save_root) RtlSetSaveRoot(save_root);
   if (!FzeroDeluxeSelectSaveRoot()) Die(FzeroDeluxeError());
   if (!FzeroMsuSelectSaveRoot()) Die(FzeroMsuError());
-  RtlReadSram();
+  /* RtlReadSram can migrate legacy saves (a write). Diagnostic originals start
+   * from fresh guest state; their only state file is the explicit .fzpt sibling. */
+  if (!FzeroShimRequested()) RtlReadSram();
   const char *record_path = FzeroShimRequested() ? FzeroShimRecordingPath() : getenv("FZERO_RECORD_PLAYTHROUGH");
   const char *replay_path = getenv("FZERO_REPLAY_PLAYTHROUGH");
   bool replay_failed = false;
@@ -2367,6 +2374,13 @@ int main(int argc, char **argv) {
     FzeroFfbInit(g_config_path, native_window);
     FzeroFfbSilence();
   }
+  int shim_callbacks_fenced = FzeroShimRequested();
+#if defined(SNES_COSIM) || defined(SNESRECOMP_NET) || SNESRECOMP_ENABLE_MODS
+  /* These alternate engine builds have extra callbacks/output paths; they
+   * have not been qualified by this adapter and cannot admit a diagnostic. */
+  shim_callbacks_fenced = 0;
+#endif
+  FzeroShimHostFences(RtlSaveRoot(), shim_callbacks_fenced);
   if (!FzeroShimStart(native_window, launcher_settings.player_gamepad_guid[0])) {
     abort_playthrough("shim startup failed");
     FzeroShimStop();
@@ -2597,7 +2611,7 @@ int main(int argc, char **argv) {
         perform_state_action(window, 1, slot, &state_feedback_until);
     }
     double debug_wait_start = monotonic_seconds();
-    debug_server_wait_if_paused();
+    if (!FzeroShimRequested()) debug_server_wait_if_paused();
     if (monotonic_seconds() - debug_wait_start > 0.1)
       g_reset_presentation_clock = true;
     if (!running) break;
@@ -2704,8 +2718,9 @@ int main(int argc, char **argv) {
           replay_failed = true; running = 0; break;
         }
         /* Diagnostic owns the controller lane; no SDL wheel, test injection
-         * or debug-server input is ORed back in. Native keyboard remains. */
-        input = keyboard_input() | shim_word | (1u << 30);
+         * or debug-server input is ORed back in. Capture-only keeps keyboard;
+         * a latched test owns it through admission, running and terminal. */
+        input = (FzeroShimLatched() ? 0 : keyboard_input()) | shim_word | (1u << 30);
       } else {
         input = keyboard_input() | controller_input(pad) |
                 debug_server_get_controller_inputs() | (1u << 30) |
@@ -2748,8 +2763,9 @@ int main(int argc, char **argv) {
         break;
       }
       uint64_t diagnostic_start = FzeroDiagnosticsBegin();
+      if (FzeroShimRequested()) input = FzeroShimGuestWord(input);
       (void)RtlRunFrame(input);
-      if (!FzeroShimConsumed((uint64_t)frames, input)) {
+      if (!FzeroShimConsumed((uint64_t)frames, input, g_ram, sizeof(g_ram))) {
         abort_playthrough("shim consumed-input capture failed");
         replay_failed = true; running = 0; break;
       }
@@ -2783,6 +2799,7 @@ int main(int argc, char **argv) {
       snes_rewind_note_frame();
       frames++;
       FzeroClockSimulationDone(&clock);
+      if (FzeroShimCompleted()) { running = 0; break; }
       if (output_probe_due(frames)) {
         g_output_probe_frame = frames;
         break; /* Explicit probe mode presents this exact verified frame. */

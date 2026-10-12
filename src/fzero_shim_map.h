@@ -37,6 +37,9 @@ int FzeroShimMapFrame(FzeroShimMap *s, const dbce_shim_frame *frame, uint32_t *w
 /* The two game channels passed to dbce_shim_record AFTER RtlRunFrame. The input
  * is the final word after host filters, not an earlier adapter preview. */
 void FzeroShimConsumedValues(uint64_t simulation_frame, uint32_t input, double out[2]);
+/* RtlRunFrame clears opposing direction pairs before consumption. Apply that
+ * exact reduction before both diagnostic recorders see the final word. */
+uint32_t FzeroShimGuestWord(uint32_t input);
 /* Pending profile writes must never run on either replay path or the shim
  * diagnostic path. A normal launch retains the existing startup writer. */
 int FzeroControlsStartupMayWrite(int scripted_replay, int recorded_replay, int shim_requested);

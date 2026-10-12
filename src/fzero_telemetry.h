@@ -26,6 +26,10 @@ size_t FzeroTelemetryBuild(FzeroTelemetryState *state, const uint8_t *ram,
 void FzeroTelemetryInit(const char *config_path);
 void FzeroTelemetryFrame(const uint8_t *ram, size_t ram_size, uint32_t input);
 void FzeroTelemetryShutdown(void);
+/* Process-latched diagnostic delivery mute. Must precede socket creation.
+ * Pure FzeroTelemetryBuild remains available for captured software signals. */
+int FzeroTelemetryLatchNoDelivery(void);
+int FzeroTelemetryDeliveryBlocked(void);
 
 #ifdef __cplusplus
 }

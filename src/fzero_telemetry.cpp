@@ -122,7 +122,18 @@ size_t FzeroTelemetryBuild(FzeroTelemetryState *state, const uint8_t *ram,
   return (size_t)build(FORZA_HORIZON_324, sled, dash, out, 324, 'F');
 }
 
+static bool s_no_delivery;
+int FzeroTelemetryLatchNoDelivery(void) {
+  if (s_socket != kInvalidSocket) return 0;
+#ifdef _WIN32
+  if (s_winsock_started) return 0;
+#endif
+  s_no_delivery = true;
+  return 1;
+}
+int FzeroTelemetryDeliveryBlocked(void) { return s_no_delivery && s_socket == kInvalidSocket; }
 void FzeroTelemetryInit(const char *config_path) {
+  if (s_no_delivery) return;
   FzeroTelemetryShutdown();
   int enabled = 0, port = 8000;
   char host[256] = "127.0.0.1";
@@ -165,7 +176,7 @@ void FzeroTelemetryInit(const char *config_path) {
 }
 
 void FzeroTelemetryFrame(const uint8_t *ram, size_t ram_size, uint32_t input) {
-  if (s_socket == kInvalidSocket) return;
+  if (s_no_delivery || s_socket == kInvalidSocket) return;
   uint8_t packet[324];
   size_t size = FzeroTelemetryBuild(&s_state, ram, ram_size, input, packet);
   if (size)
@@ -174,7 +185,7 @@ void FzeroTelemetryFrame(const uint8_t *ram, size_t ram_size, uint32_t input) {
 }
 
 void FzeroTelemetryShutdown(void) {
-  if (s_socket != kInvalidSocket) {
+  if (!s_no_delivery && s_socket != kInvalidSocket) {
     /* Dashboards can retain the last racing packet after this process exits.
      * Publish an explicit idle state before closing the UDP transport. */
     uint8_t idle_ram[0x0be2]{};

@@ -1,4 +1,6 @@
 import json
+import hashlib
+import struct
 from argparse import Namespace
 import tempfile
 import unittest
@@ -6,10 +8,58 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from tools.fzero_replay_adapter import create_case, observe, raw_rows, requests, sha256
+from tools.fzero_replay_adapter import (create_case, observe, raw_rows, requests, sha256,
+                                       pin_deluxe, verify_deluxe, deluxe_effective_rom)
 
 
 class ReplayAdapterTests(unittest.TestCase):
+    def test_deluxe_requires_exact_data_and_linked_module_pins(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "diagnostics").mkdir()
+            rom, data, runner, exe = [root / n for n in ("rom", "data", "runner", "exe")]
+            rom.write_bytes(b"synthetic stock")
+            runner.write_bytes(b"synthetic headless module")
+            exe.write_bytes(b"synthetic graphical module")
+            mapped = bytearray(0x100000)
+            mapped[:rom.stat().st_size] = rom.read_bytes()
+            mapped[20:24] = b"fake"
+            target = hashlib.sha256(mapped).hexdigest()
+            payload = (b"BSDELX1\0" + struct.pack("<II", 0x100000, 1) + bytes.fromhex(sha256(rom)) +
+                       bytes.fromhex(target) + struct.pack("<II", 20, 4) + b"fake")
+            data.write_bytes(payload)
+            args = Namespace(case=root / "case.json", rom=rom, capture_exe=exe, deluxe_data=data,
+                             deluxe_runner=runner, deluxe_data_sha256=sha256(data),
+                             deluxe_runner_sha256=sha256(runner))
+            with mock.patch("tools.fzero_replay_adapter.STOCK_ROM", sha256(rom)), \
+                 mock.patch("tools.fzero_replay_adapter.DELUXE_ROM", target):
+                self.assertEqual(deluxe_effective_rom(rom, data, None), target)
+                artifacts = pin_deluxe(args, root, target, None)
+                case = {"artifacts": artifacts, "provenance": {"executableSha256": sha256(exe)}}
+                self.assertEqual(verify_deluxe(case, root, rom, runner, target, None).read_bytes(), payload)
+                runner.write_bytes(b"another module")
+                with self.assertRaisesRegex(ValueError, "identity mismatch"):
+                    verify_deluxe(case, root, rom, runner, target, None)
+                with self.assertRaisesRegex(ValueError, "SHA-256 pin"):
+                    pin_deluxe(args, root, target, None)
+                runner.write_bytes(b"synthetic headless module")
+                args.deluxe_data_sha256 = None
+                with self.assertRaisesRegex(ValueError, "explicit data and module"):
+                    pin_deluxe(args, root, target, None)
+                for bad in (payload[:-1], payload + b"extra", payload[:88] + b"nope"):
+                    data.write_bytes(bad)
+                    with self.assertRaises(ValueError):
+                        deluxe_effective_rom(rom, data, None)
+
+    def test_deluxe_native_identity_constants_and_zero_padding_match(self):
+        # A miscopied hash/fill makes every private Deluxe case unusable.
+        import re
+        from tools.fzero_replay_adapter import STOCK_ROM, DELUXE_ROM
+        source = Path("src/fzero_deluxe.c").read_text()
+        for key, digest in (("stock_hash", STOCK_ROM), ("target_hash", DELUXE_ROM)):
+            block = source.split(f"static const uint8_t {key}[32] = {{")[1].split("}")[0]
+            self.assertEqual("".join(re.findall(r"0x([0-9a-f]{2})", block)), digest)
+
     def test_independent_steering_requires_matching_version_and_both_strengths(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "model.raw"
