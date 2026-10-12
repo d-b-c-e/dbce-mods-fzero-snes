@@ -151,9 +151,9 @@ if ($Action -eq 'Prepare') {
     $Install=[IO.Path]::GetFullPath($Install); $Build=[IO.Path]::GetFullPath($Build)
     Assert-NoLink $Install; Assert-NoLink $Build
     $buildReceipt=Read-Json (Join-Path $Build 'fzero-shim-build.json')
-    if ($buildReceipt.sourceRevision -cne '4f43f1a7a2224d06c4d3020a624f371dd89d2579' -or $buildReceipt.dirty -ne $false) { throw 'Expected reviewed 4f43f1a clean build receipt' }
+    if ($buildReceipt.sourceRevision -cne '91b6f4025f83ce6c580907d78b8987976242b746' -or $buildReceipt.dirty -ne $false) { throw 'Expected reviewed 91b6f40 clean build receipt' }
     $pins=@{
-        'FZeroSNESRecomp.exe'='0a37843731a672e305040ef673fc4c7618ce81f61637017ba54b55f840b2cef5'
+        'FZeroSNESRecomp.exe'='ad78b6b0279a22da5924af07442857affb5f6633d51f91f6c0034b17ec7d3c0e'
         'FZeroSNESRecompHeadless.exe'='e55c48f39cc43fb5c9d7a832698d97a67a24e4ad41f7a8a5d740426574e01103'
         'dbce_shim.dll'='9b8a036f664cf8f45cccf82b98e5e4376f93215b60eac50b6db965bf498015d8'
         'WheelFfb.dll'='3f6cc51444879d01feb900098b2de94242594d093f523e3c34bd511d69c0d946'
