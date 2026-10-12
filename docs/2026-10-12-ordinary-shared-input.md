@@ -1,12 +1,16 @@
 # Ordinary shared input candidate
 
-The first private ordinary run at `9790788` FAILED during legacy SDL device
-startup on October 12. Do not install, repeat this path, or claim ordinary Shared
-qualification until the legacy device path is removed and a fresh run passes.
-The follow-up source removes SDL devices completely for Shared; it is not yet
-runtime-qualified. The earlier private CLI
-proof at `26a3f0e` remains intact; the new backend has not passed an owner drive. The default backend, owner configuration, FFB model/tunes and
-display geometry remain unchanged.
+The corrected `7187c57` private build passed ordinary Shared startup, a 900-frame
+recording, and a fresh-process graphical replay with all 900 WRAM checkpoints
+exact. REC/Saved/Replay/Verified and the missing-wheel-extras warning were seen.
+This is a title/menu test with the wheel at rest, not a driven controls or release
+qualification. Native remains the default; no owner install, settings, FFB model
+or geometry changed.
+
+The earlier `9790788` run failed inside SDL device acquisition. Its incomplete
+original and diagnostic dump remain unchanged. Do not deploy or retry that path.
+The corrected path uses Core plus keyboard and explicitly lacks legacy wheel
+extras, launcher integration and the force/read ownership bridge.
 
 ## Opt-in and ownership
 
@@ -210,4 +214,75 @@ launcher refusal and no-fallback cases, Native/replay controls, actual `.fzpt`
 round trip with a keyboard SNES-L input, plus the unchanged SDL virtual-device
 fixture. These fixtures do not reproduce the Windows driver's blocking Acquire;
 the startup/hotplug/overlay wiring was source-reviewed and the replacement path
-still requires one fresh private runtime before an ordinary Shared claim.
+was then checked by the bounded private pair below; broader controls/feature qualification remains open.
+
+
+## Corrected private original and fresh replay: passed narrowly
+
+On October 12, 07:03-07:05 CT, the reviewed source `7187c57f8731423c6318088d21b4f4fa5bf13fdc`
+(tree `e0f3bdcce14cef35e60828315f54d128a4d34bae`) ran from two fresh private copies.
+The exact game SHA256 was
+`177fe4329a67b69dbf90986c7b8be5fb8de85646fb33382344efee9885e459ed`;
+the pinned shared DLL remained
+`9b8a036f664cf8f45cccf82b98e5e4376f93215b60eac50b6db965bf498015d8`.
+
+- Original: `E:/fz-probe-ordinary-02`, actual ordinary ABI2 flags0 backend;
+  900 frames, normal exit 0. Host report resolved, `released=1`, `held=0`,
+  `inputReleased=true`, no control worker. SDL device opens were disabled.
+- Fresh replay: `E:/fz-probe-ordinary-replay-02`, same frozen config/video/keybinds,
+  ROM and Deluxe data. It did not open Core, replayed all 900 frames, verified
+  every WRAM checkpoint, and exited normally with code 0.
+- Each wrapper checked all 77 owner pins and released its lease. A separate
+  post-pair hash pass again found no changed owner pins; both exact PIDs were
+  gone and the lease absent at 07:05:36 CT. No owner install was performed.
+
+Tape SHA256:
+`0142307c378f6a9c09a193c99d33e0876d465937e1ac066d79a14287fc568880`.
+Snapshot SHA256:
+`18bda07046cd36c3dceca4ca26d38fa0d7317ed325ff29390af34c54dc8042db`.
+Both original and replay copies match exactly. These are **at-rest inputs, not
+all-neutral inputs**: 563 words are `0x40000000`, 337 are `0x40000080` (right
+steering PDM pulses). They match the earlier nonlatched preview tape, including
+the same at-rest steering offset. There were no injected actions and no observed
+player driving. Do not call the title animation a driven workload.
+
+Viewed native-window frames:
+
+- REC plus the explicit wheel-extras limitation:
+  `E:/fz-probe-ordinary-02/frames/burst/frame-0001.png`.
+- Saved 900 frames plus the same limitation: `frame-0158.png` in that folder.
+- Replay 714/900: `E:/fz-probe-ordinary-replay-02/frames/burst/frame-0001.png`.
+- Replay verified 900: `frame-0166.png` in that folder.
+
+The passive WGC bursts retained 158 and 166 frames respectively, then reported
+exit 4 when the target closed. Their service status remains failed/partial; the
+individual inspected images establish only the displayed states. They are not
+presentation/performance measurements. Ctrl+F11 key routing remains untested;
+these sessions used the existing frame-bounded normal-close path.
+
+The wrapper is `E:/fz-ordinary-research/Invoke-OrdinaryCopy02.ps1`, SHA256
+`8b31b28b90e5da196bdfe116b93e01ea1c04c213020534edfb654128add034ad`.
+It preserves logs continuously rather than buffering until process exit. A dummy
+waiting child proved that stdout and stderr are readable while it is still alive;
+readers use `FileShare.ReadWrite` to coexist with the writer. The old wrapper and
+failed original were not changed. Derived checks are in `verify-ordinary02.py` and
+`ordinary02-evidence.json`, SHA256
+`e199db0616057b2ee239c9d4cff3d84c55d3f631e8555511e95db62ea54ef544`.
+The generic result's `runtimeQualified=false` is deliberately retained: passing
+this narrow check does not qualify the entire mod for release.
+
+## Next owner-facing gaps
+
+1. Reuse the reviewed shared provider/force ownership work for physical FFB;
+   do not add a competing SDL/native owner. Preserve the accepted model/tunes.
+2. Obtain explicit extra-button bindings from that same owned snapshot, with
+   exact device/epoch identity, then integrate the existing launcher. The current
+   missing-extras/direct-ROM limitations are temporary and disclosed.
+3. After the ordinary backend is complete, add Wheelkit discovery for the
+   existing `--record` / `--replay` entry points and `.fzpt` + `.state` pair. Do not
+   introduce another recording container or silently select Shared on install.
+4. Qualify a moving ordinary original and the remaining feature/release checklist.
+   The previously qualified injected Practice drive and this ordinary startup
+   pair are separate evidence. Public Deluxe packaging still follows the existing
+   game-data/licensing review; no default/install/publication decision follows
+   from these private checks.
