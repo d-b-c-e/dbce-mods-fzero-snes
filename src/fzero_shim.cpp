@@ -152,6 +152,9 @@ int FzeroShimPrepare(const char *config, int direct_rom, int replay, int script,
     if (selection != "shared") return refuse("Input Backend must be Native or Shared");
     ordinary = true;
     config_path = config;
+    // Temporary source candidate: the legacy launcher can open SDL devices for
+    // steering preview. Do not admit that path until it uses the owned reader.
+    if (!direct_rom) return refuse("Shared input currently requires an explicit ROM without --launcher; legacy wheel extras are unavailable");
     if (!ordinary_force_disabled()) return 0;
     // Refuse an independent force owner for the lifetime of Shared input. This
     // is an ownership limitation, not a changed force model or saved setting.
@@ -281,7 +284,7 @@ int FzeroShimStart(void *window, const char *legacy_guid) {
     started = Clock::now();
     std::fprintf(stderr, "[fzero-shim] ABI 2 %s opened; steering range=%d response=%d; Core calibration; keyboard=%s; %s\n",
       ordinary ? "ordinary input" : "capture", range, response, latched ? "suppressed" : "retained",
-      ordinary ? "SDL digital extras/unbound buttons retained; physical FFB unavailable until ownership bridge" : "native SDL controller lane disabled");
+      ordinary ? "SDL devices disabled; legacy wheel X/Y/L/R/save/rewind and unbound buttons unavailable; keyboard retained; physical FFB unavailable until ownership bridge" : "native SDL controller lane disabled");
     return 1;
   } catch (const std::exception &e) { return refuse(e.what()); }
 #else
@@ -319,7 +322,8 @@ int FzeroShimOverlayInput(uint32_t *word) {
   return 1;
 }
 uint32_t FzeroShimSupplementalMask(void) {
-  return ordinary && !failed ? FzeroShimLegacyButtonMask(&frame) : 0;
+  // No legacy SDL fallback: even a digital-only open can reset FFB actuators.
+  return 0;
 }
 int FzeroShimConsumed(uint64_t simulation_frame, uint32_t input, const uint8_t *ram, size_t ram_size) {
   if (!FzeroShimUsingInput()) return 1;

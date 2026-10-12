@@ -26,6 +26,7 @@ const char *FzeroShimRecordingPath(void);
 int FzeroShimStart(void *window, const char *legacy_sdl_guid);
 int FzeroShimInput(uint32_t *word);
 int FzeroShimOverlayInput(uint32_t *word);
+/* Always zero until extras can share Core's existing input owner. */
 uint32_t FzeroShimSupplementalMask(void);
 int FzeroShimConsumed(uint64_t simulation_frame, uint32_t input, const uint8_t *ram, size_t ram_size);
 void FzeroShimNeutral(void);

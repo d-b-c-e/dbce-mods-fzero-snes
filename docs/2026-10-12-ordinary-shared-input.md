@@ -2,7 +2,9 @@
 
 The first private ordinary run at `9790788` FAILED during legacy SDL device
 startup on October 12. Do not install, repeat this path, or claim ordinary Shared
-qualification until the supplemental reader is replaced. The earlier private CLI
+qualification until the legacy device path is removed and a fresh run passes.
+The follow-up source removes SDL devices completely for Shared; it is not yet
+runtime-qualified. The earlier private CLI
 proof at `26a3f0e` remains intact; the new backend has not passed an owner drive. The default backend, owner configuration, FFB model/tunes and
 display geometry remain unchanged.
 
@@ -41,7 +43,7 @@ ordinary shared input.
 | Mode | Input | Saves/telemetry | Recording |
 |---|---|---|---|
 | Native default | Existing SDL/controller and keyboard | Existing behavior | Optional ordinary `.fzpt` |
-| Ordinary Shared | Core actions, keyboard, explicit legacy digital supplement | Ordinary SRAM/host settings and configured telemetry; FFB enabled is refused | Optional `.fzpt`; no shared diagnostic recorder |
+| Ordinary Shared | Core actions and keyboard; legacy wheel extras explicitly unavailable | Ordinary SRAM/host settings and configured telemetry; FFB enabled is refused | Optional `.fzpt`; no shared diagnostic recorder |
 | Capture-only preview | Core actions and keyboard | Private saves, no force/UDP delivery | Mandatory `.fzpt` plus shared computed-signal capture, bounded |
 | Latched diagnostic | Core's journalled injected actions; keyboard suppressed | Private saves, no force/UDP delivery | Same pair with injected provenance and completed terminal required |
 | Recorded replay | Final input words from tape only | No input/force owner, UDP, config/profile or SRAM writes | Verify every recorded WRAM checkpoint |
@@ -53,8 +55,7 @@ An explicitly supplied `.fzpt` is still optional, using the existing CLI/recorde
 
 At each emulated gameplay frame, Core runs once and the existing steering PDM
 maps its normalized steering. The saved native range/response/pedal threshold
-still shape this game adapter. Keyboard bits and the allowed legacy digital
-buttons are merged before the normal host filters. Opposing directions are
+still shape this game adapter. Keyboard bits are merged with Core before the normal host filters. Opposing directions are
 reduced using the guest's rule, then the **same final word** goes to `RtlRunFrame`
 and the existing `.fzpt` writer. No parallel recording container is added.
 The `.fzpt` snapshot/hash path can reconstruct software force/telemetry through
@@ -69,26 +70,36 @@ creating a guest recording row; pedals do not become overlay Confirm/Back.
 Recorded replay bypasses both input backends and host gestures before reading the
 tape, even if its config selects Shared.
 
-## Preserved legacy buttons, explicitly supplemental
+## Temporary missing wheel extras
 
-ABI2 has no independent SNES X/Y/L/R or host save/rewind actions. Those existing
-bindings remain in the selected SDL controller's digital reader. Generic Confirm,
-Back, Start, Select and navigation buttons also retain their legacy mapping only
-when Core explicitly reports that action **Unbound**. A bound action that is
-opening, missing, mismatched, invalid, stale or failed never falls back to its old
-generic mapping. Keyboard controls remain available.
+The first ordinary slice tried preserving native digital bindings through SDL.
+The failed runtime below showed why even a digital-only reader cannot open an
+independent SDL wheel. Current source does not initialize the SDL controller
+subsystem, refresh/open a pad, process gamepad hotplug events (including inside
+an overlay), or call the SDL supplemental reader in Shared. Native remains
+unchanged. Replay likewise never initializes a controller.
 
-This supplemental reader reads configured buttons/POVs, not legacy steering or
-pedal axes, advances no PDM and does not run the old test-injection path. SNES Y
-shares the guest brake bit, but the preserved native **ButtonY** is an independent
-digital binding, not a substitute for a missing Core pedal. A gamepad trigger
-explicitly used in a digital button combination remains that saved combination.
+ABI2 has no independent SNES X/Y/L/R or host save/rewind actions. These **wheel**
+bindings are explicitly unavailable in this opt-in interim backend, including
+legacy generic buttons when the Core action is unbound. No saved bindings are
+deleted or reinterpreted. Native is still the complete existing wheel path;
+keyboard SNES/host controls remain available in ordinary Shared. A persistent
+on-screen warning and the startup log disclose the missing wheel extras.
 
-The supplement still uses the existing selected SDL GUID and its handle; it is
-**not** claimed as Core-owned or multi-device parity for SNES extras. Keeping it
-avoids silently dropping the owner's existing controls while the shared action
-vocabulary is incomplete. Native SDL analog steering/pedals and mapped generic
-buttons cannot override the corresponding Core actions.
+This private candidate temporarily requires a direct ROM path without the
+launcher: the existing launcher's steering preview can also open SDL devices.
+This is an integration gap to remove when the launcher shares the input owner,
+not a desired permanent user restriction.
+
+An additive optional raw-digital observation API is a possible follow-up. Core
+already retains `Frame::samples` (device index/epoch/read sequence/time, validity,
+physical and delivered values), but the pinned ABI2 only exposes mapped actions
+and identity reports. The new API would copy one exact last-tick sample, never
+poll/open again, with frame sequence and epoch checks. Exposing that API alone
+does not prove which old SDL controller section belongs to that Core instance;
+that identity/binding migration must be exact rather than product/name matching.
+Coordinate this with the shared provider/force bridge instead of opening another
+handle or extending the ABI independently.
 
 ## Offline validation and next runtime slice
 
@@ -97,7 +108,7 @@ UDP transport. Fixtures cover default Native, replay bypass, ordinary flags0,
 exact profile bytes, no capture/deadline arguments, no save-root/recording path,
 initial and launcher-time Shared+FFB refusal, actual force-latch refusal,
 malformed Core profile, stray injection request and an unexpected latched frame.
-They also cover canceled overlay ticks, missing-bound versus unbound buttons,
+They also cover canceled overlay ticks, no legacy fallback for missing or unbound buttons,
 real `.fzpt` consumed-word equality and shutdown. The SDL virtual-wheel fixture
 proves held steering/pedals do not leak into the supplement while saved SNES and
 host buttons still work. Existing preview, latched capture, session UI and codec
@@ -183,3 +194,20 @@ failed `result.json` and incomplete original remain unchanged. No replay was
 started and no owner install/configuration changed. The wrapper also needs
 continuous file-backed stdout/stderr: its in-memory redirected output was lost
 when the supervisor exited while the child remained alive.
+
+
+## Source-only follow-up after the failed run
+
+The small follow-up gates controller initialization and every gameplay/hotplug/
+overlay device path on `!FzeroShimUsingInput()` (plus the recorded-replay guard),
+and removes both supplemental reads. The header's old mask seam now returns zero.
+The Shared direct-ROM admission check precedes the launcher. Recorder input still
+combines Core with keyboard, then records exactly the final consumed word. The
+persistent limitation notice is separate from REC/Saved/Replay state.
+
+Clean compilation and 28 targeted CTests pass, including the actual host's new
+launcher refusal and no-fallback cases, Native/replay controls, actual `.fzpt`
+round trip with a keyboard SNES-L input, plus the unchanged SDL virtual-device
+fixture. These fixtures do not reproduce the Windows driver's blocking Acquire;
+the startup/hotplug/overlay wiring was source-reviewed and the replacement path
+still requires one fresh private runtime before an ordinary Shared claim.

@@ -826,12 +826,10 @@ static bool session_live_input(void *context, uint32_t *word) {
     if (!FzeroShimInput(&shim_word)) {
       return false;
     }
-    /* Shared owns mapped inputs. Ordinary play retains only explicit digital
-     * supplements, never SDL steering/pedals or the dev injection lane.
-     * A latched diagnostic also owns keyboard input. */
+    /* Shared owns mapped inputs; no SDL controller is opened. Legacy wheel
+     * extras remain unavailable until they can use the same owned snapshot.
+     * Keyboard SNES extras remain available outside a latched diagnostic. */
     input = (FzeroShimLatched() ? 0 : keyboard_input()) | shim_word | (1u << 30);
-    if (FzeroShimOrdinary())
-      input |= FzeroGamepadReadSupplemental(ctx->pad, FzeroShimSupplementalMask());
   } else {
     input = keyboard_input() | controller_input(ctx->pad) |
             debug_server_get_controller_inputs() | (1u << 30) |
@@ -1343,11 +1341,17 @@ static void overlay_draw_sdl(const FzeroPresenter *p, const uint32_t *panel,
 }
 
 static void session_status_draw(const FzeroPresenter *p) {
-  enum { w = 448, h = 36 };
-  uint32_t pixels[w * h];
+  enum { w = 448, max_h = 51 };
+  const bool limited_shared = FzeroShimOrdinary();
+  const int h = limited_shared ? max_h : 36;
+  uint32_t pixels[w * max_h];
   char top[56], bottom[56];
   if (!FzeroSessionCaption(&g_session_ui, g_playthrough.frames, g_playthrough.total,
-                          SDL_GetTicks(), top, sizeof(top), bottom, sizeof(bottom))) return;
+                          SDL_GetTicks(), top, sizeof(top), bottom, sizeof(bottom))) {
+    if (!limited_shared) return;
+    snprintf(top, sizeof(top), "Shared input (experimental)");
+    snprintf(bottom, sizeof(bottom), "Mapped controls and keyboard; forces unavailable");
+  }
   uint32_t accent = g_session_ui.state == FZERO_SESSION_ERROR ? 0xffffb348u :
       g_session_ui.state == FZERO_SESSION_REC ? 0xffff4242u :
       g_session_ui.state == FZERO_SESSION_PLAYING ? 0xff60caffu : 0xff6ed88fu;
@@ -1356,6 +1360,8 @@ static void session_status_draw(const FzeroPresenter *p) {
   snes_ovl_fill_disc(pixels, w, h, 10, 11, 3, accent);
   snes_ovl_draw_text(pixels, w, h, 20, 7, top, accent, 1);
   snes_ovl_draw_text(pixels, w, h, 8, 22, bottom, 0xffffffffu, 1);
+  if (limited_shared)
+    snes_ovl_draw_text(pixels, w, h, 8, 37, "Extra wheel buttons unavailable; use keyboard", 0xffffb348u, 1);
   FzeroRect game = overlay_rect(p, 1);
   int draw_w = game.w * 4 / 5;
   if (draw_w > w * 2) draw_w = w * 2;
@@ -1714,8 +1720,7 @@ static uint32_t overlay_nav_inputs(SDL_GameController *pad) {
   if (FzeroShimOrdinary()) {
     uint32_t shared = 0;
     if (!FzeroShimOverlayInput(&shared)) return keyboard_input();
-    return keyboard_input() | shared |
-      FzeroGamepadReadSupplemental(pad, FzeroShimSupplementalMask());
+    return keyboard_input() | shared;
   }
   return keyboard_input() | FzeroGamepadReadOverlay(pad);
 }
@@ -1750,8 +1755,9 @@ static void overlay_pump_events(int *running, SDL_GameController **pad,
       key_down((int)SNESRECOMP_SDL_EVENT_KEY(event), event.key.repeat ? 1 : 0);
       continue;
     }
-    /* A pad plugged in while a panel is up must still be able to drive it. */
-    FzeroGamepadEvent(pad, &event);
+    /* Native may adopt a hotplugged pad; Shared must not open SDL devices. */
+    if (!FzeroShimUsingInput() && g_playthrough.mode != 2)
+      FzeroGamepadEvent(pad, &event);
   }
 }
 
@@ -2209,7 +2215,7 @@ int main(int argc, char **argv) {
   /* SDL_Init flipped to true-on-success in SDL3 and inverts silently in its
    * old `!= 0` form, so it must route through the shim. */
   if (!snesrecomp_sdl_init(SDL_INIT_VIDEO | SDL_INIT_AUDIO |
-                           (FzeroShimRequested() ? 0 : SDL_INIT_GAMECONTROLLER))) {
+                           ((FzeroShimUsingInput() || recorded_replay) ? 0 : SDL_INIT_GAMECONTROLLER))) {
     fprintf(stderr, "SDL initialization failed: %s\n", SDL_GetError());
     free(rom);
     return 3;
@@ -2475,9 +2481,11 @@ int main(int argc, char **argv) {
   if (!FzeroShimUsingInput() && !recorded_replay) selftest_attach();
 
   SDL_GameController *pad = NULL;
-  FzeroGamepadConfigure(g_config_path, g_selftest_pad ? g_selftest_guid : launcher_settings.player_gamepad_guid[0],
+  if (g_playthrough.mode != 2 && !FzeroShimUsingInput()) {
+    FzeroGamepadConfigure(g_config_path, g_selftest_pad ? g_selftest_guid : launcher_settings.player_gamepad_guid[0],
                          launcher_settings.deadzone[0]);
-  if (g_playthrough.mode != 2 && !FzeroShimRequested()) FzeroGamepadRefresh(&pad);
+    FzeroGamepadRefresh(&pad);
+  }
 
   /* The fullscreen transition and renderer creation can make DirectInput
    * re-acquire the wheel. Starting effects before either step leaves some
@@ -2658,7 +2666,7 @@ int main(int argc, char **argv) {
         if (SNESRECOMP_SDL_EVENT_KEY(event) == SDLK_ESCAPE) running = 0;
         continue; /* no user hotkey may mutate a verified replay/diagnostic */
       }
-      if (g_playthrough.mode != 2 && !FzeroShimRequested()) FzeroGamepadEvent(&pad, &event);
+      if (g_playthrough.mode != 2 && !FzeroShimUsingInput()) FzeroGamepadEvent(&pad, &event);
       if (event.type == SDL_KEYDOWN && !event.key.repeat) {
         /* Hotkeys are tested before the quick slots, so a binding on an
          * F-key takes that key from the slot behind it. */

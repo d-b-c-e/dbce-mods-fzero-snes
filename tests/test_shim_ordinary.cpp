@@ -33,11 +33,11 @@ int main(int argc,char **argv) {
   "\r\n"+profile+"[ForceFeedback]\r\nEnabled="+(force?"1":"0")+"\r\nStrength=12\r\n[Telemetry]\r\nEnabled=1\r\n";
  {std::ofstream f(cfg,std::ios::binary);f<<original;}
  if(mode=="session") _putenv_s("FZERO_SHIM_SESSION_NONCE","noordinaryinjection");
- bool prepared=FzeroShimPrepare(cfg.string().c_str(),0,mode=="replay",0,1)!=0;
+ bool prepared=FzeroShimPrepare(cfg.string().c_str(),mode!="launcher",mode=="replay",0,1)!=0;
  if(mode=="native" || mode=="replay") {
   CHECK(prepared && !FzeroShimUsingInput() && !FzeroNoForceLatched());
   CHECK(FzeroShimStart(nullptr,"fixture") && FzeroShimStop());
- } else if(mode=="force" || mode=="unknown" || mode=="session") {
+ } else if(mode=="force" || mode=="unknown" || mode=="session" || mode=="launcher") {
   CHECK(!prepared && !std::filesystem::exists(root/"diagnostics"));
   CHECK(!FzeroTelemetryDeliveryBlocked());
  } else {
@@ -72,7 +72,7 @@ int main(int argc,char **argv) {
      if(mode=="missing") {
       CHECK((word&0xc0)==0); // no steering fallback
       CHECK((FzeroShimSupplementalMask()&0x100)==0); // missing Confirm never falls back
-      CHECK(FzeroShimSupplementalMask()&1u); // explicitly Unbound Back retains legacy button
+      CHECK(FzeroShimSupplementalMask()==0); // even Unbound cannot open/read a legacy wheel
      }
      CHECK(FzeroShimConsumed(0,word,nullptr,0));
      _putenv_s("FZERO_FAKE_BAD_RECORD","1"); // ordinary must never call shared capture
@@ -80,9 +80,10 @@ int main(int argc,char **argv) {
      FzeroShimNeutral(); // host overlay cancels this pending guest frame
      CHECK(FzeroShimOverlayInput(&word) && word==0); // pedal/steering never navigate host UI
      CHECK(FzeroShimInput(&word));
-     uint32_t consumed=FzeroShimGuestWord(word | (FzeroShimSupplementalMask()&0x400) | 0x40000000u);
+     uint32_t consumed=FzeroShimGuestWord(word | 0x400u | 0x40000000u);
      CHECK(FzeroShimConsumed(1,consumed,nullptr,0));
-     // Same final merged word enters the actual .fzpt writer used after RtlRunFrame.
+     // Same final Core + keyboard (SNES L here) word enters the actual .fzpt
+     // writer used after RtlRunFrame; no legacy wheel supplement participates.
      FzeroPlaythrough tape{},replay{};uint8_t digest[32]={7},ram[8]={1};
      auto path=(root/"ordinary.fzpt").string();
      CHECK(FzeroPlaythroughRecordOpen(&tape,path.c_str(),digest));
