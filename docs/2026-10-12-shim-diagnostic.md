@@ -573,3 +573,34 @@ originals retain their older adapter version and are never rewritten to fit it.
 ROM-free router tests exercise the production guard, route, refusal paths and
 incremental source reader; native fixtures cover exact-width read-only RAM
 extraction and all recorded channels. No new player capability is advertised.
+
+The exact driving commands also pass 17 checks linked against the pinned shared
+Core's production `core.cpp` and `parse.cpp`, with its fake device provider
+(`tests/shim_neutral_batch.cpp`). Both action-form axis commands resolve through
+the profile into owned raw objects, then the ordinary normalizer; the fixture
+checks delivered raw/normalized values, injected provenance and timed release.
+There is no F-Zero-specific shortcut around the shared mapper.
+
+### 1012d result: Practice navigation works; supervisor contention stopped run
+
+Candidate `91b6f40` (graphical SHA-256
+`ad78b6b0279a22da5924af07442857affb5f6633d51f91f6c0034b17ec7d3c0e`)
+ran from `E:/fz-probe-1012d` at 09:58:47 UTC, PID 79184. The state-checked route
+issued five positive batches: select Practice, enter Practice, Blue Falcon,
+Yes, default rival. Each had its expected live source guard and fresh WGC frame;
+the last successful frame shows the rival selection menu. No throttle or steering
+was issued, and no player-driving claim follows from this partial route.
+
+At about 21 seconds the supervisor's lease assertion collided with the child
+capture assertion: both read the same token using `FileShare.None`. The supervisor
+closed its exact game normally; the incomplete diagnostic intentionally exited 9
+and invalidated its tape because no explicit `end` batch had completed. This was
+a supervisor file-sharing error, not a game crash. `result.json` records all
+77 owner file/absence pins unchanged, no forced termination and lease released.
+The original remains unsealed and is not a cold-replay qualification case.
+
+Toolkit `ad81439` changes only read-only assertion sharing to `FileShare.Read`.
+Exclusive lease creation/replacement/release remain unchanged. The actual held-read
+fixture passes with correct ownership, still refuses wrong tokens and ownership
+mutations, and fails with the original sharing mode. The next private copy keeps
+the exact same game/router pins and starts a fresh original after that helper fix.
