@@ -1,5 +1,11 @@
 # Recorded F-Zero drives (experimental)
 
+**October 12:** the private shared-shim BS Deluxe Practice original now has exact
+2,351-frame consumed-input and cold WRAM replay proof; see the
+[diagnostic evidence](2026-10-12-shim-diagnostic.md). New explicit CLI recording,
+replay and muted shared-profile preview entry points, plus REC/Saved/Error UI,
+are a [source-tested candidate](2026-10-12-recording-cli.md), not installed yet.
+
 **Current verified example (October 8):** the [fresh stock capture and three
 steering trials](2026-10-08-stock-replay-proof.md) each pass all 3,600 recorded
 frame-state checks. It is a synthetic stock-cartridge diagnostic, not an owner

@@ -18,6 +18,8 @@
 #include "fzero_msu.h"
 #include "fzero_replay.h"
 #include "fzero_playthrough.h"
+#include "fzero_session_ui.h"
+#include "fzero_output_latch.h"
 #include "fzero_triple_display.h"
 #include "fzero_state_mode.h"
 #include "fzero_diagnostics.h"
@@ -90,10 +92,13 @@ static char video_config_path[1024];
 /* config.ini, exe-anchored: the launcher's [KeyMap] and the game's hotkeys. */
 static char g_config_path[1024];
 static FzeroPlaythrough g_playthrough;
+static FzeroSessionUi g_session_ui;
+static bool g_shared_profile_preview;
 static void abort_playthrough(const char *reason) {
   if (g_playthrough.mode != 1) return;
   fprintf(stderr, "[fzero-playthrough] recording invalidated: %s\n", reason);
   FzeroPlaythroughAbort(&g_playthrough);
+  FzeroSessionFail(&g_session_ui, reason);
 }
 static const char *const kFzeroAspectLabels[] = {
     "4:3",
@@ -1265,8 +1270,8 @@ static FzeroRect overlay_rect(const FzeroPresenter *p, int is_menu) {
   return game;
 }
 
-static void overlay_draw_sdl(const FzeroPresenter *p, const uint32_t *panel,
-                             int pw, int ph, int is_menu) {
+static void overlay_draw_sdl_rect(const FzeroPresenter *p, const uint32_t *panel,
+                                  int pw, int ph, FzeroRect r) {
   if (!panel || pw <= 0 || ph <= 0) return;
   if (g_overlay_texture &&
       (g_overlay_texture_w != pw || g_overlay_texture_h != ph)) {
@@ -1287,10 +1292,39 @@ static void overlay_draw_sdl(const FzeroPresenter *p, const uint32_t *panel,
     SDL_SetTextureBlendMode(g_overlay_texture, SDL_BLENDMODE_BLEND);
   }
   SDL_UpdateTexture(g_overlay_texture, NULL, panel, pw * 4);
-  FzeroRect r = overlay_rect(p, is_menu);
   SDL_Rect destination = {r.x, r.y, r.w, r.h};
   snesrecomp_sdl_render_texture(p->renderer, g_overlay_texture, NULL,
                                 &destination);
+}
+
+static void overlay_draw_sdl(const FzeroPresenter *p, const uint32_t *panel,
+                             int pw, int ph, int is_menu) {
+  overlay_draw_sdl_rect(p, panel, pw, ph, overlay_rect(p, is_menu));
+}
+
+static void session_status_draw(const FzeroPresenter *p) {
+  enum { w = 448, h = 36 };
+  uint32_t pixels[w * h];
+  char top[56], bottom[56];
+  if (!FzeroSessionCaption(&g_session_ui, g_playthrough.frames, g_playthrough.total,
+                          SDL_GetTicks(), top, sizeof(top), bottom, sizeof(bottom))) return;
+  uint32_t accent = g_session_ui.state == FZERO_SESSION_ERROR ? 0xffffb348u :
+      g_session_ui.state == FZERO_SESSION_REC ? 0xffff4242u :
+      g_session_ui.state == FZERO_SESSION_PLAYING ? 0xff60caffu : 0xff6ed88fu;
+  snes_ovl_fill_rect(pixels, w, h, 0, 0, w, h, 0xec10151au);
+  snes_ovl_stroke_rect(pixels, w, h, 0, 0, w, h, accent);
+  snes_ovl_fill_disc(pixels, w, h, 10, 11, 3, accent);
+  snes_ovl_draw_text(pixels, w, h, 20, 7, top, accent, 1);
+  snes_ovl_draw_text(pixels, w, h, 8, 22, bottom, 0xffffffffu, 1);
+  FzeroRect game = overlay_rect(p, 1);
+  int draw_w = game.w * 4 / 5;
+  if (draw_w > w * 2) draw_w = w * 2;
+  if (draw_w < 1) return;
+  int draw_h = h * draw_w / w;
+  if (draw_h < 1) draw_h = 1;
+  FzeroRect rect = {game.x + (game.w - draw_w) / 2, game.y + 8, draw_w, draw_h};
+  if (p->gl) fzero_gl_draw_overlay(p->gl, pixels, w, h, rect, p->drawable_height);
+  else overlay_draw_sdl_rect(p, pixels, w, h, rect);
 }
 
 /* Read the composited window back for FZERO_OVERLAY_DUMP / FZERO_REWIND_DUMP;
@@ -1474,6 +1508,7 @@ static void present_frame(FzeroPresenter *p, const uint32_t *panel,
                             p->drawable_height);
       overlay_dump(p, is_menu);
     }
+    session_status_draw(p);
     uint64_t diagnostic_start = FzeroDiagnosticsBegin();
     output_probe(p->gl->window, "center", pixels, width, height,
         p->drawable_width, p->drawable_height, triple_ready,
@@ -1538,6 +1573,7 @@ static void present_frame(FzeroPresenter *p, const uint32_t *panel,
   snesrecomp_sdl_render_texture(p->renderer, p->texture, &source, &destination);
   overlay_draw_sdl(p, panel, pw, ph, is_menu);
   if (panel) overlay_dump(p, is_menu);
+  session_status_draw(p);
   FzeroDiagnosticsEnd(FZERO_DIAG_DRAW, diagnostic_start);
   diagnostic_start = FzeroDiagnosticsBegin();
   SDL_RenderPresent(p->renderer);
@@ -1977,17 +2013,43 @@ int main(int argc, char **argv) {
   /* Launcher paths, imported shaders/music and saves are installation-relative,
    * even when a shortcut or terminal starts us in a different directory.
    * Resolve an explicit ROM against the caller's cwd before changing it. */
-  char command_line_rom[1024];
-  const char *explicit_rom = NULL;
-  bool force_launcher = false, positional_only = false;
-  for (int i = 1; i < argc; ++i) {
-    if (!positional_only && !strcmp(argv[i], "--")) { positional_only = true; continue; }
-    if (!positional_only && !strcmp(argv[i], "--launcher")) { force_launcher = true; continue; }
-    if (explicit_rom || (!positional_only && argv[i][0] == '-')) {
-      fprintf(stderr, "usage: FZeroSNESRecomp [--launcher] [path-to-rom.sfc]\n");
+  char command_line_rom[1024], command_line_session[1024];
+  const char *const session_environment[] = {
+    "FZERO_RECORD_PLAYTHROUGH", "FZERO_REPLAY_PLAYTHROUGH", "FZERO_SHIM_DIAGNOSTIC_RUN",
+    "FZERO_SHIM_SESSION_NONCE", "FZERO_SHIM_SESSION_FILE", "FZERO_SHIM_BATCH_FILE",
+    "SNESRECOMP_INPUT_SCRIPT", "FZERO_VIEWPORT_SCRIPT", "FZERO_STATE_SAVE_AT",
+    "FZERO_STATE_LOAD_AT", "FZERO_OVERLAY_SELFTEST"
+  };
+  bool conflicting_environment = false;
+  for (unsigned i = 0; i < sizeof(session_environment) / sizeof(*session_environment); ++i) {
+    const char *value = getenv(session_environment[i]);
+    if (value && *value) conflicting_environment = true;
+  }
+  FzeroSessionOptions options;
+  const char *option_error;
+  if (!FzeroSessionParse(argc, argv, conflicting_environment, &options, &option_error)) {
+    fprintf(stderr, "%s\nusage: FZeroSNESRecomp [--launcher] [rom.sfc]\n"
+                    "       FZeroSNESRecomp --record fresh.fzpt rom.sfc\n"
+                    "       FZeroSNESRecomp --replay recording.fzpt rom.sfc\n"
+                    "       FZeroSNESRecomp --shared-profile-preview fresh-folder rom.sfc\n", option_error);
+    return 2;
+  }
+  const char *explicit_rom = options.rom;
+  bool force_launcher = options.launcher;
+  if (options.mode) {
+    if (!snesrecomp_abspath(options.path, command_line_session, sizeof(command_line_session))) {
+      fprintf(stderr, "Unable to resolve the recording/replay/preview path\n");
       return 2;
     }
-    explicit_rom = argv[i];
+    const char *name = options.mode == FZERO_SESSION_RECORD ? "FZERO_RECORD_PLAYTHROUGH" :
+        options.mode == FZERO_SESSION_REPLAY ? "FZERO_REPLAY_PLAYTHROUGH" : "FZERO_SHIM_DIAGNOSTIC_RUN";
+    set_env_default(name, command_line_session);
+    const char *applied = getenv(name);
+    if (!applied || strcmp(applied, command_line_session)) {
+      fprintf(stderr, "Could not apply explicit session request\n");
+      return 2;
+    }
+    g_shared_profile_preview = options.mode == FZERO_SESSION_PREVIEW;
   }
   if (explicit_rom) {
     if (!snesrecomp_abspath(explicit_rom, command_line_rom, sizeof(command_line_rom))) {
@@ -2035,7 +2097,11 @@ int main(int argc, char **argv) {
   if (!FzeroShimPrepare(g_config_path, explicit_rom && !force_launcher,
                         recorded_replay, FzeroReplayHasInput(), early_record && *early_record))
     return 2;
-  FzeroTelemetryInit(g_config_path); // diagnostic delivery latch is already held.
+  if (recorded_replay && (!FzeroLatchNoForce() || !FzeroTelemetryLatchNoDelivery())) {
+    fprintf(stderr, "[fzero-playthrough] output mute could not be established\n");
+    return 2;
+  }
+  FzeroTelemetryInit(g_config_path); // preview/replay delivery latch is already held.
   if (FzeroControlsStartupMayWrite(FzeroReplayHasInput(), recorded_replay, FzeroShimRequested())) {
     FzeroControlsApplyAtStartup(g_config_path);
     FzeroInjectInit(g_config_path);   /* dev only: inject.on, no force, applied profile */
@@ -2048,7 +2114,7 @@ int main(int argc, char **argv) {
   if (resolve_result <= 0) return resolve_result == 0 ? 0 : 2;
   if (!g_video.enhanced) {
     g_video.aspect = launcher_aspect(launcher_settings.aspect_index);
-    if (!FzeroShimRequested() && !FzeroVideoSave(&g_video, kVideoConfig))
+    if (!FzeroShimRequested() && !recorded_replay && !FzeroVideoSave(&g_video, kVideoConfig))
       fprintf(stderr, "[fzero] Unable to save video settings\n");
   }
   g_config.linear_filtering = launcher_settings.linear_filter != 0;
@@ -2111,8 +2177,8 @@ int main(int argc, char **argv) {
    * recomp in this family). Must precede the first keyboard_input() call. */
   /* Avoid keybinds_init's missing-file writer during diagnostics. Static
    * defaults still work in capture-only mode if no keybinds.ini exists. */
-  FILE *existing_keybinds = FzeroShimRequested() ? fopen("keybinds.ini", "rb") : NULL;
-  if (!FzeroShimRequested() || existing_keybinds) keybinds_init(NULL);
+  FILE *existing_keybinds = (FzeroShimRequested() || recorded_replay) ? fopen("keybinds.ini", "rb") : NULL;
+  if ((!FzeroShimRequested() && !recorded_replay) || existing_keybinds) keybinds_init(NULL);
   if (existing_keybinds) fclose(existing_keybinds);
 
   RtlRegisterGame(FzeroGameInfo());
@@ -2120,7 +2186,7 @@ int main(int argc, char **argv) {
     Die("SNESRecomp rejected the F-Zero cartridge");
   cpu_trace_init();
   debug_server_set_ram(g_snes->ram, 0x20000);
-  if (!FzeroShimRequested()) {
+  if (!FzeroShimRequested() && !recorded_replay) {
     int debug_port = 4385;
     const char *port_value = getenv("SNESRECOMP_DEBUG_PORT");
     if (port_value && port_value[0]) {
@@ -2140,7 +2206,7 @@ int main(int argc, char **argv) {
   if (!FzeroMsuSelectSaveRoot()) Die(FzeroMsuError());
   /* RtlReadSram can migrate legacy saves (a write). Diagnostic originals start
    * from fresh guest state; their only state file is the explicit .fzpt sibling. */
-  if (!FzeroShimRequested()) RtlReadSram();
+  if (!FzeroShimRequested() && !recorded_replay) RtlReadSram();
   const char *record_path = FzeroShimRequested() ? FzeroShimRecordingPath() : getenv("FZERO_RECORD_PLAYTHROUGH");
   const char *replay_path = getenv("FZERO_REPLAY_PLAYTHROUGH");
   bool replay_failed = false;
@@ -2181,7 +2247,9 @@ int main(int argc, char **argv) {
                                    playthrough_rom_sha) ||
         !RtlSaveSnapshot(state_path)) {
       abort_playthrough("could not create fresh input/state files");
-      fprintf(stderr, "[fzero-playthrough] recording unavailable: %s\n", record_path);
+      fprintf(stderr, "[fzero-playthrough] ERROR: recording unavailable: %s\n", record_path);
+      free(rom);
+      return 3; /* An explicit failed recording must never silently become ordinary play. */
     } else {
       fprintf(stderr, "[fzero-playthrough] recording from boot: %s\n", record_path);
     }
@@ -2191,6 +2259,7 @@ int main(int argc, char **argv) {
     free(rom);
     return 3;
   }
+  FzeroSessionBegin(&g_session_ui, g_playthrough.mode, FzeroShimRequested() != 0);
   /* After the machine exists: the ring's slots are whole-machine snapshots
    * and it sizes them from a real one. */
   snes_rewind_configure();
@@ -2358,7 +2427,7 @@ int main(int argc, char **argv) {
   snesrecomp_sdl_pause_audio_device(audio, launcher_settings.enable_audio == 0);
 
   /* Before the pad scan below, so the virtual pad is the one player 1 gets. */
-  if (!FzeroShimRequested()) selftest_attach();
+  if (!FzeroShimRequested() && !recorded_replay) selftest_attach();
 
   SDL_GameController *pad = NULL;
   FzeroGamepadConfigure(g_config_path, g_selftest_pad ? g_selftest_guid : launcher_settings.player_gamepad_guid[0],
@@ -2497,7 +2566,13 @@ int main(int argc, char **argv) {
   uint32_t held_wheel_host_buttons = 0;
   FzeroDiagnosticFrame diagnostic_frame = {0};
 
+  double preview_started = monotonic_seconds();
   while (running) {
+    if (g_shared_profile_preview && monotonic_seconds() - preview_started >= 230.0) {
+      fprintf(stderr, "[fzero-playthrough] muted preview duration complete; saving\n");
+      running = 0;
+      break;
+    }
     if (g_video.diagnostics) {
       diagnostic_frame = (FzeroDiagnosticFrame){
         .simulation = (uint64_t)frames, .presentations = presentations,
@@ -2520,6 +2595,20 @@ int main(int argc, char **argv) {
       if (event.type == SDL_WINDOWEVENT &&
           event.window.event == SDL_WINDOWEVENT_CLOSE) running = 0;
 #endif
+      if (event.type == SDL_KEYDOWN && FzeroSessionStopKey(g_playthrough.mode,
+            SNESRECOMP_SDL_EVENT_KEY(event) == SDLK_F11,
+            (SNESRECOMP_SDL_EVENT_MOD(event) & KMOD_CTRL) != 0,
+            (SNESRECOMP_SDL_EVENT_MOD(event) & (KMOD_SHIFT | KMOD_ALT)) != 0,
+            event.key.repeat != 0)) {
+        if (FzeroShimRequested()) {
+          /* The preview records the shared and guest streams as one session.
+           * Stop both before sealing; do not leave a partial stream behind. */
+          running = 0;
+        } else if (!FzeroSessionFinish(&g_session_ui, &g_playthrough, true, SDL_GetTicks())) {
+          replay_failed = true;
+        }
+        continue;
+      }
       if ((g_playthrough.mode == 2 || FzeroShimRequested()) && event.type == SDL_KEYDOWN) {
         if (SNESRECOMP_SDL_EVENT_KEY(event) == SDLK_ESCAPE) running = 0;
         continue; /* no user hotkey may mutate a verified replay/diagnostic */
@@ -2772,7 +2861,8 @@ int main(int argc, char **argv) {
       if (g_playthrough.mode == 1 &&
           !FzeroPlaythroughRecordFrame(&g_playthrough, input, g_ram, sizeof(g_ram))) {
         fprintf(stderr, "[fzero-playthrough] write failed; case incomplete\n");
-        if (FzeroShimRequested()) { replay_failed = true; running = 0; break; }
+        FzeroSessionFail(&g_session_ui, "Input recording write failed");
+        replay_failed = true; running = 0; break;
       }
       if (g_playthrough.mode == 2 &&
           !FzeroPlaythroughVerifyFrame(&g_playthrough, g_ram, sizeof(g_ram))) {
@@ -2917,8 +3007,6 @@ int main(int argc, char **argv) {
     if (dump) fclose(dump);
   }
   if (g_playthrough.mode != 2 && !FzeroShimRequested()) RtlWriteSram();
-  FzeroSetMode7Hd(0, NULL, 0);
-  free(hd_pixels);
   debug_server_shutdown();
   snesrecomp_sdl_pause_audio_device(audio, true);
 #if SNESRECOMP_SDL3
@@ -2937,6 +3025,28 @@ int main(int argc, char **argv) {
     replay_failed = true;
   }
   FzeroFfbShutdown();
+  if (!FzeroSessionFinish(&g_session_ui, &g_playthrough, !replay_failed, SDL_GetTicks()))
+    replay_failed = true;
+  if (g_session_ui.state == FZERO_SESSION_SAVED)
+    fprintf(stderr, "[fzero-playthrough] recording complete\n");
+  else if (g_session_ui.state == FZERO_SESSION_VERIFIED)
+    fprintf(stderr, "[fzero-playthrough] visual replay complete\n");
+  if (g_session_ui.state != FZERO_SESSION_IDLE) {
+    char top[80], bottom[96];
+    bool caption_visible = FzeroSessionCaption(&g_session_ui, g_playthrough.frames, g_playthrough.total,
+                        SDL_GetTicks(), top, sizeof(top), bottom, sizeof(bottom));
+    if (caption_visible) fprintf(stderr, "[fzero-playthrough] %s: %s\n", top, bottom);
+    /* The terminal result is composited only after close succeeded. Keep the
+     * final frame visible briefly without advancing the guest or polling input. */
+    uint64_t feedback_end = SDL_GetTicks() + (g_session_ui.failed ? 1800 : 900);
+    while (caption_visible && SDL_GetTicks() < feedback_end) {
+      present_frame(&presenter, NULL, 0, 0, 0);
+      SDL_PumpEvents();
+      SDL_Delay(16);
+    }
+  }
+  FzeroSetMode7Hd(0, NULL, 0);
+  free(hd_pixels);
   snes_rewind_shutdown();
   if (g_overlay_texture) {
     SDL_DestroyTexture(g_overlay_texture);
@@ -2953,17 +3063,6 @@ int main(int argc, char **argv) {
     SDL_DestroyRenderer(renderer);
   }
   FzeroTelemetryShutdown();
-  if (g_playthrough.mode == 1) {
-    if (!FzeroPlaythroughClose(&g_playthrough)) {
-      fprintf(stderr, "[fzero-playthrough] close failed; case incomplete\n");
-      if (FzeroShimRequested()) replay_failed = true;
-    } else fprintf(stderr, "[fzero-playthrough] recording complete\n");
-  } else if (g_playthrough.mode == 2) {
-    if (!FzeroPlaythroughClose(&g_playthrough)) {
-      fprintf(stderr, "[fzero-playthrough] visual replay incomplete\n");
-      replay_failed = true;
-    } else fprintf(stderr, "[fzero-playthrough] visual replay complete\n");
-  }
   SDL_DestroyWindow(window);
   SDL_DestroyMutex(g_audio_mutex);
   g_audio_mutex = NULL;
@@ -2971,5 +3070,5 @@ int main(int argc, char **argv) {
   free(rom);
   /* A self-test that printed FAIL must not exit 0: a harness that only reads
    * the exit status would otherwise record a pass. */
-  return replay_failed ? 9 : g_selftest_failed ? 4 : 0;
+  return (replay_failed || g_session_ui.failed) ? 9 : g_selftest_failed ? 4 : 0;
 }
