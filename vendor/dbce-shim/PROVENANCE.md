@@ -14,7 +14,9 @@ The DLL is **not tracked or included by default**. For a private candidate,
 pass `-DFZERO_SHIM_DLL=<reviewed DLL>`; CMake verifies that hash and stages it
 beside the graphical executable. The loader checks ABI, struct sizes and every
 action name before opening. A diagnostic launch without the DLL refuses.
-Ordinary launches do not load it.
+Default Native launches do not load it. The source-only ordinary Shared option
+also loads this pinned ABI, without capture or injection. Shared+FFB remains
+refused until force/read ownership is integrated and qualified.
 
 The target builds `windows/shim` and `windows/host` with the shared controls and
 session headers, independently of OutRun's reconstructed runtime. Its reviewed

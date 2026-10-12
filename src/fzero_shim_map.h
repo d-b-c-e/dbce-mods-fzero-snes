@@ -16,7 +16,7 @@
 extern "C" {
 #endif
 
-/* Diagnostic adapter only. ABI 2 has no SNES X/Y/L/R or host save/rewind
+/* ABI 2 has no SNES X/Y/L/R or host save/rewind
  * actions; those are deliberately NOT aliased onto unrelated racing actions. */
 extern const char *const kFzeroShimActions[DBCE_SHIM_ACTIONS];
 extern const char kFzeroShimUnsupported[];
@@ -34,6 +34,13 @@ void FzeroShimMapNeutral(FzeroShimMap *s);
  * frames or overlay reads. Duplicate/out-of-order frames refuse, rather than
  * advancing the steering pulse twice. Only finite Live values are delivered. */
 int FzeroShimMapFrame(FzeroShimMap *s, const dbce_shim_frame *frame, uint32_t *word);
+/* Ordinary host overlays poll digital navigation without advancing the steering
+ * PDM or recording a guest frame. Same sequence/layout checks as gameplay. */
+int FzeroShimMapOverlayFrame(FzeroShimMap *s, const dbce_shim_frame *frame, uint32_t *word);
+/* SDL supplements buttons only. Keep SNES extras/host actions, plus generic
+ * buttons explicitly Unbound in Core. Never fall back for missing/faulted
+ * bindings; no legacy steering or pedal axes are read by this lane. */
+uint32_t FzeroShimLegacyButtonMask(const dbce_shim_frame *frame);
 /* The two game channels passed to dbce_shim_record AFTER RtlRunFrame. The input
  * is the final word after host filters, not an earlier adapter preview. */
 void FzeroShimConsumedValues(uint64_t simulation_frame, uint32_t input, double out[2]);
@@ -46,7 +53,7 @@ int FzeroShimMenuValues(const uint8_t *ram, size_t ram_size,
  * exact reduction before both diagnostic recorders see the final word. */
 uint32_t FzeroShimGuestWord(uint32_t input);
 /* Pending profile writes must never run on either replay path or the shim
- * diagnostic path. A normal launch retains the existing startup writer. */
+ * path. The Native backend retains its existing startup writer. */
 int FzeroControlsStartupMayWrite(int scripted_replay, int recorded_replay, int shim_requested);
 
 #ifdef __cplusplus

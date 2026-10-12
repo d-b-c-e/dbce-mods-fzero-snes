@@ -21,7 +21,7 @@ extern "C" {
 #endif
 
 namespace {
-bool requested, failed, latched, completed, host_persistence, host_debug;
+bool requested, ordinary, failed, latched, completed, host_persistence, host_debug;
 std::string config_path, profile, recording_path, save_root, session_nonce;
 std::filesystem::path session_file, batch_file;
 FzeroFfbState force_state{};
@@ -50,11 +50,11 @@ using Open = int32_t (*)(const dbce_shim_open_args *, void **, char *, int32_t);
 using Tick = int32_t (*)(void *, dbce_shim_frame *);
 using Record = int32_t (*)(void *, uint64_t, const double *, int32_t);
 using Text = int32_t (*)(void *, char *, int32_t, int32_t *);
-Open open2; Tick tick; Record record; Text stop;
+Open open2; Tick tick; Record record; Text stop, profile_info;
 
 bool refuse(const char *why) {
   failed = true;
-  std::fprintf(stderr, "[fzero-shim] diagnostic refused/failed: %s\n", why);
+  std::fprintf(stderr, "[fzero-shim] %s refused/failed: %s\n", ordinary ? "ordinary input" : "diagnostic", why);
   return false;
 }
 bool present(const char *s) { return s && *s; }
@@ -86,6 +86,11 @@ bool read_profile(const char *path) {
   profile = all.substr(begin, end-begin); // exact bytes; Core owns binding validation.
   return true;
 }
+bool ordinary_force_disabled() {
+  int enabled = 0;
+  FzeroIniReadInt(config_path.c_str(), "ForceFeedback", "Enabled", &enabled);
+  return !enabled || refuse("Shared input with ForceFeedback Enabled is not yet supported: the force/read ownership bridge is pending; use Native for force feedback");
+}
 #ifdef _WIN32
 template<class T> T entry(HMODULE module, const char *name) {
   return reinterpret_cast<T>(GetProcAddress(module, name));
@@ -107,8 +112,9 @@ bool load() {
   tick = entry<Tick>(module, "dbce_shim_tick");
   record = entry<Record>(module, "dbce_shim_record");
   stop = entry<Text>(module, "dbce_shim_stop");
+  profile_info = entry<Text>(module, "dbce_shim_profile_info");
   if (!abi || !size || !args || !name || !open2 || !tick || !record || !stop ||
-      abi() != DBCE_SHIM_ABI || size() != sizeof(frame) || args() != sizeof(dbce_shim_open_args))
+      (ordinary && !profile_info) || abi() != DBCE_SHIM_ABI || size() != sizeof(frame) || args() != sizeof(dbce_shim_open_args))
     return refuse("shim ABI/layout/export mismatch");
   for (int i = 0; i < DBCE_SHIM_ACTIONS; ++i) {
     const char *actual = name(i);
@@ -120,6 +126,8 @@ bool load() {
 }
 
 int FzeroShimRequested(void) { return requested; }
+int FzeroShimUsingInput(void) { return requested || ordinary; }
+int FzeroShimOrdinary(void) { return ordinary; }
 int FzeroShimLatched(void) { return latched; }
 int FzeroShimCompleted(void) { return completed && !failed; }
 const char *FzeroShimSaveRoot(void) { return save_root.c_str(); }
@@ -132,7 +140,30 @@ void FzeroShimHostFences(const char *selected_save_root, int debug_disabled) {
 const char *FzeroShimRecordingPath(void) { return recording_path.c_str(); }
 int FzeroShimPrepare(const char *config, int direct_rom, int replay, int script, int explicit_recording) {
   const char *run = std::getenv("FZERO_SHIM_DIAGNOSTIC_RUN");
-  if (!present(run)) return 1;
+  if (!present(run)) {
+    // A recorded/scripted replay never opens an input backend, even when the
+    // captured config selected Shared and normal play had force enabled.
+    if (replay || script) return 1;
+    char backend[32] = "Native";
+    FzeroIniReadString(config, "Input", "Backend", backend, sizeof(backend));
+    std::string selection = backend;
+    for (char &c : selection) if(c>='A' && c<='Z') c += 'a'-'A';
+    if (selection == "native") return 1;
+    if (selection != "shared") return refuse("Input Backend must be Native or Shared");
+    ordinary = true;
+    config_path = config;
+    if (!ordinary_force_disabled()) return 0;
+    // Refuse an independent force owner for the lifetime of Shared input. This
+    // is an ownership limitation, not a changed force model or saved setting.
+    if (!FzeroLatchNoForce()) return refuse("force owner already initialized");
+    for (const char *key : {"FZERO_SHIM_SESSION_NONCE", "FZERO_SHIM_SESSION_FILE", "FZERO_SHIM_BATCH_FILE"})
+      if (present(std::getenv(key))) return refuse("injection files require an explicit diagnostic, not ordinary Shared input");
+#ifndef _WIN32
+    return refuse("the shared input provider requires Windows");
+#else
+    return read_profile(config);
+#endif
+  }
   requested = true;
   /* Must precede every refusal: a malformed diagnostic request cannot turn
    * into a normal force-enabled launch. */
@@ -186,31 +217,45 @@ int FzeroShimPrepare(const char *config, int direct_rom, int replay, int script,
 #endif
 }
 int FzeroShimStart(void *window, const char *legacy_guid) {
-  if (!requested) return 1;
-  if (failed || !FzeroNoForceLatched()) return refuse("diagnostic not admitted or force latch missing");
+  if (!FzeroShimUsingInput()) return 1;
+  if (failed || !FzeroNoForceLatched()) return refuse("shared input not admitted or force ownership guard missing");
   const bool fences = host_persistence && host_debug && FzeroTelemetryDeliveryBlocked();
-  if (!fences) return refuse("host persistence/debug/telemetry fences not established");
+  if (requested && !fences) return refuse("host persistence/debug/telemetry fences not established");
+  if (ordinary && !ordinary_force_disabled()) return 0; // launcher may have changed it
 #ifdef _WIN32
   try {
     if (!load()) return 0;
-    auto folder = run_path.wstring(), capture = (run_path / "capture").wstring();
     std::string nonce = "fzero" + std::to_string(GetCurrentProcessId()) +
         std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+    if (ordinary) {
+      run_path = std::filesystem::absolute(config_path).parent_path() / "diagnostics" / nonce;
+      std::filesystem::create_directories(run_path.parent_path());
+      if (!std::filesystem::create_directory(run_path)) return refuse("ordinary input report folder already exists");
+    }
+    auto folder = run_path.wstring(), capture = (run_path / "capture").wstring();
     auto session = session_file.wstring(), batch = batch_file.wstring();
     dbce_shim_open_args a{};
-    a.struct_size = sizeof(a); a.flags = DBCE_SHIM_CAPTURE | (latched ? DBCE_SHIM_LATCHED : 0);
+    a.struct_size = sizeof(a); a.flags = requested ? DBCE_SHIM_CAPTURE | (latched ? DBCE_SHIM_LATCHED : 0) : 0;
     if (latched) {
       a.fences_verified = fences; a.force_absent = FzeroNoForceLatched();
       a.session_file = session.c_str(); a.batch_file = batch.c_str();
     }
     a.folder = folder.c_str(); a.nonce = latched ? session_nonce.c_str() : nonce.c_str(); a.profile = profile.data(); a.profile_len = (int32_t)profile.size();
-    a.unsupported = kFzeroShimUnsupported; a.hwnd = window; a.capture_folder = capture.c_str();
-    a.game_id = "fzero-snes"; a.game_channels = kChannels;
-    a.context = latched ? "diagnostic-injected-original; keyboard suppressed; software signals only; partial SNES actions" :
-                         "diagnostic-owner-original; keyboard retained; software signals only; partial SNES actions";
+    a.unsupported = kFzeroShimUnsupported; a.hwnd = window;
+    if (requested) {
+      a.capture_folder = capture.c_str(); a.game_id = "fzero-snes"; a.game_channels = kChannels;
+      a.context = latched ? "diagnostic-injected-original; keyboard suppressed; software signals only; partial SNES actions" :
+                           "diagnostic-owner-original; keyboard retained; software signals only; partial SNES actions";
       a.adapter_version = "fzero-shim-diagnostic-3"; a.hz = kHz; a.seconds = kSeconds;
+    }
     char why[512]{};
     if (open2(&a, &handle, why, sizeof(why)) != DBCE_SHIM_OK || !handle) return refuse(why);
+    if (ordinary) {
+      char info[4096]{}; int32_t needed = 0;
+      if (profile_info(handle,info,sizeof(info),&needed) != DBCE_SHIM_OK || needed <= 0 ||
+          needed > sizeof(info) || std::strncmp(info,"ok=1\n",5))
+        return refuse("ordinary shared profile was not accepted by Core");
+    }
     int range = 100, response = 50, threshold = 0;
     std::string section = "Controller." + std::string(legacy_guid ? legacy_guid : "");
     FzeroIniReadInt(config_path.c_str(), section.c_str(), "SteeringRangePercent", &range);
@@ -226,14 +271,17 @@ int FzeroShimStart(void *window, const char *legacy_guid) {
     char impact_type[32] = "Constant";
     FzeroIniReadString(config_path.c_str(), "ForceFeedback", "ImpactType", impact_type, sizeof(impact_type));
     sine_impact = std::strcmp(impact_type, "Sine") == 0;
-    std::ofstream origin(run_path / "origin.txt", std::ios::binary);
-    origin << "origin=" << (latched ? "diagnostic-injected" : "diagnostic-owner") << "\nforce=software-only\ntelemetry=software-only\n"
-      << "strength=" << strength << "\nsteeringStrength=" << steering_strength << "\nimpactStrength=" << impact_strength
-      << "\nimpactType=" << (sine_impact ? "Sine" : "Constant") << "\n";
-    origin.close(); if (!origin) return refuse("origin receipt write failed");
+    if (requested) {
+      std::ofstream origin(run_path / "origin.txt", std::ios::binary);
+      origin << "origin=" << (latched ? "diagnostic-injected" : "diagnostic-owner") << "\nforce=software-only\ntelemetry=software-only\n"
+        << "strength=" << strength << "\nsteeringStrength=" << steering_strength << "\nimpactStrength=" << impact_strength
+        << "\nimpactType=" << (sine_impact ? "Sine" : "Constant") << "\n";
+      origin.close(); if (!origin) return refuse("origin receipt write failed");
+    }
     started = Clock::now();
-    std::fprintf(stderr, "[fzero-shim] ABI 2 capture opened; native SDL controller lane disabled; "
-                  "steering range=%d response=%d; Core calibration; keyboard=%s\n", range, response, latched ? "suppressed" : "retained");
+    std::fprintf(stderr, "[fzero-shim] ABI 2 %s opened; steering range=%d response=%d; Core calibration; keyboard=%s; %s\n",
+      ordinary ? "ordinary input" : "capture", range, response, latched ? "suppressed" : "retained",
+      ordinary ? "SDL digital extras/unbound buttons retained; physical FFB unavailable until ownership bridge" : "native SDL controller lane disabled");
     return 1;
   } catch (const std::exception &e) { return refuse(e.what()); }
 #else
@@ -243,9 +291,9 @@ int FzeroShimStart(void *window, const char *legacy_guid) {
 }
 int FzeroShimInput(uint32_t *word) {
   if (word) *word = 0;
-  if (!requested || failed || !handle || !word) return 0;
+  if (!FzeroShimUsingInput() || failed || !handle || !word) return 0;
   if (pending) return refuse("previous simulation input was not consumed");
-  if (std::chrono::duration<double>(Clock::now()-started).count() >= kSeconds)
+  if (requested && std::chrono::duration<double>(Clock::now()-started).count() >= kSeconds)
     return refuse("240-second diagnostic deadline exceeded");
   frame = {}; frame.struct_size = sizeof(frame);
   if (tick(handle, &frame) != DBCE_SHIM_OK || !FzeroShimMapFrame(&map, &frame, word))
@@ -257,13 +305,28 @@ int FzeroShimInput(uint32_t *word) {
       if (a.status == 12 && !a.injected) return refuse("latched action lacks injected provenance");
     completed = frame.run == 4; // consume and record the terminal neutral frame.
   } else if (frame.latched || frame.suppress_native || frame.run != 0)
-    return refuse("capture-only provider unexpectedly owns keyboard lane");
+    return refuse("ordinary/capture-only provider unexpectedly owns keyboard lane");
   pending = true;
   return 1;
 }
+int FzeroShimOverlayInput(uint32_t *word) {
+  if (word) *word = 0;
+  if (!ordinary || failed || !handle || !word || pending) return 0;
+  frame = {}; frame.struct_size = sizeof(frame);
+  if (tick(handle,&frame) != DBCE_SHIM_OK || !FzeroShimMapOverlayFrame(&map,&frame,word) ||
+      frame.latched || frame.suppress_native || frame.run != 0)
+    return refuse("ordinary overlay input failed");
+  return 1;
+}
+uint32_t FzeroShimSupplementalMask(void) {
+  return ordinary && !failed ? FzeroShimLegacyButtonMask(&frame) : 0;
+}
 int FzeroShimConsumed(uint64_t simulation_frame, uint32_t input, const uint8_t *ram, size_t ram_size) {
-  if (!requested) return 1;
+  if (!FzeroShimUsingInput()) return 1;
   if (!pending || failed || !handle) return refuse("no pending simulation input");
+  // The ordinary game's .fzpt writer records this same final input after the
+  // real guest frame. No duplicate shared recorder or diagnostic model instance.
+  if (ordinary) { pending = false; return 1; }
   if (!ram || ram_size < 0x0be2) return refuse("post-frame WRAM unavailable");
   FzeroFfbOutput f{}; uint8_t packet[324];
   FzeroFfbComputeSteering(&force_state, ram, ram_size, input, strength, steering_strength, &f);
@@ -281,7 +344,10 @@ int FzeroShimConsumed(uint64_t simulation_frame, uint32_t input, const uint8_t *
   pending = false;
   return record(handle, frame.seq, values, 17+FZERO_SHIM_MENU_VALUES) == DBCE_SHIM_OK || refuse("consumed-input record failed");
 }
-void FzeroShimNeutral(void) { FzeroShimMapNeutral(&map); }
+void FzeroShimNeutral(void) {
+  FzeroShimMapNeutral(&map);
+  if (ordinary) pending = false; // an opened overlay may cancel an unconsumed tick
+}
 int FzeroShimStop(void) {
   if (latched && !completed) refuse("latched session closed without an explicit completed end batch");
   if (handle) {

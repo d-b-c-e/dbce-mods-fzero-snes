@@ -53,6 +53,8 @@ int main(void) {
   CHECK(SDL_SetJoystickVirtualAxis(joy, SDL_GAMEPAD_AXIS_LEFT_TRIGGER, 32767));
   pump(&pad);
   CHECK(FzeroGamepadRead(pad) == (0x0080u | 0x0100u)); /* profile deadzone + L2 */
+  CHECK(FzeroGamepadReadSupplemental(pad,0xffffffffu)==0x0100u); // button combo, no stick
+  CHECK(FzeroGamepadReadSupplemental(pad,0x0e02u)==0); // bound generic button suppressed
   CHECK(SDL_DetachVirtualJoystick(decoy));
   pump(&pad);
   CHECK(pad && SDL_GetGamepadID(pad) == selected); /* other device removal */
@@ -82,7 +84,8 @@ int main(void) {
   CHECK(cfg);
   fprintf(cfg, "[Controller.%s]\nAnalogSteering=1\nDeadzone=3\n"
                "SteeringAxis=0\nAcceleratorAxis=2\nBrakeAxis=3\n"
-               "ButtonB=1\nButtonStart=36\nButtonUp=128\nButtonRight=129\n"
+               "ButtonB=1\nButtonX=2\nButtonY=3\nButtonL=4\nButtonR=5\n"
+               "ButtonSaveStateMenu=6\nButtonRewind=7\nButtonStart=36\nButtonUp=128\nButtonRight=129\n"
                "ButtonDown=130\nButtonLeft=131\n", guid);
   fclose(cfg);
   FzeroGamepadConfigure("gamepad-test.ini", guid, 25);
@@ -98,6 +101,14 @@ int main(void) {
   SDL_UpdateJoysticks();
   CHECK(FzeroGamepadRead(pad) == (0x0080u | 0x0001u | 0x0002u | 0x0008u));
   CHECK(FzeroGamepadReadOverlay(pad) == (0x0080u | 0x0008u));
+  const uint32_t extras=0x03000e02u;
+  CHECK(FzeroGamepadReadSupplemental(pad,0xffffffffu)==0x8u); // pedal/steer axes absent
+  CHECK(FzeroGamepadReadSupplemental(pad,extras)==0); // mapped Start excluded
+  for(int i=2;i<=7;++i) CHECK(SDL_SetJoystickVirtualButton(wheel,i,true));
+  SDL_UpdateJoysticks();
+  CHECK(FzeroGamepadReadSupplemental(pad,extras)==extras); // original SNES/host bindings kept
+  for(int i=2;i<=7;++i) CHECK(SDL_SetJoystickVirtualButton(wheel,i,false));
+  SDL_UpdateJoysticks();
   CHECK(SDL_SetJoystickVirtualButton(wheel, 1, true));
   SDL_UpdateJoysticks();
   CHECK(FzeroGamepadReadOverlay(pad) == (0x0080u | 0x0001u | 0x0008u));

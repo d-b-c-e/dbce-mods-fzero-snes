@@ -821,15 +821,17 @@ typedef struct FzeroLiveInputContext {
 static bool session_live_input(void *context, uint32_t *word) {
   FzeroLiveInputContext *ctx = (FzeroLiveInputContext *)context;
   uint32_t input;
-  if (FzeroShimRequested()) {
+  if (FzeroShimUsingInput()) {
     uint32_t shim_word = 0;
     if (!FzeroShimInput(&shim_word)) {
       return false;
     }
-    /* Diagnostic owns the controller lane; no SDL wheel, test injection
-     * or debug-server input is ORed back in. Capture-only keeps keyboard;
-     * a latched test owns it through admission, running and terminal. */
+    /* Shared owns mapped inputs. Ordinary play retains only explicit digital
+     * supplements, never SDL steering/pedals or the dev injection lane.
+     * A latched diagnostic also owns keyboard input. */
     input = (FzeroShimLatched() ? 0 : keyboard_input()) | shim_word | (1u << 30);
+    if (FzeroShimOrdinary())
+      input |= FzeroGamepadReadSupplemental(ctx->pad, FzeroShimSupplementalMask());
   } else {
     input = keyboard_input() | controller_input(ctx->pad) |
             debug_server_get_controller_inputs() | (1u << 30) |
@@ -1709,6 +1711,12 @@ static uint32_t overlay_filter_guest_input(uint32_t inputs) {
 }
 
 static uint32_t overlay_nav_inputs(SDL_GameController *pad) {
+  if (FzeroShimOrdinary()) {
+    uint32_t shared = 0;
+    if (!FzeroShimOverlayInput(&shared)) return keyboard_input();
+    return keyboard_input() | shared |
+      FzeroGamepadReadSupplemental(pad, FzeroShimSupplementalMask());
+  }
   return keyboard_input() | FzeroGamepadReadOverlay(pad);
 }
 
@@ -2139,7 +2147,7 @@ int main(int argc, char **argv) {
     return 2;
   }
   FzeroTelemetryInit(g_config_path); // preview/replay delivery latch is already held.
-  if (FzeroControlsStartupMayWrite(FzeroReplayHasInput(), recorded_replay, FzeroShimRequested())) {
+  if (FzeroControlsStartupMayWrite(FzeroReplayHasInput(), recorded_replay, FzeroShimUsingInput())) {
     FzeroControlsApplyAtStartup(g_config_path);
     FzeroInjectInit(g_config_path);   /* dev only: inject.on, no force, applied profile */
   }
@@ -2464,7 +2472,7 @@ int main(int argc, char **argv) {
   snesrecomp_sdl_pause_audio_device(audio, launcher_settings.enable_audio == 0);
 
   /* Before the pad scan below, so the virtual pad is the one player 1 gets. */
-  if (!FzeroShimRequested() && !recorded_replay) selftest_attach();
+  if (!FzeroShimUsingInput() && !recorded_replay) selftest_attach();
 
   SDL_GameController *pad = NULL;
   FzeroGamepadConfigure(g_config_path, g_selftest_pad ? g_selftest_guid : launcher_settings.player_gamepad_guid[0],
@@ -2476,7 +2484,7 @@ int main(int argc, char **argv) {
    * drivers accepting updates to effects that are no longer playing until a
    * menu calls ZeroForces. Start after the window settles, then clear the
    * initial effect state so the first nonzero update explicitly starts it. */
-  if (g_playthrough.mode != 2 && !FzeroShimRequested()) {
+  if (g_playthrough.mode != 2 && !FzeroShimUsingInput()) {
     FzeroFfbInit(g_config_path, native_window);
     FzeroFfbSilence();
   }
@@ -2804,7 +2812,7 @@ int main(int argc, char **argv) {
     /* Viewport policy and input sampling change only at simulation boundaries. */
     for (unsigned batch = 0; !panel && batch < 4 &&
                              FzeroClockSimulationDue(&clock, now); ++batch) {
-      if (!FzeroShimRequested() && !recorded_replay) selftest_main_tick(frames);
+      if (!FzeroShimUsingInput() && !recorded_replay) selftest_main_tick(frames);
       if (!recorded_replay && !FzeroShimRequested() && frames == scripted_save.frame)
         (void)perform_state_action(window, 1, scripted_save.slot,
                                    &state_feedback_until);
@@ -2867,7 +2875,7 @@ int main(int argc, char **argv) {
         }
       }
       uint64_t diagnostic_start = FzeroDiagnosticsBegin();
-      if (FzeroShimRequested()) input = FzeroShimGuestWord(input);
+      if (FzeroShimUsingInput()) input = FzeroShimGuestWord(input);
       (void)RtlRunFrame(input);
       if (!FzeroShimConsumed((uint64_t)frames, input, g_ram, sizeof(g_ram))) {
         abort_playthrough("shim consumed-input capture failed");
@@ -2927,6 +2935,7 @@ int main(int argc, char **argv) {
 
     if (panel) {
       abort_playthrough("state/rewind overlay opened");
+      FzeroShimNeutral(); // cancel a tick whose host gesture froze the guest
       /* A panel owns the screen: freeze the guest, and let the window keep
        * repainting the frame the player stopped at with the panel over it.
        * Audio goes quiet for the duration, as it would for any paused

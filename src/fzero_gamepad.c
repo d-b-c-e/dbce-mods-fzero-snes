@@ -270,19 +270,19 @@ static void raw_snapshot(RawSnapshot *s) {
 static int snap_axis(const RawSnapshot *s, int axis) { return axis >= 0 && axis < s->axis_count ? s->axes[axis] : 0; }
 static int snap_button(const RawSnapshot *s, int button) { return button >= 0 && button < s->button_count && s->buttons[button]; }
 static int snap_hat(const RawSnapshot *s, int hat) { return hat >= 0 && hat < s->hat_count ? s->hats[hat] : 0; }
-static uint32_t gamepad_read(SDL_GameController *pad, bool include_pedals) {
+static uint32_t gamepad_read(SDL_GameController *pad, bool include_pedals, bool axes) {
   if ((!pad || !SDL_GameControllerGetAttached(pad)) &&
       (!s_raw || !SDL_JoystickGetAttached(s_raw))) return 0;
   if (!pad) {
     uint32_t input = 0;
     RawSnapshot snap;
-    const int injecting = FzeroInjectArmed();
+    const int injecting = axes && FzeroInjectArmed();
     if (injecting) raw_snapshot(&snap);
-    int x = injecting ? snap_axis(&snap, s_raw_axis) : SDL_JoystickGetAxis(s_raw, s_raw_axis);
-    if (s_analog_steering)
+    int x = axes ? (injecting ? snap_axis(&snap, s_raw_axis) : SDL_JoystickGetAxis(s_raw, s_raw_axis)) : 0;
+    if (axes && s_analog_steering)
       input |= FzeroAnalogSteeringReadTuned(&s_steering, x, s_deadzone,
                                            s_range_percent, s_response_percent);
-    else {
+    else if (axes) {
       if (x < -s_deadzone) input |= 0x0040u;
       if (x > s_deadzone) input |= 0x0080u;
     }
@@ -325,26 +325,29 @@ static uint32_t gamepad_read(SDL_GameController *pad, bool include_pedals) {
     buttons |= 1u << 16;
   for (int i = 0; i < 12; ++i)
     if (s_bind[i] && (buttons & s_bind[i]) == s_bind[i]) input |= 1u << s_input_bits[i];
-  int x = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTX);
-  int y = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTY);
-  if (s_analog_steering)
+  int x = axes ? SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTX) : 0;
+  int y = axes ? SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTY) : 0;
+  if (axes && s_analog_steering)
     input |= FzeroAnalogSteeringReadTuned(&s_steering, x, s_deadzone,
                                          s_range_percent, s_response_percent);
-  else {
+  else if (axes) {
     if (x < -s_deadzone) input |= 0x0040u;
     if (x > s_deadzone) input |= 0x0080u;
   }
-  if (y < -s_deadzone) input |= 0x0010u;
-  if (y > s_deadzone) input |= 0x0020u;
+  if (axes && y < -s_deadzone) input |= 0x0010u;
+  if (axes && y > s_deadzone) input |= 0x0020u;
   return input;
 }
 
 uint32_t FzeroGamepadRead(SDL_GameController *pad) {
-  return gamepad_read(pad, true);
+  return gamepad_read(pad, true, true);
 }
 
 uint32_t FzeroGamepadReadOverlay(SDL_GameController *pad) {
-  return gamepad_read(pad, false);
+  return gamepad_read(pad, false, true);
+}
+uint32_t FzeroGamepadReadSupplemental(SDL_GameController *pad, uint32_t mask) {
+  return gamepad_read(pad, false, false) & mask;
 }
 
 void FzeroGamepadShutdown(SDL_GameController **pad) {

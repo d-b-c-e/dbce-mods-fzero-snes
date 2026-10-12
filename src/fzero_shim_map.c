@@ -13,9 +13,9 @@ const char kFzeroShimUnsupported[] =
   "shiftUp=F-Zero has no gearbox\nshiftDown=F-Zero has no gearbox\n"
   "neutral=F-Zero has no gearbox\nreverse=F-Zero has no reverse gear\n"
   "camera=no generic F-Zero camera action\nlookBack=no F-Zero look-back action\n"
-  "reset=guest reset is excluded from this diagnostic\nhorn=F-Zero has no horn\n"
+  "reset=guest reset remains a native host hotkey\nhorn=F-Zero has no horn\n"
   "modMenu=the F-Zero launcher is not an in-game mod menu\n"
-  "muteFfb=physical force is latched off in this diagnostic\n"
+  "muteFfb=shared input does not own the native force lifecycle\n"
   "gear1=F-Zero has no gearbox\ngear2=F-Zero has no gearbox\n"
   "gear3=F-Zero has no gearbox\ngear4=F-Zero has no gearbox\n"
   "gear5=F-Zero has no gearbox\ngear6=F-Zero has no gearbox\n"
@@ -34,7 +34,7 @@ static float applied(const dbce_shim_action *a, int signed_axis) {
   float low = signed_axis ? -1.f : 0.f;
   return a->value < low ? low : a->value > 1.f ? 1.f : a->value;
 }
-int FzeroShimMapFrame(FzeroShimMap *s, const dbce_shim_frame *f, uint32_t *word) {
+static int valid_frame(FzeroShimMap *s, const dbce_shim_frame *f, uint32_t *word) {
   if (word) *word = 0;
   if (!s || !f || !word) return 0;
   if (f->struct_size != sizeof(*f) || f->abi != DBCE_SHIM_ABI ||
@@ -43,6 +43,17 @@ int FzeroShimMapFrame(FzeroShimMap *s, const dbce_shim_frame *f, uint32_t *word)
     return 0;
   }
   s->last_seq = f->seq; s->have_seq = 1;
+  return 1;
+}
+static uint32_t digital_word(const dbce_shim_frame *f) {
+  uint32_t word = 0;
+  static const unsigned bits[] = {8, 0, 3, 2, 4, 5, 6, 7};
+  for (int i = 0; i < 8; ++i)
+    if (applied(&f->action[9+i], 0) > .5f) word |= 1u << bits[i];
+  return word;
+}
+int FzeroShimMapFrame(FzeroShimMap *s, const dbce_shim_frame *f, uint32_t *word) {
+  if (!valid_frame(s,f,word)) return 0;
   float steer = applied(&f->action[0], 1);
   int axis = (int)roundf(steer * (steer < 0 ? 32768.f : 32767.f));
   /* Core already applied the profile's calibrated deadzone. Preserve the
@@ -51,10 +62,24 @@ int FzeroShimMapFrame(FzeroShimMap *s, const dbce_shim_frame *f, uint32_t *word)
                                       s->range_percent, s->response_percent);
   if (applied(&f->action[1], 0) > s->pedal_threshold) *word |= 1u;  /* SNES B / gas */
   if (applied(&f->action[2], 0) > s->pedal_threshold) *word |= 2u;  /* SNES Y / brake */
-  static const unsigned bits[] = {8, 0, 3, 2, 4, 5, 6, 7};
-  for (int i = 0; i < 8; ++i)
-    if (applied(&f->action[9+i], 0) > .5f) *word |= 1u << bits[i];
+  *word |= digital_word(f);
   return 1;
+}
+int FzeroShimMapOverlayFrame(FzeroShimMap *s, const dbce_shim_frame *f, uint32_t *word) {
+  if (!valid_frame(s,f,word)) return 0;
+  FzeroShimMapNeutral(s);
+  *word = digital_word(f);
+  return 1;
+}
+uint32_t FzeroShimLegacyButtonMask(const dbce_shim_frame *f) {
+  if (!f || f->abi != DBCE_SHIM_ABI || f->struct_size != sizeof(*f)) return 0;
+  /* Y is also SNES brake, but ButtonY is an independent legacy digital binding,
+   * not a fallback pedal axis. Keep it with X/L/R and the two host-only actions. */
+  uint32_t mask = (1u<<1)|(1u<<9)|(1u<<10)|(1u<<11)|(1u<<24)|(1u<<25);
+  static const unsigned bits[] = {8,0,3,2,4,5,6,7};
+  for (int i=0;i<8;++i)
+    if (f->action[9+i].status == 0) mask |= 1u<<bits[i]; // exact ABI2 Unbound
+  return mask;
 }
 void FzeroShimConsumedValues(uint64_t frame, uint32_t input, double out[2]) {
   out[0] = (double)frame;

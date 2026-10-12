@@ -19,7 +19,7 @@ that will be used for replay:
 ./FZeroSNESRecomp.exe --shared-profile-preview E:/fz-owner-preview-01 ./fzero.sfc
 ```
 
-`--record` uses the existing ordinary input backend and force settings. It records
+`--record` uses the selected ordinary input backend and force settings. It records
 from boot, including menus. It is **not a muted unattended test mode**. Choose a
 fresh `.fzpt` path inside an existing directory; its `.fzpt.state` sibling must
 also be absent. Neither file is overwritten. Keep the pair together.
@@ -79,12 +79,13 @@ normalization is provided by Core, but a real owner wheel+button-device drive
 has not yet qualified this consumer.
 
 These diagnostic restrictions are **not permanent product requirements**.
-The next ordinary shared-backend slice must separate input ownership from the
-preview's output/persistence/deadline policy, retain the complete owner control
-set (including SNES extras), and qualify a real unlatched owner gameplay
-recording and its cold replay. It must not silently replace current bindings
-with this partial preview. Launcher/Wheelkit record/replay buttons are also
-still unimplemented; the new CLI gives them a direct entry point.
+The [ordinary shared-backend source candidate](2026-10-12-ordinary-shared-input.md)
+now separates input ownership from preview persistence/deadline policy and retains
+legacy SNES extras through a documented digital supplement. It is not runtime
+qualified, and Shared+FFB remains refused pending device-ownership integration.
+A real unlatched owner gameplay recording and cold replay are still needed.
+Launcher/Wheelkit record/replay buttons are also unimplemented; the CLI gives
+them a direct entry point.
 
 ## Source validation
 
@@ -180,10 +181,9 @@ claim follows from these checks.
    the runtime's success/failure. The existing pinned replay-case adapter already
    describes these extra identities; do not make a second recording container.
 2. **Ordinary shared input:** the installed launch still uses its existing raw
-   backend. The shared preview is opt-in and muted. Separate backend selection
-   from diagnostic fences, support the owner's SNES extras without aliases or
-   dropped bindings, and qualify actual unlatched wheel/menu gameplay. Never
-   silently promote the preview to an ordinary default.
+   backend. The new source-only opt-in backend retains the owner's SNES extras
+   and separates diagnostic fences. Qualify actual unlatched wheel/menu gameplay,
+   resolve force/read ownership, and retain Native as the default until then.
 3. **Release and owner checks:** retain the reviewed source/ABI pins, build the
    proper installer and distribution variant, then verify installed CLI discovery,
    an attended Ctrl+F11 stop and a real owner recording/replay. Deluxe embeds
