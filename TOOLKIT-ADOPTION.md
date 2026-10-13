@@ -88,3 +88,13 @@ unchanged. This advances diagnostic/input recording evidence only: ordinary
 Wheelkit Play With Recording, physical bindings, wheel extras, Shared force
 ownership, multi-device runtime and installed delivery stay partial. See
 `docs/2026-10-12-shim-diagnostic.md`, October 13 stock result.
+
+October 13 ordinary recording source follow-up for STD-002/012/032: independent
+request-bound CLI status/Stop now reuses the actual recorder, preserves Ctrl+F11
+and Saved/Verified terminal outcomes, and survives transient Windows status locks.
+The existing installer/Recording.ps1 gain an ordinary receipt-owned companion;
+private diagnostic build receipts cannot enable it. Interim installed recording
+admission is Native only, with Shared ownership and automated-original isolation
+still open. Offline native, companion and Wheelkit fixtures/build pass; no new
+game build, launch, installation or public publication follows. See
+`docs/2026-10-12-recording-cli.md`, October 13 ordinary source checkpoint.

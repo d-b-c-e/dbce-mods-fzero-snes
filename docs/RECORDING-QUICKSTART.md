@@ -71,3 +71,11 @@ exact cold frames. These are distinct proofs: physical owner driving, complete
 wheel-button parity, launcher integration and physical Shared FFB are pending.
 Wheelkit's recording entries are also pending; the CLI is ready for that
 integration without a new recording format.
+
+October 13 internal source update: a receipt-owned ordinary Wheelkit companion is
+implemented and passes offline fixtures, including Stop while the game stays open.
+It requires a newly built/installed session capability; the current owner receipt
+does not qualify. Its interim recording admission is Native only. Shared installed
+runtime ownership and automated-original state isolation remain pending; the
+existing direct-ROM Shared CLI and prior diagnostic evidence are unchanged. See
+[the source checkpoint](2026-10-12-recording-cli.md#october-13-ordinary-companion-source-checkpoint).

@@ -191,3 +191,39 @@ claim follows from these checks.
    proper installer and distribution variant, then verify installed CLI discovery,
    an attended Ctrl+F11 stop and a real owner recording/replay. Deluxe embeds
    cartridge data: the existing public-packaging boundary still applies.
+
+## October 13 ordinary companion source checkpoint
+
+The existing `--record`/`--replay` pair now accepts `--session-id` (32 lowercase
+hex characters) and `--session-status` (fresh file) on Windows. This is independent
+of diagnostic injection. `fzero.session-status@1` binds action, state, actual PID
+and creation FILETIME, frame counts, effective ROM hash and output-mute state.
+An exact request-bound `status.json.stop` closes the existing recorder and leaves
+the game running, as Ctrl+F11 already does. Plain F11 is unchanged.
+
+Status publication is atomic and retries transient sharing locks using only its
+own temporary file. Status transport failure and foreign/malformed Stop files
+do not invalidate a recording. Once the recorder closes successfully, Saved or
+Verified remains its terminal outcome; later game/supervisor errors stay separate.
+`--mute-outputs` only mutes delivery and does not change save/config/input behavior.
+
+`tools/Recording.ps1` adds an installed companion route over the same `.fzpt` and
+`.fzpt.state`, with a small hash descriptor for library discovery and ROM/config/MSU
+identity. Native game replay still validates the snapshot and every WRAM checkpoint.
+The ordinary installer must own the launcher, WheelFfb runtime and exact companion,
+and stamp `fzero.session-capability@1` after checking the linked source marker.
+Existing owner receipts and private stock build receipts do not qualify. The
+interim installed recording admission is Native only; installed Shared shim
+ownership is the next bounded addition. Replay remains muted and uses the existing
+private save-root option. Automated originals are refused until owner-state
+isolation is reviewed; human recording retains its existing output/progress policy.
+
+Offline checks: 130 native CLI/UI checks, 282 control checks (including a real
+Windows deny-delete status reader, continued recording/Stop/recovered publication,
+and 61-frame tape replay), 16 PowerShell helper checks, 191 Wheelkit session tests,
+and a Release Wheelkit app build with zero warnings/errors. The initial Wheelkit
+test run retained one fixture-only mixed-separator assertion failure; the corrected
+absolute-path assertion passes. Evidence is in the private hub's
+`artifacts/fzero-ordinary-session-20261013`. This checkpoint has no new game binary,
+game launch, installation, physical input/force proof or public push. The previous
+stock diagnostic Practice evidence remains unchanged.

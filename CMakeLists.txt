@@ -16,6 +16,12 @@ if(BUILD_TESTING)
     add_executable(fzero_session_ui_tests tests/test_session_ui.c src/fzero_session_ui.c src/fzero_playthrough.c)
     target_include_directories(fzero_session_ui_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
     add_test(NAME fzero_session_ui COMMAND fzero_session_ui_tests)
+    if(WIN32)
+        add_executable(fzero_session_control_tests tests/test_session_control.c
+            src/fzero_session_control.c src/fzero_session_ui.c src/fzero_playthrough.c)
+        target_include_directories(fzero_session_control_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+        add_test(NAME fzero_session_control COMMAND fzero_session_control_tests)
+    endif()
     add_executable(fzero_shim_map_tests tests/test_shim_map.c src/fzero_shim_map.c
         src/fzero_analog.c src/fzero_playthrough.c)
     target_include_directories(fzero_shim_map_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -254,6 +260,7 @@ add_executable(FZeroSNESRecomp
     ${FZERO_GEN_SOURCES}
     src/sdl_main.c
     src/fzero_session_ui.c
+    src/fzero_session_control.c
     src/fzero_diagnostics.c
     src/fzero_mods.c
     src/fzero_hotkeys.c

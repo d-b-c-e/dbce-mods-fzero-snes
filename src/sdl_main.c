@@ -19,6 +19,7 @@
 #include "fzero_replay.h"
 #include "fzero_playthrough.h"
 #include "fzero_session_ui.h"
+#include "fzero_session_control.h"
 #include "fzero_output_latch.h"
 #include "fzero_triple_display.h"
 #include "fzero_state_mode.h"
@@ -93,6 +94,20 @@ static char video_config_path[1024];
 static char g_config_path[1024];
 static FzeroPlaythrough g_playthrough;
 static FzeroSessionUi g_session_ui;
+static FzeroSessionControl g_session_control;
+static bool g_session_status_unavailable, g_session_stop_refused;
+static uint64_t g_session_status_retry;
+static void publish_session_status(bool force) {
+  uint64_t now = SDL_GetTicks();
+  if (!force && g_session_status_unavailable && now < g_session_status_retry) return;
+  bool ok = FzeroSessionControlPublish(&g_session_control, &g_session_ui, &g_playthrough);
+  if (!ok && !g_session_status_unavailable)
+    fprintf(stderr, "[fzero-playthrough] session status unavailable; recording/replay continues, publication will retry\n");
+  else if (ok && g_session_status_unavailable)
+    fprintf(stderr, "[fzero-playthrough] session status publication recovered\n");
+  g_session_status_unavailable = !ok;
+  g_session_status_retry = now + 250;
+}
 static bool g_shared_profile_preview;
 static void abort_playthrough(const char *reason) {
   if (g_playthrough.mode != 1) return;
@@ -2064,7 +2079,7 @@ int main(int argc, char **argv) {
   /* Launcher paths, imported shaders/music and saves are installation-relative,
    * even when a shortcut or terminal starts us in a different directory.
    * Resolve an explicit ROM against the caller's cwd before changing it. */
-  char command_line_rom[1024], command_line_session[1024];
+  char command_line_rom[1024], command_line_session[1024], command_line_status[2048];
   const char *const session_environment[] = {
     "FZERO_RECORD_PLAYTHROUGH", "FZERO_REPLAY_PLAYTHROUGH", "FZERO_SHIM_DIAGNOSTIC_RUN",
     "FZERO_SHIM_SESSION_NONCE", "FZERO_SHIM_SESSION_FILE", "FZERO_SHIM_BATCH_FILE",
@@ -2087,6 +2102,19 @@ int main(int argc, char **argv) {
   }
   const char *explicit_rom = options.rom;
   bool force_launcher = options.launcher;
+  if (options.request_id &&
+      (!snesrecomp_abspath(options.status_path, command_line_status, sizeof(command_line_status)) ||
+       !FzeroSessionControlOpen(&g_session_control, command_line_status,
+           options.request_id, options.mode, options.mute_outputs))) {
+    fprintf(stderr, "Ordinary session control requires a fresh writable Windows status path\n");
+    return 2;
+  }
+  /* Ordinary automated capture may mute delivery without enabling diagnostic
+   * injection, changing the backend, or suppressing keyboard passthrough. */
+  if (options.mute_outputs && (!FzeroLatchNoForce() || !FzeroTelemetryLatchNoDelivery())) {
+    fprintf(stderr, "[fzero-playthrough] recording output mute could not be established\n");
+    return 2;
+  }
   if (options.mode) {
     if (!snesrecomp_abspath(options.path, command_line_session, sizeof(command_line_session))) {
       fprintf(stderr, "Unable to resolve the recording/replay/preview path\n");
@@ -2208,6 +2236,7 @@ int main(int argc, char **argv) {
   }
   uint8_t playthrough_rom_sha[32];
   sha256_compute(rom, rom_size, playthrough_rom_sha);
+  FzeroSessionControlRom(&g_session_control, playthrough_rom_sha);
 
   /* Match the shared host: keep gamepads live through launcher/game focus
    * transitions and host overlays (SDL otherwise suppresses their state). */
@@ -2311,6 +2340,7 @@ int main(int argc, char **argv) {
     return 3;
   }
   FzeroSessionBegin(&g_session_ui, g_playthrough.mode, FzeroShimRequested() != 0);
+  publish_session_status(true);
   /* After the machine exists: the ring's slots are whole-machine snapshots
    * and it sizes them from a real one. */
   snes_rewind_configure();
@@ -2621,6 +2651,16 @@ int main(int argc, char **argv) {
 
   double preview_started = monotonic_seconds();
   while (running) {
+    int session_stop = FzeroSessionControlStop(&g_session_control, &g_session_ui);
+    if (session_stop < 0) {
+      if (!g_session_stop_refused)
+        fprintf(stderr, "[fzero-playthrough] refused unrelated or malformed ordinary Stop; recording continues\n");
+      g_session_stop_refused = true;
+    } else if (session_stop > 0 &&
+               !FzeroSessionFinish(&g_session_ui, &g_playthrough, true, SDL_GetTicks())) {
+      replay_failed = true;
+    }
+    publish_session_status(false);
     if (g_shared_profile_preview && monotonic_seconds() - preview_started >= 230.0) {
       fprintf(stderr, "[fzero-playthrough] muted preview duration complete; saving\n");
       running = 0;
@@ -3059,6 +3099,7 @@ int main(int argc, char **argv) {
   FzeroFfbShutdown();
   if (!FzeroSessionFinish(&g_session_ui, &g_playthrough, !replay_failed, SDL_GetTicks()))
     replay_failed = true;
+  publish_session_status(true);
   if (g_session_ui.state == FZERO_SESSION_SAVED)
     fprintf(stderr, "[fzero-playthrough] recording complete\n");
   else if (g_session_ui.state == FZERO_SESSION_VERIFIED)
@@ -3072,6 +3113,7 @@ int main(int argc, char **argv) {
      * final frame visible briefly without advancing the guest or polling input. */
     uint64_t feedback_end = SDL_GetTicks() + (g_session_ui.failed ? 1800 : 900);
     while (caption_visible && SDL_GetTicks() < feedback_end) {
+      publish_session_status(false);
       present_frame(&presenter, NULL, 0, 0, 0);
       SDL_PumpEvents();
       SDL_Delay(16);

@@ -27,27 +27,38 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 if (!$BuildDir) { $BuildDir = Join-Path $repo 'build-merge' }
 $launcher = 'FZeroSNESRecomp-wheel-launcher.exe'
-$owned = @($launcher, 'WheelFfb.dll')
+$owned = @($launcher, 'WheelFfb.dll', 'tools/Recording.ps1')
 $receiptName = 'install-receipt.json'
 $transactionFiles = @($owned) + $receiptName
 function HashOrNull([string]$path) { if (Test-Path -LiteralPath $path -PathType Leaf) { (Get-FileHash -LiteralPath $path).Hash } else { $null } }
 function Restore-Files([string]$from, $state) {
     # Fixed owned paths only; validate every backup before the first mutation.
-    foreach ($name in $transactionFiles) {
+    # Earlier backups predate the companion. Restore only their inventory;
+    # their old receipt cannot authorize a leftover companion for execution.
+    $restoreFiles = @($state.files | ForEach-Object { $_.name })
+    if (@($restoreFiles | Select-Object -Unique).Count -ne $restoreFiles.Count -or
+        @($restoreFiles | Where-Object { $_ -cnotin $transactionFiles }).Count -or
+        @($launcher,'WheelFfb.dll',$receiptName | Where-Object { $_ -cnotin $restoreFiles }).Count) { throw 'Invalid backup ownership inventory.' }
+    foreach ($name in $restoreFiles) {
         $entry = @($state.files | Where-Object { $_.name -ceq $name })
         if ($entry.Count -ne 1) { throw "Invalid backup inventory for $name" }
         if ($entry[0].existed -and (HashOrNull (Join-Path $from $name)) -cne $entry[0].sha256) { throw "Backup hash differs: $name" }
     }
-    foreach ($name in $transactionFiles) {
+    foreach ($name in $restoreFiles) {
         $entry = @($state.files | Where-Object { $_.name -ceq $name })[0]
         $destination = Join-Path $Target $name
-        if ($entry.existed) { Copy-Item -LiteralPath (Join-Path $from $name) -Destination $destination -Force }
+        if ($entry.existed) {
+            [void][IO.Directory]::CreateDirectory((Split-Path -Parent $destination))
+            Copy-Item -LiteralPath (Join-Path $from $name) -Destination $destination -Force
+        }
         elseif (Test-Path -LiteralPath $destination) { Remove-Item -LiteralPath $destination -Force }
         if ((HashOrNull $destination) -cne $entry.sha256) { throw "Restoration did not verify: $name" }
     }
 }
 if (Get-Process | Where-Object { $_.Name -like 'FZeroSNESRecomp*' }) { throw 'F-Zero is running; close it first. Nothing changed.' }
 if (-not (Test-Path -LiteralPath (Join-Path $Target $launcher))) { throw "Not the F-Zero Stream Deck folder: $Target" }
+if ((Test-Path -LiteralPath (Join-Path $Target 'tools')) -and
+    ((Get-Item -LiteralPath (Join-Path $Target 'tools')).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'The owned tools folder must not be a link.' }
 $backups = Join-Path $Target 'deployment-backups'
 
 if ($Rollback) {
@@ -83,7 +94,7 @@ if (-not (Test-Path -LiteralPath $cache) -or -not (Select-String -LiteralPath $c
 $commit = (git -C $repo rev-parse HEAD).Trim()
 $dirty = @(git -C $repo status --porcelain --untracked-files=no)
 if ($dirty.Count) { throw 'Commit the source first: the receipt names the commit the build came from.' }
-$sources = @{ $launcher = $built; 'WheelFfb.dll' = (Join-Path $BuildDir 'WheelFfb.dll') }
+$sources = @{ $launcher = $built; 'WheelFfb.dll' = (Join-Path $BuildDir 'WheelFfb.dll'); 'tools/Recording.ps1' = (Join-Path $repo 'tools/Recording.ps1') }
 $nativePin = @(Get-Content -LiteralPath (Join-Path $repo 'lib/toolkit/MANIFEST.txt') |
     Where-Object { $_ -match '^[0-9A-Fa-f]{64}\s+native/WheelFfb\.dll\s*$' })
 if ($nativePin.Count -ne 1 -or -not (Test-Path -LiteralPath $sources['WheelFfb.dll'])) {
@@ -101,7 +112,8 @@ $header = Join-Path $BuildDir 'generated/fzero_build.h'
 $linkedText = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($built))
 if (!(Test-Path -LiteralPath $header) -or
     (Get-Content -LiteralPath $header -Raw) -notmatch ('(?m)^#define FZERO_SOURCE_REVISION "' + [regex]::Escape($description) + '"\r?$') -or
-    !$linkedText.Contains($description + [char]0) -or !$linkedText.Contains('[fzero-controls]')) {
+    !$linkedText.Contains($description + [char]0) -or !$linkedText.Contains('[fzero-controls]') -or
+    !$linkedText.Contains('fzero.session-status@1')) {
     throw 'Build source stamp is stale or absent; reconfigure and rebuild from this clean commit. Nothing changed.'
 }
 $changes = @($owned | Where-Object { (HashOrNull $sources[$_]) -cne (HashOrNull (Join-Path $Target $_)) })
@@ -110,7 +122,9 @@ if (-not $changes.Count -and (Test-Path -LiteralPath $oldReceiptPath)) {
     try { $oldReceipt = Get-Content -LiteralPath $oldReceiptPath -Raw | ConvertFrom-Json } catch { $oldReceipt = $null }
     if ($oldReceipt.schemaVersion -eq 1 -and $oldReceipt.controlsProfileSchema -eq 1 -and
         $oldReceipt.controlsProfileAdapter -ceq 'fzero-raw-wheel-1' -and $oldReceipt.sourceCommit -ceq $commit -and
-        $oldReceipt.launcherSha256 -ceq (HashOrNull $built) -and $oldReceipt.wheelFfbSha256 -ceq $nativeHash.ToUpperInvariant()) {
+        $oldReceipt.launcherSha256 -ceq (HashOrNull $built) -and $oldReceipt.wheelFfbSha256 -ceq $nativeHash.ToUpperInvariant() -and
+        $oldReceipt.session.schema -ceq 'fzero.session-capability@1' -and $oldReceipt.session.protocol -ceq 'fzero.session-control@1' -and
+        @($oldReceipt.files | Where-Object { $_.name -ceq 'tools/Recording.ps1' -and $_.sha256 -ceq (HashOrNull $sources['tools/Recording.ps1']) }).Count -eq 1) {
         'The installed files and controls receipt already match this build; nothing changed.'; return
     }
 }
@@ -126,6 +140,7 @@ $state = [ordered]@{ schemaVersion = 1; files = @($transactionFiles | ForEach-Ob
 }) }
 foreach ($entry in $state.files) {
     if ($entry.existed) {
+        [void][IO.Directory]::CreateDirectory((Split-Path -Parent (Join-Path $backup $entry.name)))
         Copy-Item -LiteralPath (Join-Path $Target $entry.name) -Destination (Join-Path $backup $entry.name)
         if ((HashOrNull (Join-Path $backup $entry.name)) -cne $entry.sha256) { throw 'Backup did not verify; nothing installed.' }
     }
@@ -136,6 +151,7 @@ Set-Content -LiteralPath (Join-Path $backup 'README.txt') -Value ($lines + "Roll
 
 try {
 foreach ($name in $changes) {
+    [void][IO.Directory]::CreateDirectory((Split-Path -Parent (Join-Path $Target $name)))
     Copy-Item -LiteralPath $sources[$name] -Destination (Join-Path $Target $name) -Force
     if ((Get-FileHash -LiteralPath $sources[$name]).Hash -ne (Get-FileHash -LiteralPath (Join-Path $Target $name)).Hash) { throw "Copy of $name did not verify; roll back with -Rollback $stamp" }
 }
@@ -143,6 +159,8 @@ foreach ($name in $changes) {
     schemaVersion = 1; controlsProfileSchema = 1; controlsProfileAdapter = 'fzero-raw-wheel-1'
     launcher = $launcher; launcherSha256 = (HashOrNull (Join-Path $Target $launcher)); wheelFfbSha256 = (HashOrNull (Join-Path $Target 'WheelFfb.dll'))
     label = $Label; sourceCommit = $commit; installedUtc = [DateTime]::UtcNow.ToString('o'); buildDir = $BuildDir; backup = $stamp
+    session = [ordered]@{ schema='fzero.session-capability@1'; protocol='fzero.session-control@1'; companion='tools/Recording.ps1'
+        record=$true; replay=$true; stopShortcut='Ctrl+F11'; automatedRecord=$false; recordBackends=@('Native') }
     files = @($owned | ForEach-Object { [ordered]@{ name = $_; sha256 = (Get-FileHash -LiteralPath (Join-Path $Target $_)).Hash } })
 } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $Target $receiptName) -Encoding utf8
 } catch {

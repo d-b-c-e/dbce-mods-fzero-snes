@@ -52,6 +52,24 @@ int main(void) {
   FzeroSessionOptions o; const char *error;
   CHECK(FzeroSessionParse(4, record, false, &o, &error));
   CHECK(!strcmp(o.path, "new folder/drive.fzpt") && !strcmp(o.rom, "rom.sfc"));
+  char *controlled[] = {"game", "--record", "a.fzpt", "--session-id",
+      "0123456789abcdef0123456789abcdef", "--session-status", "fresh/status.json", "rom.sfc", "--mute-outputs"};
+  CHECK(FzeroSessionParse(9, controlled, false, &o, &error));
+  CHECK(o.mute_outputs && !strcmp(o.status_path, "fresh/status.json"));
+  CHECK(!strcmp(o.request_id, controlled[4]));
+  parse(false, true, 9, controlled, FZERO_SESSION_NONE);
+  controlled[1] = "--replay";
+  parse(false, false, 9, controlled, FZERO_SESSION_NONE); /* replay already mutes */
+  parse(true, false, 8, controlled, FZERO_SESSION_REPLAY);
+  controlled[1] = "--shared-profile-preview";
+  parse(false, false, 8, controlled, FZERO_SESSION_NONE); /* independent transport */
+  controlled[1] = "--record"; controlled[4] = "0123456789abcdef0123456789abcdeF";
+  parse(false, false, 8, controlled, FZERO_SESSION_NONE);
+  controlled[4] = "0123456789abcdef0123456789abcdefEXTRA";
+  parse(false, false, 8, controlled, FZERO_SESSION_NONE);
+  char *no_record[] = {"game", "rom.sfc", "--session-id", "0123456789abcdef0123456789abcdef", "--session-status", "status.json"};
+  parse(false, false, 6, no_record, FZERO_SESSION_NONE);
+  parse(false, false, 4, no_record, FZERO_SESSION_NONE);
   CHECK(!FzeroSessionStopKey(1, true, false, false, false)); /* plain F11 stays save slot */
   CHECK(!FzeroSessionStopKey(0, true, true, false, false));
   CHECK(!FzeroSessionStopKey(2, true, true, false, false));
@@ -74,6 +92,9 @@ int main(void) {
   CHECK(ui.state == FZERO_SESSION_REC); /* writing a frame alone is not Saved */
   CHECK(FzeroSessionFinish(&ui, &p, true, 100));
   CHECK(ui.state == FZERO_SESSION_SAVED && !ui.failed && p.mode == 0);
+  FzeroSessionFail(&ui, "later game fault after Stop");
+  CHECK(FzeroSessionFinish(&ui, &p, false, 101));
+  CHECK(ui.state == FZERO_SESSION_SAVED && !ui.failed); /* game exit is separate */
   CHECK(FzeroSessionCaption(&ui, p.frames, 0, 5099, top, sizeof(top), bottom, sizeof(bottom)));
   CHECK(!FzeroSessionCaption(&ui, p.frames, 0, 5100, top, sizeof(top), bottom, sizeof(bottom)));
   CHECK(FzeroPlaythroughPlaybackOpen(&reader, path, sha));

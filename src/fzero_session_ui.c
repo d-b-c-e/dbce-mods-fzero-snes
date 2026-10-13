@@ -16,6 +16,17 @@ bool FzeroSessionParse(int argc, char *const argv[], bool conflicting_environmen
       if (out->launcher) { *error = "Duplicate --launcher"; return false; }
       out->launcher = true; continue;
     }
+    if (!positional && (!strcmp(arg, "--session-id") || !strcmp(arg, "--session-status"))) {
+      const char **field = !strcmp(arg, "--session-id") ? &out->request_id : &out->status_path;
+      if (*field || ++i >= argc || !argv[i] || !*argv[i] || argv[i][0] == '-') {
+        *error = "Session control requires one request ID and one fresh status path"; return false;
+      }
+      *field = argv[i]; continue;
+    }
+    if (!positional && !strcmp(arg, "--mute-outputs")) {
+      if (out->mute_outputs) { *error = "Duplicate --mute-outputs"; return false; }
+      out->mute_outputs = true; continue;
+    }
     enum FzeroSessionMode mode = FZERO_SESSION_NONE;
     if (!positional) {
       if (!strcmp(arg, "--record")) mode = FZERO_SESSION_RECORD;
@@ -42,6 +53,19 @@ bool FzeroSessionParse(int argc, char *const argv[], bool conflicting_environmen
     *error = "Explicit session conflicts with existing recording/replay/test environment";
     return false;
   }
+  if (out->request_id || out->status_path || out->mute_outputs) {
+    if (!out->request_id || !out->status_path ||
+        (out->mode != FZERO_SESSION_RECORD && out->mode != FZERO_SESSION_REPLAY)) {
+      *error = "Session control requires ordinary --record or --replay, --session-id and --session-status";
+      return false;
+    }
+    if (strlen(out->request_id) != 32 || strspn(out->request_id, "0123456789abcdef") != 32) {
+      *error = "Session ID must be 32 lowercase hexadecimal characters"; return false;
+    }
+    if (out->mute_outputs && out->mode != FZERO_SESSION_RECORD) {
+      *error = "--mute-outputs is for recording; replay already mutes output"; return false;
+    }
+  }
   *error = NULL;
   return true;
 }
@@ -59,11 +83,15 @@ void FzeroSessionBegin(FzeroSessionUi *ui, int mode, bool preview) {
   ui->state = mode == 1 ? FZERO_SESSION_REC : mode == 2 ? FZERO_SESSION_PLAYING : FZERO_SESSION_IDLE;
 }
 void FzeroSessionFail(FzeroSessionUi *ui, const char *reason) {
+  /* A later game/supervisor fault cannot invalidate an already closed tape.
+   * Callers still retain their separate game exit/failure result. */
+  if (ui->state == FZERO_SESSION_SAVED || ui->state == FZERO_SESSION_VERIFIED) return;
   ui->state = FZERO_SESSION_ERROR; ui->failed = true;
   snprintf(ui->error, sizeof(ui->error), "%s", reason ? reason : "Recording or replay failed");
 }
 bool FzeroSessionFinish(FzeroSessionUi *ui, FzeroPlaythrough *p,
                        bool upstream_ok, uint64_t now_ms) {
+  if (!p->mode && (ui->state == FZERO_SESSION_SAVED || ui->state == FZERO_SESSION_VERIFIED)) return true;
   if (!upstream_ok || ui->failed) {
     FzeroPlaythroughAbort(p);
     if (!ui->failed) FzeroSessionFail(ui, "Session did not finish cleanly");

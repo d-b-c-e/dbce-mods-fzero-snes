@@ -5,8 +5,8 @@ enum FzeroSessionMode { FZERO_SESSION_NONE, FZERO_SESSION_RECORD,
   FZERO_SESSION_REPLAY, FZERO_SESSION_PREVIEW };
 typedef struct {
   enum FzeroSessionMode mode;
-  const char *rom, *path;
-  bool launcher;
+  const char *rom, *path, *request_id, *status_path;
+  bool launcher, mute_outputs;
 } FzeroSessionOptions;
 
 /* Parse before changing cwd or opening devices. Explicit sessions require a
