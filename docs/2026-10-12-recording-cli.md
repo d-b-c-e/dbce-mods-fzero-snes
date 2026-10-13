@@ -247,9 +247,19 @@ No backend/configuration/force setting is rewritten. A Native-only update over
 previously owned Shared files refuses before mutation; retain the explicit switch
 or roll back the Shared installation first. Backup/rollback owns all four paths.
 
-### Ordinary automated-original isolation (source checkpoint, not qualified)
+Focused offline checks for that ownership follow-up passed: 33 companion
+assertions, 24 installer inventory/rollback assertions (including two real
+entry-point Shared-to-Native refusals against disposable fixtures), 112 Wheelkit
+session tests and the Release app build with zero warnings/errors. Nine initial
+legacy Woden trajectory-fixture failures were preserved and corrected by
+selecting their historical protocol explicitly; the new ordinary Woden default
+has separate lifecycle fixtures. Evidence is in
+`artifacts/fzero-shared-woden-sessions-20261013` in the private hub. No native/game
+rebuild, owner install, game launch or public push occurred for that follow-up.
 
-The next private Shared candidate adds explicit `--isolate-owner-state <root>`
+### Ordinary automated-original isolation and title/menu replay qualification
+
+Private Shared candidate `026ec2a` adds explicit `--isolate-owner-state <root>`
 alongside `--mute-outputs`, with the existing request-bound ordinary Record
 arguments. Isolation requires a fresh short local root and the ordinary Shared
 backend. Native automation and alternate network/mod callback builds refuse.
@@ -275,14 +285,63 @@ This uses the existing no-force and no-network latches before initialization;
 Shared also avoids legacy SDL controller/force acquisition. Software force and
 telemetry calculations are unchanged. Ordinary `.fzpt` captures consumed input,
 not a force-signal stream. No diagnostic input channel is enabled by isolation.
-Source and fixtures are prepared; the leased build/tests, fresh candidate and
-ordinary Record/Stop/replay runtime qualification remain pending.
 
-Focused offline checks passed: 33 companion assertions, 24 installer inventory/
-rollback assertions (including two real entry-point Shared-to-Native refusals
-against disposable fixtures), 112 Wheelkit session tests and the Release app build
-with zero warnings/errors. Nine initial legacy Woden trajectory-fixture failures
-were preserved and corrected by selecting their historical protocol explicitly;
-the new ordinary Woden default has separate lifecycle fixtures. Evidence is in
-`artifacts/fzero-shared-woden-sessions-20261013` in the private hub. No native/game
-rebuild, owner install, game launch or public push occurred for this follow-up.
+October 13's leased batch passed two native test targets, 44 companion checks,
+29 installer checks, 119 focused/shared Wheelkit tests and an App build with zero
+warnings/errors. The fresh embedded-Deluxe build passed its linked source stamp,
+runtime closure, seven-file Shared installation and disposable rollback. Graphical
+SHA-256 is `A6E2AFF80D4841CE8020D8FF197930290F3C23DFB6101277D83DFD6612E2C6AA`;
+headless is `BD4B87F65DB98A20B5E1886ED9C6F678CB1A077F983864473F709793688FE190`.
+Native ABI-2 `9B8A036F...015D8` and WheelFfb `3F6CC514...D946` are unchanged.
+The game build retains two existing `HIBYTE` macro redefinition warnings.
+
+`E:/fz-ordinary-isolated-runtime02` then ran the actual installed ordinary
+companion with `-Record -InputOrigin automated -Seconds 30`, without diagnostic
+flags or OS input injection. The request-bound companion Stop sealed **699
+frames** while the exact game process was still open. Native status acknowledged
+output mute, the live module inventory contained no WheelFfb DLL, and ordinary
+Shared shutdown resolved with input released and zero held inputs. The game
+closed normally. A fresh companion replay verified **all 699 WRAM checkpoints**
+from that exact input/state pair, with a different request/process and normal
+exit 0. It opened no live Shared input backend.
+
+The accepted profile was **Moza KS Pro Triple**, revision
+`owner-provisioned-2026-10-09`, exact Controls SHA-256
+`CA540938048AAE42C8185BFC6236ADB4CE11946C16F435ED63F5E0F4348387A9`.
+This is the retained schema-1 profile, not the earlier `A983D5A7...` production
+Apply case. Config/keyboard/video, ROM, embedded Deluxe override absence and
+selected MSU identity remained unchanged. The effective ROM was
+`419EED641CFA20013D1E9B8270062D90155051A441441A2118BF23846AC8D747`.
+All 77 owner file/absence pins matched, the disposable install rolled back, and
+the shared lease was released at 13:33:40.508 CDT. Owner activity was explicitly
+allowed by the existing policy; no idle observation was fabricated.
+
+Inspected center-window images show only the title Grand Prix/Practice menu:
+REC at 10.8 seconds, SAVED 699 frames, and REPLAY 155/699 with Forces Off. The
+tape contains 667 words `0x40000000` and 32 words `0x40000040`. Bit 30 marks the
+active input port; bit 6 adds SNES Left. Left occurs every 21–22 frames, consistent
+with a small steady PDM steering offset, but the ordinary tape cannot attribute
+it to a particular input source. This was **not strictly neutral**, player
+driving, physical-axis qualification, force-signal capture or FFB acceptance.
+
+| Retained artifact under runtime02 | SHA-256 |
+|---|---|
+| `recording/recording.fzpt` | `580512598D86EAA568ED8BAE8529051CF1F1D01F6FE87317A4C2F56352B8D6CC` |
+| `recording/recording.fzpt.state` | `18BDA07046CD36C3DCECA4CA26D38FA0D7317ED325FF29390AF34C54DC8042DB` |
+| `recording/recording.json` | `14DD8DCD7D8884EAF16D3AF887AAFE5C73440A0C0B3AF5007BB4E785C5366EAD` |
+| `frames/recording.png` | `DBFD6888AF6288C87CBF9F92E357292627F0C864B74156EE138C8A95F8FC3342` |
+| `frames/saved.png` | `EF0015003F9729D3ECECBBD777553D6ED0744D248B42C3FDECE1B8D68207ECAF` |
+| `frames/replay.png` | `F5C65E265DCB28028A326383953EFDC31516615E5A810686B63CBE30A0455DC0` |
+
+The preserved runtime01 failure occurred before any game launch: the private
+supervisor called the companion's self-hash helper outside its script context.
+The corrected private recipe leaves real companion validation intact. No consumer
+change or repeated game attempt was needed. Owner state and rollback passed for
+both copies. The older stock/Deluxe diagnostic tapes remain immutable.
+
+The next meaningful ordinary driving qualification can use the existing keyboard
+passthrough with explicitly synthetic input and the exact Deluxe Practice route;
+it would exercise ordinary consumed keyboard input, not Shared axis normalization.
+The existing Core injection transport remains diagnostic-only and is refused by
+ordinary sessions. A live route/source guard must be reviewed before any driving
+run; neither an idle repeat nor a diagnostic tape substitutes for that evidence.

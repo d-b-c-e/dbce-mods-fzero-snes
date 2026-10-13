@@ -107,10 +107,20 @@ inventory and `ForceFeedback/Enabled=0`; no configuration is rewritten. Public
 packaging remains unchanged. Source/fixture work is not an installation or new
 runtime qualification.
 
-October 13 next source checkpoint for STD-002/012/035: ordinary private Shared
+October 13 follow-up for STD-002/012/035: ordinary private Shared
 automation adds explicit owner-state isolation separately from physical/network
 output mute. The existing companion/installer bind it to actual Shared ownership
 and a linked native isolation marker, with fresh private saves/keybind defaults,
 fenced owner writes and request-bound Stop that leaves the game open. Native
-automation remains refused. Tests/build/runtime qualification of this delta are
-pending; the previously qualified bf4c63a build has no automated capability.
+automation remains refused. Candidate `026ec2a` passed focused native/companion/
+installer/Wheelkit checks, a fresh Deluxe build and disposable install/rollback.
+The actual installed companion recorded 699 title/menu frames, saved after Stop
+while the game remained open, then verified all 699 WRAM checkpoints in a fresh
+cold replay. Both games exited normally, all 77 owner pins matched and the lease
+was released. The retained schema-1 Controls hash is `CA540938...387A9`, revision
+`owner-provisioned-2026-10-09`; it is not the earlier Applied Controls case.
+Thirty-two Left pulses prevent a strictly neutral claim. There is no ordinary
+driving, physical-axis, force-signal or FFB qualification, owner install, schema-2
+promotion or public push. The previous bf4c63a candidate has no automated
+capability. Exact source/build/tape/screenshot evidence is recorded in
+`docs/2026-10-12-recording-cli.md`.
