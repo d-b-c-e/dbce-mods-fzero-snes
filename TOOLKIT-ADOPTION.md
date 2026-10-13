@@ -106,3 +106,11 @@ the stock stager. Its ordinary session receipt admits Shared only with this exac
 inventory and `ForceFeedback/Enabled=0`; no configuration is rewritten. Public
 packaging remains unchanged. Source/fixture work is not an installation or new
 runtime qualification.
+
+October 13 next source checkpoint for STD-002/012/035: ordinary private Shared
+automation adds explicit owner-state isolation separately from physical/network
+output mute. The existing companion/installer bind it to actual Shared ownership
+and a linked native isolation marker, with fresh private saves/keybind defaults,
+fenced owner writes and request-bound Stop that leaves the game open. Native
+automation remains refused. Tests/build/runtime qualification of this delta are
+pending; the previously qualified bf4c63a build has no automated capability.

@@ -120,6 +120,25 @@ function SessionRecordBackend([string]$Root, $Receipt) {
         (SessionHash (SessionBound $Root 'dbce_shim.dll')) -cne $pin.files.'dbce_shim.dll' -or
         (SessionHash (SessionBound $Root 'shared-input/dbce_shim.h')) -cne $pin.files.'dbce_shim.h') { throw 'Installed Shared metadata and actual source/runtime pins disagree.' }
 }
+function SessionAutomatedStart($Start, [string]$Root, $Receipt, [string]$Id) {
+    if ($Receipt.session.automatedRecord -ne $true -or
+        (@($Receipt.session.automatedRecordBackends) -join ',') -cne 'Shared' -or
+        (SessionIni (SessionBound $Root 'config.ini') 'Input' 'Backend' 'Native') -ine 'Shared') {
+        throw 'Automated ordinary recording requires installed Shared owner-state isolation. Native automation remains unavailable.'
+    }
+    SessionRecordBackend $Root $Receipt
+    if ($Id -cnotmatch '^[0-9a-f]{32}$') { throw 'Invalid private save request.' }
+    # The native host claims this absent directory before reading any devices;
+    # it copies keybinds there and fences config/SRAM/host/debug writes itself.
+    $saves = SessionBound ([IO.Path]::GetTempPath()) ('fza-' + $Id.Substring(0, 8))
+    if ($saves.Length -gt 70 -or (Test-Path -LiteralPath $saves)) { throw 'A fresh short automated save root is required.' }
+    $Start.ArgumentList.Add('--mute-outputs')
+    $Start.ArgumentList.Add('--isolate-owner-state'); $Start.ArgumentList.Add($saves)
+    $saves
+}
+function SessionCheckAutomatedStatus($Status, [bool]$Automated) {
+    if ($Automated -and $Status.outputMuted -ne $true) { throw 'Automated recorder did not confirm muted physical and network output.' }
+}
 function SessionIdentity([string]$Root, [string]$SelectedRom) {
     $paths = [Collections.Generic.List[string]]::new()
     $paths.Add([IO.Path]::GetFullPath($SelectedRom))
@@ -201,7 +220,7 @@ function SessionStop([string]$Folder, [string]$Id, $Launch) {
 function InvokeInstalledSession {
     if (@($Record,$Playback,$Stop | Where-Object { $_ }).Count -ne 1 -or $Action -or $Tape -or !$GameDir -or !$Result -or !$RequestId) { throw 'Choose exactly one installed Record, Playback or Stop request.' }
     $root = [IO.Path]::GetFullPath($GameDir); $folder = [IO.Path]::GetFullPath($Result)
-    if ($Record -and $InputOrigin -ceq 'automated') { throw 'Automated F-Zero recording requires a reviewed owner-state isolation companion. Human recording and muted playback are supported by this contract.' }
+    $automated = $Record -and $InputOrigin -ceq 'automated'
     $receipt = SessionCapability $root
     if ($Record) { SessionRecordBackend $root $receipt }
     if ($Stop) {
@@ -260,19 +279,23 @@ function InvokeInstalledSession {
         [void][IO.Directory]::CreateDirectory($saves)
         $start.Environment['SNESRECOMP_SAVE_ROOT'] = $saves
     }
-    if ($Record -and $InputOrigin -ceq 'automated') { $start.ArgumentList.Add('--mute-outputs') }
+    $privateSaves = if ($automated) { SessionAutomatedStart $start $root $receipt $RequestId } else { $null }
+    # Human startup may perform its existing controls/config writes. Automated
+    # originals instead bind the exact prelaunch identity and permit no drift.
+    $identity = if ($automated) { SessionIdentity $root $Rom } else { $null }
     $p = [Diagnostics.Process]::new(); $p.StartInfo = $start
     if (!$p.Start()) { throw 'F-Zero did not start.' }
     $out = $p.StandardOutput.ReadToEndAsync(); $err = $p.StandardError.ReadToEndAsync()
     $launch = [ordered]@{ schema = 'fzero.companion-session@1'; requestId = $RequestId; action = $(if ($Record) {'record'} else {'replay'})
         processId = $p.Id; processCreationFileTime = $p.StartTime.ToUniversalTime().ToFileTimeUtc(); exe = $start.FileName
-        exeSha256 = $receipt.launcherSha256.ToLowerInvariant(); inputOrigin = $InputOrigin }
-    $started = [DateTime]::UtcNow; $identity = $null; $sealed = $false; $timedOut = $false
+        exeSha256 = $receipt.launcherSha256.ToLowerInvariant(); inputOrigin = $InputOrigin; privateSaveRoot = $privateSaves }
+    $started = [DateTime]::UtcNow; $sealed = $false; $timedOut = $false
     try {
         SessionWrite (Join-Path $folder 'companion.json') $launch
         while (!$p.HasExited) {
             if (Test-Path -LiteralPath (Join-Path $folder 'status.json')) {
                 $s = SessionStatus $folder $RequestId $launch
+                SessionCheckAutomatedStatus $s $automated
                 if ($s.state -cin @('recording','saved') -and !$identity) { $identity = SessionIdentity $root $Rom }
                 if ($s.state -ceq 'saved' -and !$sealed) {
                     SessionCheckIdentity $identity $root $Rom
@@ -299,6 +322,7 @@ function InvokeInstalledSession {
         }
         $p.WaitForExit()
         $s = SessionStatus $folder $RequestId $launch
+        SessionCheckAutomatedStatus $s $automated
         # A fast ordinary close can complete between monitor polls. Seal using
         # the authoritative terminal state, never an inferred successful exit.
         if ($Record -and !$sealed -and $s.state -ceq 'saved') {
@@ -318,6 +342,7 @@ function InvokeInstalledSession {
             if ((SessionHash $descriptor) -cne $RecordingSha256 -or (SessionHash $tapePath) -cne $expected.tapeSha256 -or
                 (SessionHash ($tapePath + '.state')) -cne $expected.stateSha256) { throw 'Recording changed during replay.' }
         }
+        if ($automated) { SessionCheckIdentity $identity $root $Rom }
         SessionWrite (Join-Path $folder 'result.json') ([ordered]@{ schema='fzero.session-result@1'; requestId=$RequestId; processId=$launch.processId
             processCreationFileTime=$launch.processCreationFileTime; passed=$passed; gameClosed=$true; exitCode=$p.ExitCode; frames=$s.frames; state=$s.state })
         if (!$passed) { throw 'Native recording/replay did not complete successfully. Evidence is retained.' }

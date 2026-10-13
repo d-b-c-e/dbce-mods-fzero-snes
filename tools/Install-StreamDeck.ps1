@@ -38,6 +38,15 @@ $receiptName = 'install-receipt.json'
 $transactionFiles = @($owned) + $receiptName
 $restorableFiles = @($launcher, 'WheelFfb.dll', 'tools/Recording.ps1', $receiptName) + $sharedOwned
 function HashOrNull([string]$path) { if (Test-Path -LiteralPath $path -PathType Leaf) { (Get-FileHash -LiteralPath $path).Hash } else { $null } }
+function Recording-Capability([bool]$PrivateShared, [string]$LinkedText) {
+    if ($PrivateShared -and (!$LinkedText.Contains('--isolate-owner-state') -or !$LinkedText.Contains('[fzero-isolation]'))) {
+        throw 'Built Shared recording lacks ordinary owner-state isolation. Reconfigure and rebuild from the clean source before installing.'
+    }
+    [ordered]@{ schema='fzero.session-capability@1'; protocol='fzero.session-control@1'; companion='tools/Recording.ps1'
+        record=$true; replay=$true; stopShortcut='Ctrl+F11'; automatedRecord=$PrivateShared
+        recordBackends=@('Native') + @(if ($PrivateShared) { 'Shared' })
+        automatedRecordBackends=@(if ($PrivateShared) { 'Shared' }) }
+}
 function Assert-SharedOwnershipTransition([bool]$Requested, $PreviousReceipt) {
     if ($Requested -or !$PreviousReceipt) { return }
     $privatePaths = @('dbce_shim.dll', 'shared-input/dbce_shim.h', 'shared-input/PIN.json', 'shared-input/PROVENANCE.md')
@@ -173,6 +182,7 @@ if (!(Test-Path -LiteralPath $header) -or
     !$linkedText.Contains('fzero.session-status@1') -or ($PrivateSharedInput -and !$linkedText.Contains('[fzero-shim]'))) {
     throw 'Build source stamp is stale or absent; reconfigure and rebuild from this clean commit. Nothing changed.'
 }
+$sessionCapability = Recording-Capability ([bool]$PrivateSharedInput) $linkedText
 $changes = @($owned | Where-Object { (HashOrNull $sources[$_]) -cne (HashOrNull (Join-Path $Target $_)) })
 if (-not $changes.Count -and (Test-Path -LiteralPath $oldReceiptPath)) {
     $expectedBackends = if ($PrivateSharedInput) { 'Native,Shared' } else { 'Native' }
@@ -190,6 +200,8 @@ if (-not $changes.Count -and (Test-Path -LiteralPath $oldReceiptPath)) {
         $oldReceipt.controlsProfileAdapter -ceq 'fzero-raw-wheel-1' -and $oldReceipt.sourceCommit -ceq $commit -and
         $oldReceipt.launcherSha256 -ceq (HashOrNull $built) -and $oldReceipt.wheelFfbSha256 -ceq $nativeHash.ToUpperInvariant() -and
         $oldReceipt.session.schema -ceq 'fzero.session-capability@1' -and $oldReceipt.session.protocol -ceq 'fzero.session-control@1' -and
+        $oldReceipt.session.automatedRecord -eq $sessionCapability.automatedRecord -and
+        (@($oldReceipt.session.automatedRecordBackends) -join ',') -ceq (@($sessionCapability.automatedRecordBackends) -join ',') -and
         $inventoryMatches -and $sharedMatches -and (@($oldReceipt.session.recordBackends) -join ',') -ceq $expectedBackends) {
         'The installed files and controls receipt already match this build; nothing changed.'; return
     }
@@ -225,8 +237,7 @@ $receipt = [ordered]@{
     schemaVersion = 1; controlsProfileSchema = 1; controlsProfileAdapter = 'fzero-raw-wheel-1'
     launcher = $launcher; launcherSha256 = (HashOrNull (Join-Path $Target $launcher)); wheelFfbSha256 = (HashOrNull (Join-Path $Target 'WheelFfb.dll'))
     label = $Label; sourceCommit = $commit; installedUtc = [DateTime]::UtcNow.ToString('o'); buildDir = $BuildDir; backup = $stamp
-    session = [ordered]@{ schema='fzero.session-capability@1'; protocol='fzero.session-control@1'; companion='tools/Recording.ps1'
-        record=$true; replay=$true; stopShortcut='Ctrl+F11'; automatedRecord=$false; recordBackends=@('Native') + @(if ($PrivateSharedInput) { 'Shared' }) }
+    session = $sessionCapability
     files = @($owned | ForEach-Object { [ordered]@{ name = $_; sha256 = (Get-FileHash -LiteralPath (Join-Path $Target $_)).Hash } })
 }
 if ($PrivateSharedInput) { $receipt.privateSharedInput = $shared.metadata }

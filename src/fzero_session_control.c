@@ -21,6 +21,35 @@ static bool absent(const char *path) {
   if (file) { fclose(file); return false; }
   return errno == ENOENT;
 }
+bool FzeroSessionCreatePrivateRoot(const char *root, const char *keybinds) {
+#ifdef _WIN32
+  /* The engine still has 128-byte save suffix buffers. Keep the same short
+   * root limit as the existing companion replay path, and refuse aliases. */
+  if (!root || strlen(root) < 4 || strlen(root) > 70 || root[1] != ':' ||
+      (root[2] != '\\' && root[2] != '/') || !keybinds) return false;
+  char normalized[80], full[80];
+  snprintf(normalized, sizeof(normalized), "%s", root);
+  for (char *at = normalized; *at; ++at) if (*at == '/') *at = '\\';
+  DWORD length = GetFullPathNameA(normalized, sizeof(full), full, NULL);
+  if (!length || length >= sizeof(full) || _stricmp(full, normalized) ||
+      full[length - 1] == '\\' || GetFileAttributesA(full) != INVALID_FILE_ATTRIBUTES ||
+      GetLastError() != ERROR_FILE_NOT_FOUND) return false;
+  char parent[80]; snprintf(parent, sizeof(parent), "%s", full);
+  while (strlen(parent) > 3) {
+    char *slash = strrchr(parent, '\\'); if (!slash) return false;
+    if (slash == parent + 2) slash[1] = 0; else *slash = 0;
+    DWORD attributes = GetFileAttributesA(parent);
+    if (attributes == INVALID_FILE_ATTRIBUTES || !(attributes & FILE_ATTRIBUTE_DIRECTORY) ||
+        (attributes & FILE_ATTRIBUTE_REPARSE_POINT)) return false;
+  }
+  if (!CreateDirectoryA(full, NULL)) return false;
+  char destination[96]; snprintf(destination, sizeof(destination), "%s\\keybinds.ini", full);
+  if (CopyFileA(keybinds, destination, TRUE)) return true;
+  return GetLastError() == ERROR_FILE_NOT_FOUND; /* private defaults may be generated */
+#else
+  (void)root; (void)keybinds; return false;
+#endif
+}
 static bool write_status(FILE *file, const FzeroSessionControl *c,
                          const FzeroSessionUi *ui, const FzeroPlaythrough *p) {
   /* All strings are fixed tokens or validated hex, so no lossy JSON escaping.

@@ -11,6 +11,13 @@ $script:checks=0
 function Check($Condition,[string]$Why) { $script:checks++; if (!$Condition) { throw $Why } }
 function Refuses([scriptblock]$Action,[string]$Why) { $failed=$false; try { & $Action | Out-Null } catch { $failed=$true }; Check $failed $Why }
 try {
+    $nativeCapability=Recording-Capability $false ''
+    Check (!$nativeCapability.automatedRecord -and $nativeCapability.recordBackends.Count -eq 1 -and $nativeCapability.recordBackends[0] -ceq 'Native') 'Native capability must preserve human-only admission.'
+    Refuses { Recording-Capability $true '[fzero-shim]' } 'Existing Shared image must not gain automation without the native isolation seam.'
+    Refuses { Recording-Capability $true '--isolate-owner-state' } 'A CLI token without the actual isolation marker must refuse.'
+    $isolatedCapability=Recording-Capability $true '--isolate-owner-state [fzero-isolation]'
+    Check ($isolatedCapability.automatedRecord -and (@($isolatedCapability.automatedRecordBackends)-join ',') -ceq 'Shared') 'Only owned Shared isolation may declare automated recording.'
+    Check ($isolatedCapability.stopShortcut -ceq 'Ctrl+F11' -and $isolatedCapability.schema -ceq 'fzero.session-capability@1') 'Existing shortcut and capability schema must remain unchanged.'
     $vendor=Join-Path $root 'vendor/dbce-shim'; $build=Join-Path $root 'build'; $Target=Join-Path $root 'target'; $backup=Join-Path $root 'backup'
     foreach ($dir in @($vendor,$build,$Target,$backup)) { [void][IO.Directory]::CreateDirectory($dir) }
     [IO.File]::WriteAllText((Join-Path $build 'dbce_shim.dll'),'fixture ABI2 DLL')

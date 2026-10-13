@@ -17,6 +17,10 @@ typedef struct {
  * the actual PID + creation FILETIME, not an approximate launch timestamp. */
 bool FzeroSessionControlOpen(FzeroSessionControl *control, const char *path,
     const char *request_id, enum FzeroSessionMode action, bool muted);
+/* Claims a fresh short local save root without traversing links. Snapshot the
+ * existing keybind file there so its missing-file writer cannot touch the game.
+ * The caller's explicit isolation policy separately fences all host writes. */
+bool FzeroSessionCreatePrivateRoot(const char *root, const char *keybinds);
 void FzeroSessionControlRom(FzeroSessionControl *control, const uint8_t sha256[32]);
 /* 1 = exact immutable Stop, 0 = no Stop, -1 = unreadable/foreign/malformed Stop.
  * The caller alone closes the existing recorder. This never edits a tape. */

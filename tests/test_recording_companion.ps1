@@ -93,6 +93,27 @@ try {
         Refuses { SessionRecordBackend $root $receipt } 'Enabled or ambiguous Shared force policy must refuse.'
     }
     [IO.File]::WriteAllText((Join-Path $root 'config.ini'), "[Input]`nBackend=Shared`n")
+    $start=[Diagnostics.ProcessStartInfo]::new('fixture-never-started.exe')
+    $automationId=[guid]::NewGuid().ToString('N')
+    Refuses { SessionAutomatedStart $start $root $receipt $automationId } 'An old Shared receipt cannot gain automated admission.'
+    Check ($start.ArgumentList.Count -eq 0) 'Refused automation must not partially configure the child.'
+    $receipt.session.automatedRecord=$true
+    $receipt.session.automatedRecordBackends=@('Shared')
+    $privateRoot=SessionAutomatedStart $start $root $receipt $automationId
+    Check ($start.ArgumentList.Count -eq 3 -and $start.ArgumentList[0] -ceq '--mute-outputs' -and
+        $start.ArgumentList[1] -ceq '--isolate-owner-state' -and $start.ArgumentList[2] -ceq $privateRoot) 'The actual companion must request separate mute and isolation flags.'
+    Check (!(Test-Path -LiteralPath $privateRoot)) 'Native must claim the fresh private root itself.'
+    [void][IO.Directory]::CreateDirectory($privateRoot)
+    try { Refuses { SessionAutomatedStart ([Diagnostics.ProcessStartInfo]::new()) $root $receipt $automationId } 'An existing private root must not be reused.' }
+    finally { [IO.Directory]::Delete($privateRoot) }
+    Refuses { SessionCheckAutomatedStatus @{outputMuted=$false} $true } 'Automated recording must require actual muted status.'
+    SessionCheckAutomatedStatus @{outputMuted=$true} $true
+    SessionCheckAutomatedStatus @{outputMuted=$false} $false # Human output policy stays unchanged.
+    [IO.File]::WriteAllText((Join-Path $root 'config.ini'), "[Input]`nBackend=Native`n")
+    Refuses { SessionAutomatedStart ([Diagnostics.ProcessStartInfo]::new()) $root $receipt $automationId } 'Private Shared metadata must not admit Native automation.'
+    [IO.File]::WriteAllText((Join-Path $root 'config.ini'), "[Input]`nBackend=Shared`n[ForceFeedback]`nEnabled=1`n")
+    Refuses { SessionAutomatedStart ([Diagnostics.ProcessStartInfo]::new()) $root $receipt $automationId } 'Automated admission must not bypass Shared force refusal.'
+    [IO.File]::WriteAllText((Join-Path $root 'config.ini'), "[Input]`nBackend=Shared`n")
     foreach ($name in @('dbce_shim.dll','shared-input/dbce_shim.h','shared-input/PIN.json','shared-input/PROVENANCE.md')) {
         $path = Join-Path $root $name; $before = [IO.File]::ReadAllBytes($path)
         [IO.File]::WriteAllText($path, 'changed')

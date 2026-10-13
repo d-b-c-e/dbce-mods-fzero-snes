@@ -109,6 +109,9 @@ static void publish_session_status(bool force) {
   g_session_status_retry = now + 250;
 }
 static bool g_shared_profile_preview;
+/* Explicit automation isolation lasts through Stop and ordinary game close.
+ * Output mute alone never changes human save/config/host-button semantics. */
+static bool g_isolated_owner_state;
 static void abort_playthrough(const char *reason) {
   if (g_playthrough.mode != 1) return;
   fprintf(stderr, "[fzero-playthrough] recording invalidated: %s\n", reason);
@@ -854,10 +857,10 @@ static bool session_live_input(void *context, uint32_t *word) {
   uint32_t wheel_host_pressed = wheel_host_buttons & ~*ctx->held_wheel_host_buttons;
   *ctx->held_wheel_host_buttons = wheel_host_buttons;
   input &= ~(FZERO_WHEEL_SAVE_MENU | FZERO_WHEEL_REWIND);
-  if (wheel_host_pressed & FZERO_WHEEL_SAVE_MENU) {
+  if (!g_isolated_owner_state && (wheel_host_pressed & FZERO_WHEEL_SAVE_MENU)) {
     (void)snes_savestate_menu_poll_open(FZERO_MENU_GESTURE);
   }
-  if (wheel_host_pressed & FZERO_WHEEL_REWIND) {
+  if (!g_isolated_owner_state && (wheel_host_pressed & FZERO_WHEEL_REWIND)) {
     (void)snes_rewind_open();
   }
   *word = input;
@@ -1008,6 +1011,7 @@ static void set_state_feedback(SDL_Window *window, const char *operation,
 
 static int perform_state_action(SDL_Window *window, int save, int slot,
                                 Uint64 *feedback_until) {
+  if (g_isolated_owner_state) return 0;
   /* 256, matching the framework's own slot browser: the engine's save root is
    * 96 bytes and a prefixed slot name is short, but a 128-byte buffer here
    * silently truncated a long SNESRECOMP_SAVE_ROOT during testing. */
@@ -2102,6 +2106,7 @@ int main(int argc, char **argv) {
   }
   const char *explicit_rom = options.rom;
   bool force_launcher = options.launcher;
+  g_isolated_owner_state = options.isolated_save_root != NULL;
   if (options.request_id &&
       (!snesrecomp_abspath(options.status_path, command_line_status, sizeof(command_line_status)) ||
        !FzeroSessionControlOpen(&g_session_control, command_line_status,
@@ -2176,16 +2181,30 @@ int main(int argc, char **argv) {
   if (!FzeroShimPrepare(g_config_path, explicit_rom && !force_launcher,
                         recorded_replay, FzeroReplayHasInput(), early_record && *early_record))
     return 2;
+  if (g_isolated_owner_state) {
+#if defined(SNES_COSIM) || defined(SNESRECOMP_NET) || SNESRECOMP_ENABLE_MODS
+    fprintf(stderr, "[fzero-isolation] alternate callbacks/network builds are not admitted\n");
+    return 2;
+#endif
+    if (!FzeroShimOrdinary() || !FzeroNoForceLatched() || !FzeroTelemetryDeliveryBlocked() ||
+        !FzeroSessionCreatePrivateRoot(options.isolated_save_root, "keybinds.ini")) {
+      fprintf(stderr, "[fzero-isolation] requires ordinary Shared, muted output and a fresh short private root\n");
+      return 2;
+    }
+    fprintf(stderr, "[fzero-isolation] owner writes and debug delivery fenced; private saves=%s\n",
+            options.isolated_save_root);
+  }
   if (recorded_replay && (!FzeroLatchNoForce() || !FzeroTelemetryLatchNoDelivery())) {
     fprintf(stderr, "[fzero-playthrough] output mute could not be established\n");
     return 2;
   }
   FzeroTelemetryInit(g_config_path); // preview/replay delivery latch is already held.
-  if (FzeroControlsStartupMayWrite(FzeroReplayHasInput(), recorded_replay, FzeroShimUsingInput())) {
+  if (!g_isolated_owner_state && FzeroControlsStartupMayWrite(FzeroReplayHasInput(), recorded_replay, FzeroShimUsingInput())) {
     FzeroControlsApplyAtStartup(g_config_path);
     FzeroInjectInit(g_config_path);   /* dev only: inject.on, no force, applied profile */
   }
   host_report_init(kWindowTitle, kBuildVersion);
+  if (g_isolated_owner_state) host_report_set_output_directory(options.isolated_save_root);
   char rom_path[1024] = {0};
   RecompLauncherCSettings launcher_settings;
   int resolve_result =
@@ -2193,7 +2212,7 @@ int main(int argc, char **argv) {
   if (resolve_result <= 0) return resolve_result == 0 ? 0 : 2;
   if (!g_video.enhanced) {
     g_video.aspect = launcher_aspect(launcher_settings.aspect_index);
-    if (!FzeroShimRequested() && !recorded_replay && !FzeroVideoSave(&g_video, kVideoConfig))
+    if (!g_isolated_owner_state && !FzeroShimRequested() && !recorded_replay && !FzeroVideoSave(&g_video, kVideoConfig))
       fprintf(stderr, "[fzero] Unable to save video settings\n");
   }
   g_config.linear_filtering = launcher_settings.linear_filter != 0;
@@ -2257,16 +2276,22 @@ int main(int argc, char **argv) {
    * recomp in this family). Must precede the first keyboard_input() call. */
   /* Avoid keybinds_init's missing-file writer during diagnostics. Static
    * defaults still work in capture-only mode if no keybinds.ini exists. */
-  FILE *existing_keybinds = (FzeroShimRequested() || recorded_replay) ? fopen("keybinds.ini", "rb") : NULL;
-  if ((!FzeroShimRequested() && !recorded_replay) || existing_keybinds) keybinds_init(NULL);
-  if (existing_keybinds) fclose(existing_keybinds);
+  if (g_isolated_owner_state) {
+    char private_exe[96];
+    snprintf(private_exe, sizeof(private_exe), "%s/game.exe", options.isolated_save_root);
+    keybinds_init(private_exe); /* copied bytes, or defaults written only to the private root */
+  } else {
+    FILE *existing_keybinds = (FzeroShimRequested() || recorded_replay) ? fopen("keybinds.ini", "rb") : NULL;
+    if ((!FzeroShimRequested() && !recorded_replay) || existing_keybinds) keybinds_init(NULL);
+    if (existing_keybinds) fclose(existing_keybinds);
+  }
 
   RtlRegisterGame(FzeroGameInfo());
   if (!SnesInit(rom, (int)rom_size))
     Die("SNESRecomp rejected the F-Zero cartridge");
   cpu_trace_init();
   debug_server_set_ram(g_snes->ram, 0x20000);
-  if (!FzeroShimRequested() && !recorded_replay) {
+  if (!g_isolated_owner_state && !FzeroShimRequested() && !recorded_replay) {
     int debug_port = 4385;
     const char *port_value = getenv("SNESRECOMP_DEBUG_PORT");
     if (port_value && port_value[0]) {
@@ -2280,13 +2305,14 @@ int main(int argc, char **argv) {
     }
   }
   const char *save_root = getenv("SNESRECOMP_SAVE_ROOT");
+  if (g_isolated_owner_state) save_root = options.isolated_save_root;
   if (FzeroShimRequested()) save_root = FzeroShimSaveRoot();
   if (save_root && *save_root) RtlSetSaveRoot(save_root);
   if (!FzeroDeluxeSelectSaveRoot()) Die(FzeroDeluxeError());
   if (!FzeroMsuSelectSaveRoot()) Die(FzeroMsuError());
   /* RtlReadSram can migrate legacy saves (a write). Diagnostic originals start
    * from fresh guest state; their only state file is the explicit .fzpt sibling. */
-  if (!FzeroShimRequested() && !recorded_replay) RtlReadSram();
+  if (!g_isolated_owner_state && !FzeroShimRequested() && !recorded_replay) RtlReadSram();
   const char *record_path = FzeroShimRequested() ? FzeroShimRecordingPath() : getenv("FZERO_RECORD_PLAYTHROUGH");
   const char *replay_path = getenv("FZERO_REPLAY_PLAYTHROUGH");
   bool replay_failed = false;
@@ -2585,7 +2611,9 @@ int main(int argc, char **argv) {
 #endif
     }
     char directory[1200];
-    if (!snesrecomp_exe_dir_path("diagnostics", directory, sizeof(directory)))
+    if (g_isolated_owner_state)
+      snprintf(directory, sizeof(directory), "%s/diagnostics", options.isolated_save_root);
+    else if (!snesrecomp_exe_dir_path("diagnostics", directory, sizeof(directory)))
       snprintf(directory, sizeof(directory), "diagnostics");
     FzeroDiagnosticsStart(true, directory, &session);
   }
@@ -2702,9 +2730,9 @@ int main(int argc, char **argv) {
         }
         continue;
       }
-      if ((g_playthrough.mode == 2 || FzeroShimRequested()) && event.type == SDL_KEYDOWN) {
+      if ((g_isolated_owner_state || g_playthrough.mode == 2 || FzeroShimRequested()) && event.type == SDL_KEYDOWN) {
         if (SNESRECOMP_SDL_EVENT_KEY(event) == SDLK_ESCAPE) running = 0;
-        continue; /* no user hotkey may mutate a verified replay/diagnostic */
+        continue; /* SNES keyboard state still passes through; no mutating host hotkeys */
       }
       if (g_playthrough.mode != 2 && !FzeroShimUsingInput()) FzeroGamepadEvent(&pad, &event);
       if (event.type == SDL_KEYDOWN && !event.key.repeat) {
@@ -2784,7 +2812,7 @@ int main(int argc, char **argv) {
     }
 
     update_state_feedback(window, &state_feedback_until);
-    if (g_playthrough.mode != 2 && !FzeroShimRequested()) {
+    if (!g_isolated_owner_state && g_playthrough.mode != 2 && !FzeroShimRequested()) {
       int slot = debug_server_consume_loadstate();
       if (slot >= 0)
         perform_state_action(window, 0, slot, &state_feedback_until);
@@ -2793,7 +2821,7 @@ int main(int argc, char **argv) {
         perform_state_action(window, 1, slot, &state_feedback_until);
     }
     double debug_wait_start = monotonic_seconds();
-    if (!FzeroShimRequested() && !recorded_replay) debug_server_wait_if_paused();
+    if (!g_isolated_owner_state && !FzeroShimRequested() && !recorded_replay) debug_server_wait_if_paused();
     if (monotonic_seconds() - debug_wait_start > 0.1)
       g_reset_presentation_clock = true;
     if (!running) break;
@@ -2840,12 +2868,12 @@ int main(int argc, char **argv) {
     /* Hotkeys act the moment they are pressed, not on the next simulation
      * boundary: the keyboard is polled every iteration and a request must not
      * wait for one. */
-    if (!recorded_replay && open_savestate_menu) {
+    if (!g_isolated_owner_state && !recorded_replay && open_savestate_menu) {
       open_savestate_menu = 0;
       if (!snes_savestate_menu_is_open())
         (void)snes_savestate_menu_poll_open(FZERO_MENU_GESTURE);
     }
-    if (!recorded_replay && open_rewind) {
+    if (!g_isolated_owner_state && !recorded_replay && open_rewind) {
       open_rewind = 0;
       if (!snes_rewind_open())
         set_title_message(window,
@@ -2908,12 +2936,12 @@ int main(int argc, char **argv) {
          * nor re-open the panel. */
         input = overlay_filter_guest_input(
             snes_savestate_menu_filter_guest_input(input));
-        if (!FzeroShimRequested() && (snes_savestate_menu_poll_open(input) ||
+        if (!g_isolated_owner_state && !FzeroShimRequested() && (snes_savestate_menu_poll_open(input) ||
             snes_savestate_menu_is_open())) {
           panel = 1;
           break; /* guest frozen: no frame to run or present */
         }
-        if (!FzeroShimRequested() && rewind_gesture_pressed(input) && snes_rewind_open()) {
+        if (!g_isolated_owner_state && !FzeroShimRequested() && rewind_gesture_pressed(input) && snes_rewind_open()) {
           panel = 2;
           break;
         }
@@ -3078,7 +3106,7 @@ int main(int argc, char **argv) {
       fprintf(stderr, "Unable to write WRAM capture\n");
     if (dump) fclose(dump);
   }
-  if (g_playthrough.mode != 2 && !FzeroShimRequested()) RtlWriteSram();
+  if (!g_isolated_owner_state && g_playthrough.mode != 2 && !FzeroShimRequested()) RtlWriteSram();
   debug_server_shutdown();
   snesrecomp_sdl_pause_audio_device(audio, true);
 #if SNESRECOMP_SDL3

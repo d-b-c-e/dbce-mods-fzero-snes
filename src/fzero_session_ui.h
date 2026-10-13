@@ -5,7 +5,7 @@ enum FzeroSessionMode { FZERO_SESSION_NONE, FZERO_SESSION_RECORD,
   FZERO_SESSION_REPLAY, FZERO_SESSION_PREVIEW };
 typedef struct {
   enum FzeroSessionMode mode;
-  const char *rom, *path, *request_id, *status_path;
+  const char *rom, *path, *request_id, *status_path, *isolated_save_root;
   bool launcher, mute_outputs;
 } FzeroSessionOptions;
 

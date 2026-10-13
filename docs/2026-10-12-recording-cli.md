@@ -247,6 +247,37 @@ No backend/configuration/force setting is rewritten. A Native-only update over
 previously owned Shared files refuses before mutation; retain the explicit switch
 or roll back the Shared installation first. Backup/rollback owns all four paths.
 
+### Ordinary automated-original isolation (source checkpoint, not qualified)
+
+The next private Shared candidate adds explicit `--isolate-owner-state <root>`
+alongside `--mute-outputs`, with the existing request-bound ordinary Record
+arguments. Isolation requires a fresh short local root and the ordinary Shared
+backend. Native automation and alternate network/mod callback builds refuse.
+The host creates that root, copies the selected keyboard bindings there, routes
+save directories, performance diagnostics and crash reports there, and fences
+owner configuration writes, legacy SRAM migration, save-state/rewind gestures
+and the debug server for the whole process, including after Stop. It starts
+from fresh guest state; the existing snapshot captures that actual initial state.
+Keyboard SNES input and Ctrl+F11 remain available. Human recording and output
+mute alone retain their prior semantics.
+
+The existing companion binds automated identity before startup, verifies the
+native muted status and unchanged ROM/configuration/Deluxe/MSU inventory, and
+seals the existing tape/state pair when Saved while the game remains open.
+Its existing deadline requests Stop, allows a five-second continuation, then
+requests normal close; exact-process recovery retains unresolved evidence.
+The private save root is retained and named in the existing companion metadata.
+The installer declares automated recording only for its owned Shared inventory
+and a freshly linked executable containing the isolation seam. Prior receipts
+cannot acquire that capability from a nearby helper or DLL.
+
+This uses the existing no-force and no-network latches before initialization;
+Shared also avoids legacy SDL controller/force acquisition. Software force and
+telemetry calculations are unchanged. Ordinary `.fzpt` captures consumed input,
+not a force-signal stream. No diagnostic input channel is enabled by isolation.
+Source and fixtures are prepared; the leased build/tests, fresh candidate and
+ordinary Record/Stop/replay runtime qualification remain pending.
+
 Focused offline checks passed: 33 companion assertions, 24 installer inventory/
 rollback assertions (including two real entry-point Shared-to-Native refusals
 against disposable fixtures), 112 Wheelkit session tests and the Release app build

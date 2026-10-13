@@ -27,6 +27,12 @@ bool FzeroSessionParse(int argc, char *const argv[], bool conflicting_environmen
       if (out->mute_outputs) { *error = "Duplicate --mute-outputs"; return false; }
       out->mute_outputs = true; continue;
     }
+    if (!positional && !strcmp(arg, "--isolate-owner-state")) {
+      if (out->isolated_save_root || ++i >= argc || !argv[i] || !*argv[i] || argv[i][0] == '-') {
+        *error = "Owner-state isolation requires one fresh private save root"; return false;
+      }
+      out->isolated_save_root = argv[i]; continue;
+    }
     enum FzeroSessionMode mode = FZERO_SESSION_NONE;
     if (!positional) {
       if (!strcmp(arg, "--record")) mode = FZERO_SESSION_RECORD;
@@ -53,7 +59,7 @@ bool FzeroSessionParse(int argc, char *const argv[], bool conflicting_environmen
     *error = "Explicit session conflicts with existing recording/replay/test environment";
     return false;
   }
-  if (out->request_id || out->status_path || out->mute_outputs) {
+  if (out->request_id || out->status_path || out->mute_outputs || out->isolated_save_root) {
     if (!out->request_id || !out->status_path ||
         (out->mode != FZERO_SESSION_RECORD && out->mode != FZERO_SESSION_REPLAY)) {
       *error = "Session control requires ordinary --record or --replay, --session-id and --session-status";
@@ -64,6 +70,9 @@ bool FzeroSessionParse(int argc, char *const argv[], bool conflicting_environmen
     }
     if (out->mute_outputs && out->mode != FZERO_SESSION_RECORD) {
       *error = "--mute-outputs is for recording; replay already mutes output"; return false;
+    }
+    if (out->isolated_save_root && (out->mode != FZERO_SESSION_RECORD || !out->mute_outputs)) {
+      *error = "Owner-state isolation requires muted ordinary recording"; return false;
     }
   }
   *error = NULL;

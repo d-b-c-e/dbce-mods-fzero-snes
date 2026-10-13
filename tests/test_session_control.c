@@ -17,6 +17,23 @@ static void contains(const char *path, const char *text) {
 int main(void) {
   char dir[MAX_PATH], path[MAX_PATH], tape[MAX_PATH];
   CHECK(GetTempPathA(sizeof(dir), dir) != 0);
+  char private_root[80], bindings[MAX_PATH], private_bindings[96];
+  snprintf(private_root, sizeof(private_root), "%sfza-%lu", dir, GetCurrentProcessId());
+  snprintf(bindings, sizeof(bindings), "%sfza-%lu.ini", dir, GetCurrentProcessId());
+  snprintf(private_bindings, sizeof(private_bindings), "%s/keybinds.ini", private_root);
+  CHECK(!FzeroSessionCreatePrivateRoot("relative", bindings));
+  CHECK(!FzeroSessionCreatePrivateRoot(dir, bindings)); /* existing owner location */
+  write_file(bindings, "[Player1]\nB = Z\n");
+  CHECK(FzeroSessionCreatePrivateRoot(private_root, bindings));
+  contains(private_bindings, "B = Z"); contains(bindings, "B = Z");
+  CHECK(!FzeroSessionCreatePrivateRoot(private_root, bindings)); /* no reuse or overwrite */
+  contains(private_bindings, "B = Z"); contains(bindings, "B = Z");
+  CHECK(remove(private_bindings) == 0); CHECK(RemoveDirectoryA(private_root));
+  CHECK(remove(bindings) == 0);
+  CHECK(FzeroSessionCreatePrivateRoot(private_root, bindings)); /* missing keybind owner stays absent */
+  CHECK(GetFileAttributesA(bindings) == INVALID_FILE_ATTRIBUTES);
+  CHECK(GetFileAttributesA(private_bindings) == INVALID_FILE_ATTRIBUTES);
+  CHECK(RemoveDirectoryA(private_root));
   snprintf(path, sizeof(path), "%sfzero-control-%lu.json", dir, GetCurrentProcessId());
   snprintf(tape, sizeof(tape), "%sfzero-control-%lu.fzpt", dir, GetCurrentProcessId());
   const char *id = "0123456789abcdef0123456789abcdef";
