@@ -661,8 +661,100 @@ py -3 tools/fzero_replay_adapter.py observe --case E:/fz-cold-1012e/case.json `
   --rom E:/fz-cold-1012e/fzero.sfc --output <fresh-force-jsonl> --timeout 60
 ```
 
-Remaining product gaps are ordinary non-latched shared-profile entry,
+At that October 12 checkpoint, remaining product gaps were ordinary non-latched shared-profile entry,
 record/play UI and status, unsupported independent SNES X/Y/L/R/host extras,
 representative owner driving, and physical/output/triple-screen acceptance.
 The successful diagnostic does not silently enable the shared backend or replace
 the owner's normal launcher. Earlier failed/unsealed originals remain intact.
+
+## October 13: stock Applied Controls, diagnostic Practice and fresh replay
+
+The clean stock source `51999e39265e4b4395394c915a68a0c29c588cc2` was built and
+privately staged at `E:/fz-stock-stage-51999e3`. Native source
+`f49cfc559f065b778967a7c94068a75df538ec69` and DLL `9B8A036F...015D8` are unchanged.
+The existing private stager receipt declares the actual Shared Controls contract;
+the production Wheelkit writer from `09c9223` uses `SharedShimProfile.Plan`.
+It admits an already selected Shared backend, requires FFB disabled, preserves
+Native/force settings, and reports 11 delivered and 20 unsupported actions.
+
+The earlier `E:/fz-probe-stock-apply-02` production Controls Apply and ordinary
+900-frame boot/idle recording admitted revision
+`B081640CE3DD13E690B4D225A1C773308C1FD3AC6FE12B0554C07BF063AA1E0F`
+and exact Controls bytes
+`A983D5A7791188866A2848738AEAFCDA50E2938DFC544D52EDA962DAEAF79467`.
+That case's fresh replay passed. Attempt04 below reused those exact bytes in a
+latched diagnostic; it does not convert the ordinary idle case into ordinary
+driving or qualify Wheelkit's Play With Recording UI.
+
+### Stock route and observed result
+
+Private `StockPracticeRoute.py` (`87A69F22...B85386C`) adapts the existing
+`tools/fzero_shim_practice_route.py`, retaining its source reader, Core command
+transport and Capture wrapper. The stock menu table comes from the exact ROM,
+not the Deluxe bank-7F selectors. It selects Practice, Blue Falcon, Yes, the
+default rival and Mute City I; stock Practice has no league-selection step.
+The two prompt animations require 42 consecutive neutral, unfaded guest-frame
+advances before confirmation. Every command has fresh source/owned-frame proof;
+unknown states, stale source and missing player countdown refuse. Images are
+retained for review without an agent round trip in the transient menu loop.
+
+Attempts01/02 remain inconclusive neutral-only recordings. Attempt03 consumed
+Practice selection/entry but stopped at a private guard that checked selection
+before car phase0 initialized it. Its 728 words match exactly. The narrow fix
+checks selection only in the initialized car/rival phases1/4; seven fixtures
+include its retained 39 transition frames and refusal of a changed stable
+selection. No game/native rebuild was needed, and original attempt03 bytes remain.
+
+Attempt04 (`E:/fz-probe-stock-drive-04`) and fresh graphical replay
+(`E:/fz-probe-stock-drive-replay-04`) held one shared lease from
+15:37:10.355 to 15:41:18.994 UTC, October 13. Both exited normally with code0.
+The owner-activity override was honored explicitly; no idle observation was
+fabricated. Both preserved all 77 owner file/absence pins. Exact game, supervisor
+and helper identities were gone before verified lease release.
+
+- All 2,213 final SNES words/frame indexes equal the 2,213 valid Shared game rows,
+  plus one terminal row: zero mismatches. P21 seal passed 2,214 rows/35,703 checks.
+- Native player countdown2/2/2 precedes gameplay2/3/0, training1/state5B0.
+  There are 559 player frames (9.289 seconds), 182 Live/injected throttle frames,
+  61 steering frames and 30 consumed right PDM pulses. Software-reported speed
+  and distance increase; these are not physical calibration measurements.
+- The fresh process replays the immutable `.fzpt`/`.fzpt.state` pair and reports
+  `Replay verified: 2213 frames`. Per-frame WRAM checkpoints pass; there is no
+  pose correction, live input backend or physical output during replay.
+- Original recorder/control workers joined and resolved with held0/inputReleased;
+  the no-force latch and native SDL suppression remained active. Ordinary Shared
+  keyboard passthrough was not exercised by this intentionally latched case.
+
+### Visual scope and capture limitation
+
+`frames/153848787.png` in the original shows Blue Falcon driving, the player
+timer/HUD and REC36.0s. Replay `frames/burst/frame-0001.png` shows active
+REPLAY2047/2213 with FORCES OFF; `frame-0128.png` shows REPLAY VERIFIED2213.
+The replay capture helper nevertheless exited **4**: 128 images saved, 93
+observed frames skipped, then process/window identity or visibility changed at
+target close. This is a partial failed capture burst, not successful capture or
+performance qualification. The game/replay result is independently exit0 and
+verified. No replay was repeated to replace those missing images.
+
+| Artifact | SHA-256 |
+|---|---|
+| Stock graphical executable | `7b2cf655e4442b05da79fa05ff1228137dc2ebfb230afdbd8543262f7a222d5e` |
+| Existing private stage receipt | `6cbf815995c5ac53fe1fb855d5e84cb70b8f1d8f0af8913de353a6898e413d51` |
+| Original `.fzpt` | `f76816a860a21686ad8b254bdaad01b3672eac933d652b1c444a5c2b75551212` |
+| Initial state | `1db8aa96932ef63c12bde849f64a8473ce7d38f08d7254fdbd61ef72bf230ccc` |
+| Shared source JSONL | `9b1cff5ceca2fc0196321057e5487585969e02b4c17d3f9298ca8f0cd063eb75` |
+| `state-route-outcome.json` in original | `026477b39d4aa28166bcf2333a956c7277610a09b6e65e9c2813121a291677e8` |
+| `consumed-input-check.json` | `b26c958266f19832c2111e2d75bd728392dc3a74c31e87384b0cfb4a411df623` |
+| Fresh replay `result.json` | `f2ba36f151ba1c0148851ebef77613be3b495ec3ffc01ff246155aa5f92e0e87` |
+
+The private recipe `StockState-Commands.attempt04.ps1.txt` is pinned as
+`CB9FFBC7630F82DDFF931316F9FD81ACCCFC622F0DE772AA80715AF25BEA7E31`.
+Its unchanged wrappers are `5815B51D...12529E` (diagnostic) and
+`846A6487...E8A32` (ordinary/replay); original recipe/router/comparator bytes
+are copied into the original's evidence directory. No ROM, private DLL or tape
+is added to this repository. No public branch, payload or owner install changed.
+
+This qualifies the short **stock diagnostic Practice consumed-input and fresh
+snapshot replay** path. Remaining parity and promotion requirements are listed
+in [delivery readiness](2026-10-12-delivery-readiness.md); broad
+`runtimeQualified` remains false deliberately.

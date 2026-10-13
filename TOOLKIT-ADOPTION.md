@@ -72,4 +72,19 @@ response once at startup, including the accepted revision and exact profile-byte
 SHA-256. This adds the missing runtime comparison point for a production Apply;
 it changes neither the ABI nor the profile/recording format. All 12 focused
 ordinary-host cases pass, and the private production Apply caller builds without
-warnings. The disposable stock Apply/record/replay qualification remains queued.
+warnings. October 13 `E:/fz-probe-stock-apply-02` completed production Controls
+Apply, ordinary profile revision/hash admission, a 900-frame boot/idle recording
+and fresh replay with all 77 owner pins unchanged. This is not ordinary driving.
+
+October 13 follow-up for STD-002/033/034/035: the same exact Applied Controls
+bytes (`A983D5A7...9467`, revision `B081640C...A1E0F`) were reused by stock source
+`51999e3` in a latched diagnostic Practice drive. Attempt04 has 2,213 exact
+consumed words, real player countdown, 182 injected throttle frames and 61
+steering frames/30 right PDM pulses; a fresh graphical snapshot replay verifies
+all 2,213 WRAM checkpoints. Both normal exits and all 77 owner pins pass. Retained
+REC/replay/verified images are available; replay capture helper exit4 is a
+partial failed burst, not capture-performance proof. Native9B8A036F remains
+unchanged. This advances diagnostic/input recording evidence only: ordinary
+Wheelkit Play With Recording, physical bindings, wheel extras, Shared force
+ownership, multi-device runtime and installed delivery stay partial. See
+`docs/2026-10-12-shim-diagnostic.md`, October 13 stock result.

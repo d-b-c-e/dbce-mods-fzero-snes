@@ -4,6 +4,15 @@ Public packaging review (2026-10-05): read docs/PUBLIC-PACKAGING.md. Public fork
 
 # Agent notes
 
+October 13 private Shared checkpoint: clean stock source `51999e3` and unchanged
+native `9B8A036F` have production Controls Apply/ordinary 900-frame idle proof plus
+stock diagnostic Practice and fresh snapshot replay with 2,213 exact frames.
+Read `docs/2026-10-12-shim-diagnostic.md` and `docs/2026-10-12-delivery-readiness.md`
+before further qualification. Replay capture exit4 remains a partial failed
+burst despite retained REC/REPLAY/Verified images. This is not physical binding,
+ordinary Wheelkit Play With Recording, force or installed-delivery acceptance.
+Keep public origin untouched and private assets out of this source repository.
+
 ## Toolkit standards
 
 At the start of every session, compare the wheel toolkit's ledger
