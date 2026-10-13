@@ -124,6 +124,9 @@ function SessionIdentity([string]$Root, [string]$SelectedRom) {
     $paths = [Collections.Generic.List[string]]::new()
     $paths.Add([IO.Path]::GetFullPath($SelectedRom))
     foreach ($name in @('config.ini','fzero-video.ini','keybinds.ini')) { $paths.Add((Join-Path $Root $name)) }
+    # The ordinary consumer prefers this exact development override to its
+    # embedded Deluxe payload. Pin absence too, so adding one changes identity.
+    $paths.Add((SessionBound $Root 'mods/bs-deluxe.dat'))
     $config = Join-Path $Root 'config.ini'
     $enabled = SessionIni $config 'Sound' 'Msu1Enabled' '0'
     if ($enabled -cnotmatch '^-?\d+$') { throw 'Invalid MSU selection.' }
@@ -144,7 +147,7 @@ function SessionIdentity([string]$Root, [string]$SelectedRom) {
     })
 }
 function SessionCheckIdentity($Identity, [string]$Root, [string]$SelectedRom) {
-    if (!$Identity -or $Identity.Count -lt 4 -or $Identity.Count -gt 516) { throw 'Invalid recorded ROM/config/MSU inventory.' }
+    if (!$Identity -or $Identity.Count -lt 5 -or $Identity.Count -gt 517) { throw 'Invalid recorded ROM/config/MSU inventory.' }
     $current = SessionIdentity $Root $SelectedRom
     if ($current.Count -ne $Identity.Count) { throw 'Recorded ROM/config/MSU inventory changed.' }
     for ($i=0; $i -lt $Identity.Count; $i++) {

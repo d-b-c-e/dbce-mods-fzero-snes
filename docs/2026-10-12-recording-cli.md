@@ -209,7 +209,10 @@ Verified remains its terminal outcome; later game/supervisor errors stay separat
 
 `tools/Recording.ps1` adds an installed companion route over the same `.fzpt` and
 `.fzpt.state`, with a small hash descriptor for library discovery and ROM/config/MSU
-identity. Native game replay still validates the snapshot and every WRAM checkpoint.
+identity. It also pins the exact optional `mods/bs-deluxe.dat` override, including
+its absence for an embedded-only Deluxe run. Adding, changing or removing that
+override refuses playback before launch. Native game replay still validates the
+snapshot and every WRAM checkpoint.
 The ordinary installer must own the launcher, WheelFfb runtime and exact companion,
 and stamp `fzero.session-capability@1` after checking the linked source marker.
 Existing owner receipts and private stock build receipts do not qualify. The

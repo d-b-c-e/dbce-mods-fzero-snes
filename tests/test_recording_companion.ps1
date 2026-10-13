@@ -20,7 +20,18 @@ try {
     foreach ($name in @('fzero.sfc','config.ini','fzero-video.ini','keybinds.ini')) { [IO.File]::WriteAllText((Join-Path $root $name), 'fixture ' + $name) }
     $rom = Join-Path $root 'fzero.sfc'
     $identity = SessionIdentity $root $rom
-    Check ($identity.Count -eq 4) 'Expected ROM plus three configuration members.'
+    Check ($identity.Count -eq 5 -and $null -eq $identity[4].sha256) 'Expected ROM, three configuration members and explicit absent Deluxe override.'
+    SessionCheckIdentity $identity $root $rom
+    $deluxe = Join-Path $root 'mods/bs-deluxe.dat'
+    [void][IO.Directory]::CreateDirectory((Split-Path -Parent $deluxe))
+    [IO.File]::WriteAllText($deluxe, 'private Deluxe fixture')
+    Refuses { SessionCheckIdentity $identity $root $rom } 'A new Deluxe override must invalidate recorded absence.'
+    $withDeluxe = SessionIdentity $root $rom
+    SessionCheckIdentity $withDeluxe $root $rom
+    [IO.File]::WriteAllText($deluxe, 'changed private Deluxe fixture')
+    Refuses { SessionCheckIdentity $withDeluxe $root $rom } 'Changed Deluxe override bytes must refuse.'
+    [IO.File]::Delete($deluxe)
+    Refuses { SessionCheckIdentity $withDeluxe $root $rom } 'Removing a recorded Deluxe override must refuse.'
     SessionCheckIdentity $identity $root $rom
     $old = [IO.File]::ReadAllText((Join-Path $root 'config.ini'))
     [IO.File]::WriteAllText((Join-Path $root 'config.ini'), 'changed')
@@ -32,7 +43,7 @@ try {
     [IO.File]::WriteAllText((Join-Path $root 'config.ini'), "[Sound]`nMsu1Enabled=1`nMsu1Dir=$root`n")
     [IO.File]::WriteAllText((Join-Path $root 'track.pcm'), 'audio fixture')
     $msu = SessionIdentity $root $rom
-    Check ($msu.Count -eq 5) 'Selected MSU files must be in the identity.'
+    Check ($msu.Count -eq 6) 'Selected MSU files and absent Deluxe override must be in the identity.'
     [IO.File]::WriteAllText((Join-Path $root 'new.pcm'), 'new audio fixture')
     Refuses { SessionCheckIdentity $msu $root $rom } 'New MSU track must invalidate inventory.'
     Refuses { SessionBound $root '../outside' } 'Parent traversal must refuse.'
