@@ -12,6 +12,7 @@ extern "C" {
 #include <fstream>
 #include <string>
 #include <process.h>
+#include <io.h>
 static unsigned checks;
 #define CHECK(x) do {++checks;if(!(x)){std::fprintf(stderr,"%d: %s\n",__LINE__,#x);return 1;}}while(0)
 static std::string read(const std::filesystem::path &p) {
@@ -21,7 +22,7 @@ int main(int argc,char **argv) {
  CHECK(argc==2);const std::string mode=argv[1];
  for(const char *key:{"FZERO_SHIM_DIAGNOSTIC_RUN","FZERO_SHIM_SESSION_NONCE","FZERO_SHIM_SESSION_FILE",
      "FZERO_SHIM_BATCH_FILE","FZERO_FAKE_BAD_ABI","FZERO_FAKE_BAD_RECORD","FZERO_FAKE_BAD_STOP",
-     "FZERO_FAKE_BAD_PROFILE","FZERO_FAKE_MISSING","FZERO_FAKE_UNBOUND","FZERO_FAKE_ORDINARY_LATCH"}) _putenv_s(key,"");
+     "FZERO_FAKE_BAD_PROFILE","FZERO_FAKE_BAD_PROFILE_INFO","FZERO_FAKE_MISSING","FZERO_FAKE_UNBOUND","FZERO_FAKE_ORDINARY_LATCH"}) _putenv_s(key,"");
  auto temp=std::filesystem::temp_directory_path();
  auto root=temp/("fzo-"+std::to_string(_getpid())+"-"+mode);
  CHECK(!std::filesystem::exists(root) && std::filesystem::create_directory(root));
@@ -51,7 +52,18 @@ int main(int argc,char **argv) {
    std::ofstream f(cfg,std::ios::binary);f<<changed;
   }
   if(mode=="profile") _putenv_s("FZERO_FAKE_BAD_PROFILE","1");
+  if(mode=="profileinfo") _putenv_s("FZERO_FAKE_BAD_PROFILE_INFO","1");
+  int previous_stderr=_dup(_fileno(stderr));CHECK(previous_stderr>=0);
+  FILE *log=nullptr;CHECK(!freopen_s(&log,(root/"startup.log").string().c_str(),"wb",stderr));
   const bool started=FzeroShimStart(nullptr,"fixture")!=0;
+  std::fflush(stderr);CHECK(!_dup2(previous_stderr,_fileno(stderr)));_close(previous_stderr);
+  auto startup=read(root/"startup.log");
+  const std::string accepted="[fzero-shim] ordinary profile accepted:\n";
+  if(started) {
+   auto at=startup.find(accepted);CHECK(at!=std::string::npos && startup.find(accepted,at+1)==std::string::npos);
+   CHECK(startup.find("revision=fixture-revision\n")!=std::string::npos);
+   CHECK(startup.find("sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n")!=std::string::npos);
+  } else CHECK(startup.find(accepted)==std::string::npos);
   if(mode=="forcechanged") {
    CHECK(!started && !std::filesystem::exists(root/"diagnostics"));
    CHECK(!FzeroShimStop());
@@ -60,7 +72,7 @@ int main(int argc,char **argv) {
    auto entries=std::filesystem::directory_iterator(root/"diagnostics");
    auto run=entries->path();++entries;CHECK(entries==std::filesystem::directory_iterator());
    CHECK(read(run/"profile.spy")==profile && read(run/"flags.spy")=="0");
-   if(mode=="profile") CHECK(!started && !FzeroShimStop());
+   if(mode=="profile" || mode=="profileinfo") CHECK(!started && !FzeroShimStop());
    else {
     CHECK(started);
     if(mode=="unexpected") _putenv_s("FZERO_FAKE_ORDINARY_LATCH","1");

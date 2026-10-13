@@ -256,8 +256,13 @@ int FzeroShimStart(void *window, const char *legacy_guid) {
     if (ordinary) {
       char info[4096]{}; int32_t needed = 0;
       if (profile_info(handle,info,sizeof(info),&needed) != DBCE_SHIM_OK || needed <= 0 ||
-          needed > sizeof(info) || std::strncmp(info,"ok=1\n",5))
+          needed > sizeof(info) || info[needed-1] != '\0' ||
+          std::memchr(info,'\0',needed-1) || std::strncmp(info,"ok=1\n",5))
         return refuse("ordinary shared profile was not accepted by Core");
+      // Keep Core's own revision and exact-byte hash, once at ordinary startup.
+      // The existing flat profile_info response is evidence, not a new schema.
+      std::fprintf(stderr,"[fzero-shim] ordinary profile accepted:\n%.*s",needed-1,info);
+      std::fflush(stderr);
     }
     int range = 100, response = 50, threshold = 0;
     std::string section = "Controller." + std::string(legacy_guid ? legacy_guid : "");

@@ -66,3 +66,10 @@ writer; unknown values refuse. October 13 offline validation passed all 48 focus
 Wheelkit controls tests and all 32 unified-package tests. No new staged binary,
 production Apply, runtime, multi-device proof, installation or public capability
 follows from these source and fixture results.
+
+Ordinary Shared admission now logs Core's existing bounded `profile_info`
+response once at startup, including the accepted revision and exact profile-byte
+SHA-256. This adds the missing runtime comparison point for a production Apply;
+it changes neither the ABI nor the profile/recording format. All 12 focused
+ordinary-host cases pass, and the private production Apply caller builds without
+warnings. The disposable stock Apply/record/replay qualification remains queued.

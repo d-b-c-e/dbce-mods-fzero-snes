@@ -38,10 +38,14 @@ int32_t dbce_shim_open2(const dbce_shim_open_args *a,void **out,char *why,int32_
  return 0;
 }
 int32_t dbce_shim_profile_info(void *,char *text,int32_t len,int32_t *needed) {
- const char *info=flag("FZERO_FAKE_BAD_PROFILE") ? "ok=0\nerror=invalid profile\n" : "ok=1\nerror=\n";
+ const char *info=flag("FZERO_FAKE_BAD_PROFILE") ? "ok=0\nerror=invalid profile\n" :
+  "ok=1\nerror=\nprofile=fixture\nrevision=fixture-revision\ntransmission=Sequential\n"
+  "sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n";
  *needed=(int32_t)std::strlen(info)+1;
  if(len<*needed) return -1;
- std::memcpy(text,info,*needed); return 0;
+ std::memcpy(text,info,*needed);
+ if(flag("FZERO_FAKE_BAD_PROFILE_INFO")) text[*needed-1]='x';
+ return 0;
 }
 int32_t dbce_shim_tick(void *handle,dbce_shim_frame *out) {
  auto f=static_cast<Fake *>(handle);
