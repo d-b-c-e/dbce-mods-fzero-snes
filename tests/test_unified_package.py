@@ -4,6 +4,7 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import re
 import struct
 import subprocess
 import sys
@@ -148,6 +149,8 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(json.loads(files["shared-input/PIN.json"]), pin)
         self.assertEqual(receipt["distribution"], "private-only")
         self.assertEqual(receipt["runtimeSha256"], pack.digest(dll))
+        self.assertEqual(receipt["controls"]["consumer"], "FZeroSNESRecomp.exe")
+        self.assertEqual(receipt["controls"]["optIn"]["default"], "Native")
         for path, original in ((build / "dbce_shim.dll", dll), (vendor / "dbce_shim.h", header)):
             path.write_bytes(original + b"changed")
             with self.subTest(path=path.name), self.assertRaisesRegex(ValueError, "differ from source pin"):
@@ -156,6 +159,44 @@ class PackageTests(unittest.TestCase):
         (build / "dbce_shim.dll").unlink()
         with self.assertRaises(FileNotFoundError):
             stage.private_shared_files(build, self.root)
+
+    def test_private_controls_contract_matches_production_mapper(self):
+        source = (pack.ROOT / "src/fzero_shim_map.c").read_text()
+        actions_block = source.split("kFzeroShimActions[DBCE_SHIM_ACTIONS] = {", 1)[1].split("};", 1)[0]
+        actions = re.findall(r'"([^"\\]+)"', actions_block)
+        unsupported_block = source.split("const char kFzeroShimUnsupported[] =", 1)[1].split(";", 1)[0]
+        text = "".join(json.loads('"' + value + '"') for value in re.findall(r'"((?:[^"\\]|\\.)*)"', unsupported_block))
+        unsupported = dict(line.split("=", 1) for line in text.splitlines())
+        contract = stage.shared_controls_contract()
+        self.assertEqual(contract["unsupported"], unsupported)
+        self.assertEqual(len(contract["delivered"]), 11)
+        self.assertEqual(set(contract["delivered"]), set(actions) - set(unsupported))
+        self.assertEqual(contract["requires"], {"directRom": True, "forceFeedbackDisabled": True})
+        self.assertEqual(contract["profile"], "config.ini")
+        self.assertEqual(contract["settings"], "config.ini")
+
+    def test_private_payload_receipt_reuses_outer_inventory_without_self_hash(self):
+        folder = self.base / "receipts"
+        (folder / "payload").mkdir(parents=True)
+        receipt = {"schema": "dbce.fzero-build", "version": 1,
+                   "files": {"FZeroSNESRecomp.exe": "a" * 64},
+                   "privateSharedInput": {"controls": stage.shared_controls_contract()}}
+        stage.write_receipts(folder, receipt)
+        self.assertEqual((folder / "build-receipt.json").read_bytes(),
+                         (folder / "payload/build-receipt.json").read_bytes())
+        self.assertNotIn("build-receipt.json", json.loads((folder / "build-receipt.json").read_text())["files"])
+        (folder / "payload/build-receipt.json").unlink()
+        del receipt["privateSharedInput"]
+        stage.write_receipts(folder, receipt)
+        self.assertFalse((folder / "payload/build-receipt.json").exists())
+
+    def test_shared_capability_requires_matching_linked_consumer_not_only_configured_header(self):
+        stamp = "v1.8.3-200-g0123456789ab"
+        stage.validate_shared_consumer(stamp.encode() + b"\0[fzero-shim]", stamp)
+        for image in (stamp.encode() + b"-dirty\0[fzero-shim]", b"old-build\0[fzero-shim]",
+                      stamp.encode() + b"\0", stamp.encode() + b"[fzero-shim]"):
+            with self.subTest(image=image), self.assertRaisesRegex(ValueError, "linked source stamp"):
+                stage.validate_shared_consumer(image, stamp)
 
     def test_private_pin_agrees_with_compiled_pin_and_no_public_grant(self):
         vendor = pack.ROOT / "vendor/dbce-shim"

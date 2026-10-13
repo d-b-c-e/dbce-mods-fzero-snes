@@ -48,6 +48,30 @@ def font_notice(data, name):
     return notice
 
 
+def shared_controls_contract():
+    """The existing ordinary consumer, not a launcher/session capability.
+
+    tests/test_unified_package.py compares this partition with the C mapper.
+    """
+    unsupported = {
+        "clutch": "F-Zero has no clutch", "handbrake": "F-Zero has no handbrake",
+        "shiftUp": "F-Zero has no gearbox", "shiftDown": "F-Zero has no gearbox",
+        "neutral": "F-Zero has no gearbox", "reverse": "F-Zero has no reverse gear",
+        "camera": "no generic F-Zero camera action", "lookBack": "no F-Zero look-back action",
+        "reset": "guest reset remains a native host hotkey", "horn": "F-Zero has no horn",
+        "modMenu": "the F-Zero launcher is not an in-game mod menu",
+        "muteFfb": "shared input does not own the native force lifecycle",
+        **{f"gear{i}": "F-Zero has no gearbox" for i in range(1, 9)},
+    }
+    return {"schema": 1, "adapter": "fzero-shim-ini-controls-1",
+            "consumer": "FZeroSNESRecomp.exe", "profile": "config.ini", "settings": "config.ini",
+            "shimAbi": 2, "optIn": {"section": "Input", "key": "Backend", "value": "Shared",
+                                    "default": "Native", "appliesAfterRestart": True},
+            "delivered": ["steer", "throttle", "brake", "confirm", "back", "start", "select",
+                          "navUp", "navDown", "navLeft", "navRight"],
+            "unsupported": unsupported, "requires": {"directRom": True, "forceFeedbackDisabled": True}}
+
+
 def private_shared_files(build, root=ROOT):
     """Explicit private add-on only; never infer permission from a nearby DLL."""
     vendor = root / "vendor/dbce-shim"
@@ -68,7 +92,21 @@ def private_shared_files(build, root=ROOT):
             raise ValueError(f"Private shared-input bytes differ from source pin: {name}")
     return files, {"abi": 2, "distribution": "private-only",
                    "sourceRevision": pin["sourceRevision"],
-                   "runtimeSha256": pin["files"]["dbce_shim.dll"]}
+                   "runtimeSha256": pin["files"]["dbce_shim.dll"],
+                   "controls": shared_controls_contract()}
+
+
+def write_receipts(output, receipt):
+    """Same private receipt beside its consumer, never in its own hash inventory."""
+    data = json.dumps(receipt, indent=2) + "\n"
+    (output / "build-receipt.json").write_text(data)
+    if "privateSharedInput" in receipt:
+        (output / "payload/build-receipt.json").write_text(data)
+
+
+def validate_shared_consumer(image, description):
+    if description.encode() + b"\0" not in image or b"[fzero-shim]" not in image:
+        raise ValueError("Private shared consumer lacks the clean linked source stamp or shim adapter")
 
 
 def stage(build, output, private_shared_input=False):
@@ -122,6 +160,7 @@ def stage(build, output, private_shared_input=False):
         files[name] = (ROOT / name).read_bytes()
     shared = None
     if private_shared_input:
+        validate_shared_consumer(files["FZeroSNESRecomp.exe"], description)
         extra, shared = private_shared_files(build)
         files.update(extra)
     pending = [n for n in files if n.lower().endswith((".exe", ".dll"))]
@@ -152,7 +191,7 @@ def stage(build, output, private_shared_input=False):
         path = output / "payload" / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
-    (output / "build-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+    write_receipts(output, receipt)
     return output / "build-receipt.json"
 
 

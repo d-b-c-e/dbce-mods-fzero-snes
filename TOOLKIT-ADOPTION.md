@@ -40,8 +40,8 @@ Audited 2026-10-04 (read-only standards audit); STD-001 and STD-010 revised 2026
 | STD-029 | New functionality installed and on | partial | Existing controls runtime installed; next capability receipt candidate is source only until its clean build and closed-game installation. |
 | STD-030 | F6 panel first | partial | Recomp launcher has settings; F6 is a save-slot binding. Standard in-game panel parity remains open. |
 | STD-031 | New Art reference level | pending | Physical normalization remains pending; this controls work does not change forces. |
-| STD-032 | Wheelkit reads portfolio records | partial | Installer declares hash-bound fzero-raw-wheel-1 controls in install-receipt.json after checking configured and linked source stamps. Restores/withdraws capability with the runtime. Wheelkit writer is next. |
-| STD-033 | Rig-profile controls contract | partial | `[Controls]` in config.ini -> `[Controller.<SDL GUID>]` at start (src/fzero_controls.cpp, the toolkit's parser vendored from e4502a6); `fzero_controls` ctest: 102 checks, translation, startup apply and the game's reader on a virtual wheel. Installed 2026-10-10 (`docs/2026-10-10-profile-controls.md`): the owner's profile applied by the game itself to the real R12 at start. Wheelkit writer and owner acceptance pending; DirectInput injection does not reach SDL. |
+| STD-032 | Wheelkit reads portfolio records | partial | Installer declares hash-bound fzero-raw-wheel-1 controls in install-receipt.json after checking configured and linked source stamps. Restores/withdraws capability with the runtime. Wheelkit's Native writer exists. October 13 source-only private stager adds a separate Shared controls descriptor inside its existing build receipt; installed receipts and catalog remain unchanged. |
+| STD-033 | Rig-profile controls contract | partial | `[Controls]` in config.ini -> `[Controller.<SDL GUID>]` at start (src/fzero_controls.cpp, the toolkit's parser vendored from e4502a6); `fzero_controls` ctest: 102 checks, translation, startup apply and the game's reader on a virtual wheel. Installed 2026-10-10 (`docs/2026-10-10-profile-controls.md`): the owner's profile applied by the game itself to the real R12 at start. Wheelkit Native writer exists; owner acceptance and Shared production Apply qualification remain separate. DirectInput injection does not reach the Native SDL path. |
 | STD-034 | Apply qualified by a closed loop | partial | Existing raw-wheel evidence remains separate. October 12 shared-shim production Core diagnostic reached player Practice, matched 2,351 consumed words and cold WRAM checks; this injected drive is not Wheelkit-to-shim or physical owner-control qualification. See docs/2026-10-12-shim-diagnostic.md. |
 | STD-035 | Identity, provenance and failure rules | partial | Exact profile bytes through pinned ABI2; muted latched private Deluxe original and native terminal shutdown qualified October 12. Five private CLI runs exit0 with all77 owner pins exact; nonlatched preview seals and matches final consumed words. Ordinary Shared9790788 failed in legacy SDL acquisition (retained dump). Corrected7187c57 disables SDL for Shared; a private900-frame at-rest original and fresh graphical replay pass exactly, normal exits and owner77 pins unchanged. Legacy wheel extras and launcher remain explicitly unavailable pending owned-reader integration. Shared+FFB refusal remains pending the ownership bridge. No installed capability/default changed. See docs/2026-10-12-ordinary-shared-input.md. |
 | STD-036 | Bindings from each device | partial | Shared Core supports one owned epoch per bound instance in the diagnostic; installed raw-wheel writer still has its R12/single-device scope. No multi-device runtime proof yet. Missing SNES X/Y/L/R actions are explicit, not mapped to unrelated generic actions. |
@@ -53,3 +53,16 @@ the public packager explicitly refuses it until the distribution gap is resolved
 Native defaults, installed owner settings and the existing force model are
 unchanged. Remaining launcher, wheel-extra, force-ownership and Wheelkit gaps are
 listed in `docs/2026-10-12-delivery-readiness.md`.
+
+October 13 source follow-up for STD-032/033/035/036: explicit private stock
+staging now declares `fzero-shim-ini-controls-1` for the actual ordinary consumer,
+with its 11 delivered and 20 unsupported actions, exact existing ABI-2 pin,
+direct-ROM/no-FFB limits and linked-source-stamp check. The same build receipt
+is copied beside the private payload without a self-hash entry. Wheelkit's
+isolated writer candidate routes only an already selected Shared backend through
+this contract and the existing shared-profile serializer, preserving Native
+controller keys and the force setting. Native/missing Backend keeps the Native
+writer; unknown values refuse. October 13 offline validation passed all 48 focused
+Wheelkit controls tests and all 32 unified-package tests. No new staged binary,
+production Apply, runtime, multi-device proof, installation or public capability
+follows from these source and fixture results.
