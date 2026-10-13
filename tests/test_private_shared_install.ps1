@@ -1,0 +1,85 @@
+# Exercise only the existing installer's pure pin inventory and rollback helpers.
+# Never execute its install body, inspect a real game, or load a DLL.
+$ErrorActionPreference = 'Stop'
+$source = Join-Path (Split-Path $PSScriptRoot -Parent) 'tools/Install-StreamDeck.ps1'
+$tokens=$null; $errors=$null
+$ast=[Management.Automation.Language.Parser]::ParseFile($source,[ref]$tokens,[ref]$errors)
+if ($errors.Count) { throw ($errors | Out-String) }
+foreach ($function in $ast.FindAll({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst]},$false)) { Invoke-Expression $function.Extent.Text }
+$root=Join-Path ([IO.Path]::GetTempPath()) ('fzero-install-fixture-' + [guid]::NewGuid().ToString('N'))
+$script:checks=0
+function Check($Condition,[string]$Why) { $script:checks++; if (!$Condition) { throw $Why } }
+function Refuses([scriptblock]$Action,[string]$Why) { $failed=$false; try { & $Action | Out-Null } catch { $failed=$true }; Check $failed $Why }
+try {
+    $vendor=Join-Path $root 'vendor/dbce-shim'; $build=Join-Path $root 'build'; $Target=Join-Path $root 'target'; $backup=Join-Path $root 'backup'
+    foreach ($dir in @($vendor,$build,$Target,$backup)) { [void][IO.Directory]::CreateDirectory($dir) }
+    [IO.File]::WriteAllText((Join-Path $build 'dbce_shim.dll'),'fixture ABI2 DLL')
+    [IO.File]::WriteAllText((Join-Path $vendor 'dbce_shim.h'),'fixture ABI2 header')
+    [IO.File]::WriteAllText((Join-Path $vendor 'PROVENANCE.md'),'private-only fixture')
+    $pin=@{schema='dbce.fzero-shared-input-pin';version=1;abi=2;distribution='private-only';sourceRevision=('a' * 40)
+        files=@{'dbce_shim.dll'=(HashOrNull (Join-Path $build 'dbce_shim.dll')).ToLowerInvariant();'dbce_shim.h'=(HashOrNull (Join-Path $vendor 'dbce_shim.h')).ToLowerInvariant()}}
+    $pinPath=Join-Path $vendor 'PIN.json'
+    [IO.File]::WriteAllText($pinPath,($pin | ConvertTo-Json -Depth 4))
+    $shared=Private-SharedSources $root $build
+    $sharedNames=@('dbce_shim.dll','shared-input/dbce_shim.h','shared-input/PIN.json','shared-input/PROVENANCE.md')
+    Check ($shared.files.Count -eq 4 -and @($sharedNames | Where-Object { !$shared.files.ContainsKey($_) }).Count -eq 0) 'Private ownership must contain exactly the existing four paths.'
+    Check ($shared.metadata.sourceRevision -ceq $pin.sourceRevision -and $shared.metadata.runtimeSha256 -ceq $pin.files.'dbce_shim.dll') 'Metadata must derive from the verified source pin.'
+    foreach ($name in @('dbce_shim.dll','shared-input/dbce_shim.h')) {
+        $path=$shared.files[$name]; $old=[IO.File]::ReadAllBytes($path); [IO.File]::WriteAllText($path,'different')
+        Refuses { Private-SharedSources $root $build } 'A changed DLL or header must refuse before installation.'
+        [IO.File]::WriteAllBytes($path,$old)
+    }
+    foreach ($mutation in @('abi','distribution','extra')) {
+        $copy=($pin | ConvertTo-Json -Depth 4 | ConvertFrom-Json -AsHashtable)
+        if ($mutation -eq 'abi') { $copy.abi=3 } elseif ($mutation -eq 'distribution') { $copy.distribution='public' } else { $copy.files.'other.dll'='f' * 64 }
+        [IO.File]::WriteAllText($pinPath,($copy | ConvertTo-Json -Depth 4))
+        Refuses { Private-SharedSources $root $build } 'Unsupported pin metadata/inventory must refuse.'
+    }
+    [IO.File]::WriteAllText($pinPath,($pin | ConvertTo-Json -Depth 4))
+    $provenance=Join-Path $vendor 'PROVENANCE.md'; $old=[IO.File]::ReadAllBytes($provenance); [IO.File]::Delete($provenance)
+    Refuses { Private-SharedSources $root $build } 'Missing private provenance must refuse.'
+    [IO.File]::WriteAllBytes($provenance,$old)
+    $launcher='FZeroSNESRecomp-wheel-launcher.exe'; $receiptName='install-receipt.json'
+    $restorableFiles=@($launcher,'WheelFfb.dll','tools/Recording.ps1',$receiptName)+$sharedNames
+    $state=@{files=@()}
+    foreach ($name in $restorableFiles) {
+        $destination=Join-Path $Target $name; $saved=Join-Path $backup $name
+        [void][IO.Directory]::CreateDirectory((Split-Path -Parent $destination)); [void][IO.Directory]::CreateDirectory((Split-Path -Parent $saved))
+        $existed=$name -cne 'shared-input/PROVENANCE.md'
+        if ($existed) { [IO.File]::WriteAllText($saved,'old ' + $name) }
+        $state.files+=@{name=$name;existed=$existed;sha256=(HashOrNull $saved)}
+        [IO.File]::WriteAllText($destination,'new ' + $name)
+    }
+    [IO.File]::WriteAllText((Join-Path $Target 'config.ini'),'owner settings fixture')
+    Restore-Files $backup $state
+    foreach ($entry in $state.files) { Check ((HashOrNull (Join-Path $Target $entry.name)) -ceq $entry.sha256) ('Rollback must restore exact prior ownership: ' + $entry.name) }
+    Check ([IO.File]::ReadAllText((Join-Path $Target 'config.ini')) -ceq 'owner settings fixture') 'Rollback touched configuration.'
+    $state.files+=@{name='../outside';existed=$false;sha256=$null}
+    Refuses { Restore-Files $backup $state } 'Unowned rollback member must refuse before mutation.'
+    # Execute the real entry point against a disposable synthetic target. The
+    # transition refusal must precede even build validation and backup creation.
+    $transition=Join-Path $root 'transition-target'
+    [void][IO.Directory]::CreateDirectory($transition)
+    foreach ($name in @($launcher,'config.ini')+$sharedNames) {
+        $path=Join-Path $transition $name; [void][IO.Directory]::CreateDirectory((Split-Path -Parent $path))
+        [IO.File]::WriteAllText($path,'retained ' + $name)
+    }
+    foreach ($metadataOnly in @($false,$true)) {
+        $previous=@{schemaVersion=1;files=@(if (!$metadataOnly) { $sharedNames | ForEach-Object { @{name=$_;sha256=(HashOrNull (Join-Path $transition $_))} } })}
+        if ($metadataOnly) { $previous.privateSharedInput=@{abi=2;distribution='private-only'} }
+        [IO.File]::WriteAllText((Join-Path $transition $receiptName),($previous | ConvertTo-Json -Depth 4))
+        $before=@(Get-ChildItem -LiteralPath $transition -File -Recurse | Sort-Object FullName | ForEach-Object { $_.FullName + ':' + (HashOrNull $_.FullName) })
+        & pwsh -NoProfile -File $source -Target $transition -BuildDir $build -Label native-transition *> (Join-Path $root 'transition.log')
+        Check ($LASTEXITCODE -ne 0 -and (Get-Content (Join-Path $root 'transition.log') -Raw).Contains('Keep -PrivateSharedInput')) 'Real installer did not refuse the exact Shared-to-Native ownership transition.'
+        $after=@(Get-ChildItem -LiteralPath $transition -File -Recurse | Sort-Object FullName | ForEach-Object { $_.FullName + ':' + (HashOrNull $_.FullName) })
+        Check (($before -join "`n") -ceq ($after -join "`n")) 'Refused transition changed target bytes or membership.'
+        Check (!(Test-Path -LiteralPath (Join-Path $transition 'deployment-backups'))) 'Refused transition created a backup or began mutation.'
+        Assert-SharedOwnershipTransition $true ($previous | ConvertTo-Json -Depth 4 | ConvertFrom-Json)
+    }
+    Write-Output "F-Zero private Shared installer: $script:checks checks passed; synthetic inventory/rollback only."
+} finally {
+    $resolved=[IO.Path]::GetFullPath($root)
+    $temp=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\','/')+[IO.Path]::DirectorySeparatorChar
+    if (!$resolved.StartsWith($temp,[StringComparison]::OrdinalIgnoreCase) -or !(Split-Path $resolved -Leaf).StartsWith('fzero-install-fixture-')) { throw 'Fixture cleanup escaped temp.' }
+    if (Test-Path -LiteralPath $resolved) { Remove-Item -LiteralPath $resolved -Recurse -Force }
+}

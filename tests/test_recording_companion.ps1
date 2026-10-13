@@ -60,6 +60,49 @@ try {
     Refuses { SessionStatus $root ('f' * 32) $launch } 'Foreign request must refuse.'
     $launch.processCreationFileTime=457
     Refuses { SessionStatus $root $id $launch } 'Reused PID with another creation time must refuse.'
+    # Synthetic installed Shared ownership. No DLL is loaded.
+    [void][IO.Directory]::CreateDirectory((Join-Path $root 'shared-input'))
+    foreach ($name in @('dbce_shim.dll','shared-input/dbce_shim.h','shared-input/PROVENANCE.md')) {
+        [IO.File]::WriteAllText((Join-Path $root $name), 'fixture ' + $name)
+    }
+    $pin = @{ schema='dbce.fzero-shared-input-pin'; version=1; abi=2; distribution='private-only'; sourceRevision=('a' * 40)
+        files=@{'dbce_shim.dll'=(SessionHash (Join-Path $root 'dbce_shim.dll')); 'dbce_shim.h'=(SessionHash (Join-Path $root 'shared-input/dbce_shim.h'))} }
+    $pinPath = Join-Path $root 'shared-input/PIN.json'
+    [IO.File]::WriteAllText($pinPath, ($pin | ConvertTo-Json -Depth 4))
+    $receipt = @{ session=@{recordBackends=@('Native','Shared')}; privateSharedInput=@{abi=2;distribution='private-only';sourceRevision=$pin.sourceRevision;runtimeSha256=$pin.files.'dbce_shim.dll'}
+        files=@('dbce_shim.dll','shared-input/dbce_shim.h','shared-input/PIN.json','shared-input/PROVENANCE.md') | ForEach-Object { @{name=$_;sha256=(SessionHash (Join-Path $root $_))} } }
+    foreach ($enabled in @('', '0', '+0 trailing', '-0 ; comment')) {
+        $config = "[Input]`nBackend=Shared`n[ForceFeedback]`n" + $(if ($enabled) { "Enabled=$enabled`n" })
+        [IO.File]::WriteAllText((Join-Path $root 'config.ini'), $config)
+        SessionRecordBackend $root $receipt
+        Check ([IO.File]::ReadAllText((Join-Path $root 'config.ini')) -ceq $config) 'Shared admission changed the output policy.'
+    }
+    foreach ($enabled in @('1','-1','invalid','99999999999999999999999999999999')) {
+        [IO.File]::WriteAllText((Join-Path $root 'config.ini'), "[Input]`nBackend=Shared`n[ForceFeedback]`nEnabled=$enabled`n")
+        Refuses { SessionRecordBackend $root $receipt } 'Enabled or ambiguous Shared force policy must refuse.'
+    }
+    [IO.File]::WriteAllText((Join-Path $root 'config.ini'), "[Input]`nBackend=Shared`n")
+    foreach ($name in @('dbce_shim.dll','shared-input/dbce_shim.h','shared-input/PIN.json','shared-input/PROVENANCE.md')) {
+        $path = Join-Path $root $name; $before = [IO.File]::ReadAllBytes($path)
+        [IO.File]::WriteAllText($path, 'changed')
+        Refuses { SessionRecordBackend $root $receipt } "Changed Shared ownership must refuse: $name"
+        [IO.File]::WriteAllBytes($path, $before)
+    }
+    $receipt.session.recordBackends=@('Native')
+    Refuses { SessionRecordBackend $root $receipt } 'Nearby shim bytes must not imply recording capability.'
+    $receipt.session.recordBackends=@('Native','Shared')
+    $receipt.privateSharedInput.sourceRevision='b' * 40
+    Refuses { SessionRecordBackend $root $receipt } 'Metadata/source disagreement must refuse.'
+    $receipt.privateSharedInput.sourceRevision=$pin.sourceRevision
+    $pin.files.'dbce_shim.dll'='c' * 64
+    [IO.File]::WriteAllText($pinPath, ($pin | ConvertTo-Json -Depth 4))
+    ($receipt.files | Where-Object name -eq 'shared-input/PIN.json').sha256=SessionHash $pinPath
+    Refuses { SessionRecordBackend $root $receipt } 'Receipt-owned pin still must match actual runtime bytes.'
+    [IO.File]::WriteAllText((Join-Path $root 'config.ini'), "[ForceFeedback]`nEnabled=1`n")
+    SessionRecordBackend $root $receipt
+    Check ([IO.File]::ReadAllText((Join-Path $root 'config.ini')) -ceq "[ForceFeedback]`nEnabled=1`n") 'Default Native behavior changed.'
+    [IO.File]::WriteAllText((Join-Path $root 'config.ini'), "[Input]`nBackend=unknown`n")
+    Refuses { SessionRecordBackend $root $receipt } 'Unknown backend must refuse.'
     Write-Output "F-Zero ordinary companion: $script:checks checks passed; no child launch or device access."
 } finally {
     # Only this fresh synthetic fixture directory, under the resolved temp root.

@@ -87,6 +87,39 @@ function SessionIni([string]$Path, [string]$WantedSection, [string]$Key, [string
     }
     $value
 }
+function SessionRecordBackend([string]$Root, $Receipt) {
+    $config = SessionBound $Root 'config.ini'
+    $backend = SessionIni $config 'Input' 'Backend' 'Native'
+    if ($backend -ieq 'Native') { return }
+    if ($backend -ine 'Shared') { throw 'Unknown F-Zero input backend.' }
+    # The consumer initializes Enabled to zero and reads an integer prefix.
+    # Ambiguous/non-integer values refuse rather than changing force settings.
+    $force = [regex]::Match((SessionIni $config 'ForceFeedback' 'Enabled' '0'), '^[+-]?\d+')
+    $enabled = [long]0
+    if (!$force.Success -or ![long]::TryParse($force.Value, [Globalization.NumberStyles]::AllowLeadingSign,
+            [Globalization.CultureInfo]::InvariantCulture, [ref]$enabled) -or $enabled -ne 0) {
+        throw 'Shared F-Zero recording requires ForceFeedback Enabled=0. Recording does not change force settings.'
+    }
+    if ((@($Receipt.session.recordBackends) -join ',') -cne 'Native,Shared' -or !$Receipt.privateSharedInput) {
+        throw 'Ordinary Shared recording requires installed ownership of its private shim runtime. A diagnostic build receipt cannot enable it.'
+    }
+    foreach ($name in @('dbce_shim.dll','shared-input/dbce_shim.h','shared-input/PIN.json','shared-input/PROVENANCE.md')) {
+        $entries = @($Receipt.files | Where-Object { $_.name -ieq $name })
+        if ($entries.Count -ne 1 -or $entries[0].name -cne $name -or $entries[0].sha256 -cnotmatch '^[0-9A-Fa-f]{64}$' -or
+            (SessionHash (SessionBound $Root $name)) -ine $entries[0].sha256) { throw "Installed Shared ownership differs: $name" }
+    }
+    $pin = SessionJson (SessionBound $Root 'shared-input/PIN.json')
+    $shared = $Receipt.privateSharedInput
+    if ($pin.schema -cne 'dbce.fzero-shared-input-pin' -or $pin.version -ne 1 -or $pin.abi -ne 2 -or
+        $pin.distribution -cne 'private-only' -or $pin.sourceRevision -cnotmatch '^[0-9a-f]{40}$' -or
+        $pin.files -isnot [Collections.IDictionary] -or $pin.files.Count -ne 2 -or
+        'dbce_shim.dll' -cnotin @($pin.files.Keys) -or 'dbce_shim.h' -cnotin @($pin.files.Keys) -or
+        $pin.files.'dbce_shim.dll' -cnotmatch '^[0-9a-f]{64}$' -or $pin.files.'dbce_shim.h' -cnotmatch '^[0-9a-f]{64}$' -or
+        $shared.abi -ne 2 -or $shared.distribution -cne 'private-only' -or $shared.sourceRevision -cne $pin.sourceRevision -or
+        $shared.runtimeSha256 -cne $pin.files.'dbce_shim.dll' -or
+        (SessionHash (SessionBound $Root 'dbce_shim.dll')) -cne $pin.files.'dbce_shim.dll' -or
+        (SessionHash (SessionBound $Root 'shared-input/dbce_shim.h')) -cne $pin.files.'dbce_shim.h') { throw 'Installed Shared metadata and actual source/runtime pins disagree.' }
+}
 function SessionIdentity([string]$Root, [string]$SelectedRom) {
     $paths = [Collections.Generic.List[string]]::new()
     $paths.Add([IO.Path]::GetFullPath($SelectedRom))
@@ -167,9 +200,7 @@ function InvokeInstalledSession {
     $root = [IO.Path]::GetFullPath($GameDir); $folder = [IO.Path]::GetFullPath($Result)
     if ($Record -and $InputOrigin -ceq 'automated') { throw 'Automated F-Zero recording requires a reviewed owner-state isolation companion. Human recording and muted playback are supported by this contract.' }
     $receipt = SessionCapability $root
-    if ($Record -and (SessionIni (Join-Path $root 'config.ini') 'Input' 'Backend' 'Native') -ine 'Native') {
-        throw 'Ordinary recording requires installed ownership of the selected input runtime. This installer owns Native only; a private Shared build receipt does not enable this route.'
-    }
+    if ($Record) { SessionRecordBackend $root $receipt }
     if ($Stop) {
         $launched = SessionJson (SessionBound $folder 'companion.json')
         if ($launched.schema -cne 'fzero.companion-session@1' -or $launched.requestId -cne $RequestId -or

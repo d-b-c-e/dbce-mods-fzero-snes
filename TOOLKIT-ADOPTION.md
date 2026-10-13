@@ -45,6 +45,7 @@ Audited 2026-10-04 (read-only standards audit); STD-001 and STD-010 revised 2026
 | STD-034 | Apply qualified by a closed loop | partial | Existing raw-wheel evidence remains separate. October 12 shared-shim production Core diagnostic reached player Practice, matched 2,351 consumed words and cold WRAM checks; this injected drive is not Wheelkit-to-shim or physical owner-control qualification. See docs/2026-10-12-shim-diagnostic.md. |
 | STD-035 | Identity, provenance and failure rules | partial | Exact profile bytes through pinned ABI2; muted latched private Deluxe original and native terminal shutdown qualified October 12. Five private CLI runs exit0 with all77 owner pins exact; nonlatched preview seals and matches final consumed words. Ordinary Shared9790788 failed in legacy SDL acquisition (retained dump). Corrected7187c57 disables SDL for Shared; a private900-frame at-rest original and fresh graphical replay pass exactly, normal exits and owner77 pins unchanged. Legacy wheel extras and launcher remain explicitly unavailable pending owned-reader integration. Shared+FFB refusal remains pending the ownership bridge. No installed capability/default changed. See docs/2026-10-12-ordinary-shared-input.md. |
 | STD-036 | Bindings from each device | partial | Shared Core supports one owned epoch per bound instance in the diagnostic; installed raw-wheel writer still has its R12/single-device scope. No multi-device runtime proof yet. Missing SNES X/Y/L/R actions are explicit, not mapped to unrelated generic actions. |
+| STD-037 | Measured endpoints through schema 2 | pending | This consumer remains schema 1. No measured calibration transfer is advertised; Nene owns the coordinated parser/profile follow-up. |
 
 October 12 delivery follow-up for STD-002/012/035: `tools/Recording.ps1` and
 `docs/RECORDING-QUICKSTART.md` expose the existing record/replay CLI in the player
@@ -98,3 +99,10 @@ admission is Native only, with Shared ownership and automated-original isolation
 still open. Offline native, companion and Wheelkit fixtures/build pass; no new
 game build, launch, installation or public publication follows. See
 `docs/2026-10-12-recording-cli.md`, October 13 ordinary source checkpoint.
+
+October 13 installed Shared source follow-up: optional `-PrivateSharedInput` on
+the existing Deluxe installer owns the same four private files and source PIN as
+the stock stager. Its ordinary session receipt admits Shared only with this exact
+inventory and `ForceFeedback/Enabled=0`; no configuration is rewritten. Public
+packaging remains unchanged. Source/fixture work is not an installation or new
+runtime qualification.

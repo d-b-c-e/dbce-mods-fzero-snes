@@ -75,7 +75,10 @@ integration without a new recording format.
 October 13 internal source update: a receipt-owned ordinary Wheelkit companion is
 implemented and passes offline fixtures, including Stop while the game stays open.
 It requires a newly built/installed session capability; the current owner receipt
-does not qualify. Its interim recording admission is Native only. Shared installed
-runtime ownership and automated-original state isolation remain pending; the
-existing direct-ROM Shared CLI and prior diagnostic evidence are unchanged. See
+does not qualify. Optional private `-PrivateSharedInput` installation now owns the
+existing DLL/header/PIN/provenance inventory and can declare Shared recording.
+Admission independently verifies those bytes and still requires force feedback
+off; it never changes the backend, profile or force setting. Native remains the
+default. Automated-original state isolation remains pending; the existing
+direct-ROM Shared CLI and prior diagnostic evidence are unchanged. See
 [the source checkpoint](2026-10-12-recording-cli.md#october-13-ordinary-companion-source-checkpoint).

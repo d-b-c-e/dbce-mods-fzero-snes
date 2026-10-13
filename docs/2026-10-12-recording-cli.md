@@ -227,3 +227,28 @@ absolute-path assertion passes. Evidence is in the private hub's
 `artifacts/fzero-ordinary-session-20261013`. This checkpoint has no new game binary,
 game launch, installation, physical input/force proof or public push. The previous
 stock diagnostic Practice evidence remains unchanged.
+
+### October 13 optional installed Shared ownership source follow-up
+
+The existing Deluxe installer now accepts explicit `-PrivateSharedInput`. It owns
+exactly the same four private files as the stock stager (`dbce_shim.dll`, header,
+PIN and provenance), derives the ABI/revision/runtime hash from the source PIN,
+and checks actual DLL/header bytes and the linked Shared adapter marker before
+any write. It preserves the ordinary Deluxe build identity; the earlier stock
+binary is not relabeled as an installed launcher. Public packaging is unchanged.
+
+`privateSharedInput` in the existing install receipt names that inventory, and
+`session.recordBackends` admits Shared only with it. Both companion and Wheelkit
+check ownership, source/runtime agreement and actual force-disabled semantics.
+No backend/configuration/force setting is rewritten. A Native-only update over
+previously owned Shared files refuses before mutation; retain the explicit switch
+or roll back the Shared installation first. Backup/rollback owns all four paths.
+
+Focused offline checks passed: 33 companion assertions, 24 installer inventory/
+rollback assertions (including two real entry-point Shared-to-Native refusals
+against disposable fixtures), 112 Wheelkit session tests and the Release app build
+with zero warnings/errors. Nine initial legacy Woden trajectory-fixture failures
+were preserved and corrected by selecting their historical protocol explicitly;
+the new ordinary Woden default has separate lifecycle fixtures. Evidence is in
+`artifacts/fzero-shared-woden-sessions-20261013` in the private hub. No native/game
+rebuild, owner install, game launch or public push occurred for this follow-up.
