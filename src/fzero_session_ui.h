@@ -6,7 +6,7 @@ enum FzeroSessionMode { FZERO_SESSION_NONE, FZERO_SESSION_RECORD,
 typedef struct {
   enum FzeroSessionMode mode;
   const char *rom, *path, *request_id, *status_path, *isolated_save_root;
-  bool launcher, mute_outputs;
+  bool launcher, mute_outputs, route_witness;
 } FzeroSessionOptions;
 
 /* Parse before changing cwd or opening devices. Explicit sessions require a

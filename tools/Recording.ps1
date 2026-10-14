@@ -16,7 +16,8 @@ param(
     [ValidatePattern('^[0-9a-f]{32}$')][string]$RequestId,
     [ValidateSet('human','automated')][string]$InputOrigin = 'human',
     [ValidateRange(10,1800)][int]$Seconds = 60,
-    [string]$RecordingSha256
+    [string]$RecordingSha256,
+    [switch]$RouteWitness
 )
 $ErrorActionPreference = 'Stop'
 
@@ -221,6 +222,7 @@ function InvokeInstalledSession {
     if (@($Record,$Playback,$Stop | Where-Object { $_ }).Count -ne 1 -or $Action -or $Tape -or !$GameDir -or !$Result -or !$RequestId) { throw 'Choose exactly one installed Record, Playback or Stop request.' }
     $root = [IO.Path]::GetFullPath($GameDir); $folder = [IO.Path]::GetFullPath($Result)
     $automated = $Record -and $InputOrigin -ceq 'automated'
+    if ($RouteWitness -and !$automated) { throw 'Route witness requires automated isolated recording.' }
     $receipt = SessionCapability $root
     if ($Record) { SessionRecordBackend $root $receipt }
     if ($Stop) {
@@ -280,6 +282,7 @@ function InvokeInstalledSession {
         $start.Environment['SNESRECOMP_SAVE_ROOT'] = $saves
     }
     $privateSaves = if ($automated) { SessionAutomatedStart $start $root $receipt $RequestId } else { $null }
+    if ($RouteWitness) { $start.ArgumentList.Add('--route-witness') }
     # Human startup may perform its existing controls/config writes. Automated
     # originals instead bind the exact prelaunch identity and permit no drift.
     $identity = if ($automated) { SessionIdentity $root $Rom } else { $null }
@@ -357,6 +360,7 @@ function InvokeInstalledSession {
 }
 try {
     if ($Record -or $Playback -or $Stop) { InvokeInstalledSession; exit 0 }
+    if ($RouteWitness) { throw 'Route witness requires an installed automated recording request.' }
     if (!$Action -or !$Rom -or !$Tape) { throw 'Use Record/Replay with -Rom and -Tape, or an installed session request.' }
     $packageRoot = Split-Path $PSScriptRoot -Parent
     $exe = Join-Path $packageRoot 'FZeroSNESRecomp.exe'

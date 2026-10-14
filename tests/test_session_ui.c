@@ -72,6 +72,22 @@ int main(void) {
       "--isolate-owner-state", "C:/private-save", "--mute-outputs"};
   CHECK(FzeroSessionParse(11, isolated, false, &o, &error));
   CHECK(!strcmp(o.isolated_save_root, "C:/private-save") && o.mute_outputs);
+  char *witness[] = {"game", "--record", "a.fzpt", "--session-id",
+      "0123456789abcdef0123456789abcdef", "--session-status", "fresh/status.json", "rom.sfc",
+      "--isolate-owner-state", "C:/private-save", "--mute-outputs", "--route-witness"};
+  CHECK(FzeroSessionParse(12, witness, false, &o, &error) && o.route_witness);
+  parse(false, false, 13, (char *[]){"game", "--record", "a.fzpt", "--session-id",
+      "0123456789abcdef0123456789abcdef", "--session-status", "fresh/status.json", "rom.sfc",
+      "--isolate-owner-state", "C:/private-save", "--mute-outputs", "--route-witness", "--route-witness"},
+      FZERO_SESSION_NONE);
+  witness[1] = "--replay";
+  parse(false, false, 12, witness, FZERO_SESSION_NONE);
+  witness[1] = "--record"; witness[10] = "--route-witness";
+  parse(false, false, 11, witness, FZERO_SESSION_NONE); /* mute remains mandatory */
+  char *not_isolated[] = {"game", "--record", "a.fzpt", "--session-id",
+      "0123456789abcdef0123456789abcdef", "--session-status", "fresh/status.json", "rom.sfc",
+      "--mute-outputs", "--route-witness"};
+  parse(false, false, 10, not_isolated, FZERO_SESSION_NONE);
   parse(false, false, 10, isolated, FZERO_SESSION_NONE); /* isolation does not imply mute */
   parse(false, false, 9, isolated, FZERO_SESSION_NONE); /* missing root */
   parse(false, true, 11, isolated, FZERO_SESSION_NONE); /* no diagnostic/script transport */

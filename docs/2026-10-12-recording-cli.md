@@ -345,3 +345,42 @@ it would exercise ordinary consumed keyboard input, not Shared axis normalizatio
 The existing Core injection transport remains diagnostic-only and is refused by
 ordinary sessions. A live route/source guard must be reviewed before any driving
 run; neither an idle repeat nor a diagnostic tape substitutes for that evidence.
+
+The source-only route-witness candidate adds an optional `-RouteWitness` switch
+to the installed companion, forwarded as `--route-witness` only for automated,
+muted, isolated ordinary recording. It extends the existing atomic
+`fzero.session-status@1` JSON with a `routeWitness` object, not the `.fzpt`
+format or an input command. After each successfully recorded guest frame, it
+reports the final consumed input word, zero-based simulation frame, raw
+`$54/$55/$56` state, read-only Practice/Deluxe menu selectors, and independently
+computed software speed/distance. The enclosing status already carries exact
+request ID, PID, process creation FILETIME, ROM SHA and tape frame count. A
+driver must require all of them, `state=recording`, `valid=true`,
+`frames=simulationFrame+1`, and a strictly advancing fresh frame before each
+key action. The driver must causally match its own navigation/confirm consumed
+words (and Start if used) to the selected Practice/menu transitions in the
+same request, then establish
+the real player countdown `(2,2,2)` before live `(2,3,0)` with movement.
+`$58` training selection is a stronger Practice witness; `$5B=0` is only
+supporting data until attract behavior is captured. A live-looking attract
+state alone is insufficient. The snapshot stops after 6,000 frames and marks
+itself invalid, while ordinary session status continues. If status publication
+is temporarily blocked, the recorder continues and the driver must refuse a
+stale row. The disposable run must also retain frame-time diagnostics because
+per-frame atomic status updates can affect the timing of short keyboard taps.
+Mufa passed the witness as a passive source provider; the route driver and
+disposable runtime remain unqualified.
+
+The separate `tools/fzero_ordinary_practice_route.py` candidate reads the
+fresh companion/status pair for one request and verifies PID plus creation
+FILETIME against the live foreground game before sending keyboard scan codes.
+It requires an advancing post-frame witness and observed release before each
+Down/X menu pulse. Every pulse must appear in the consumed word and lead to
+the exact next Practice selector. It then requires the player countdown before
+Z throttle and Z+Right steering, and prints bounded step and observed-status
+timing summaries to stdout. It sends no Stop, changes no configuration and
+never drives replay; the existing companion owns Stop/seal/close and replay.
+These status-poll intervals are not a substitute for game frame-time
+diagnostics. Mufa closed the driver's ROM, status-read, startup and key-hold
+review findings. The private runner still needs its fixed-key release cleanup
+review before any disposable run.

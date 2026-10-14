@@ -2194,6 +2194,10 @@ int main(int argc, char **argv) {
     fprintf(stderr, "[fzero-isolation] owner writes and debug delivery fenced; private saves=%s\n",
             options.isolated_save_root);
   }
+  if (options.route_witness && !FzeroSessionControlWitnessEnable(&g_session_control)) {
+    fprintf(stderr, "[fzero-playthrough] isolated route witness unavailable\n");
+    return 2;
+  }
   if (recorded_replay && (!FzeroLatchNoForce() || !FzeroTelemetryLatchNoDelivery())) {
     fprintf(stderr, "[fzero-playthrough] output mute could not be established\n");
     return 2;
@@ -2676,6 +2680,7 @@ int main(int argc, char **argv) {
   int open_rewind = 0;
   uint32_t held_wheel_host_buttons = 0;
   FzeroDiagnosticFrame diagnostic_frame = {0};
+  FzeroTelemetryState route_telemetry = {0};
 
   double preview_started = monotonic_seconds();
   while (running) {
@@ -2980,6 +2985,26 @@ int main(int argc, char **argv) {
                 frames, (unsigned)FzeroResumePc(), g_fail, FzeroLastLleResult(),
                 g_ram[0x54], g_ram[0x55], g_ram[0x56], g_ram[0x52]);
         Die("F-Zero runtime execution failed");
+      }
+      if (options.route_witness && !g_session_control.witness_limit &&
+          g_session_ui.state == FZERO_SESSION_REC) {
+        double menu_values[FZERO_SHIM_MENU_VALUES];
+        uint32_t menu[12];
+        uint8_t state[3] = {g_ram[0x54], g_ram[0x55], g_ram[0x56]};
+        uint8_t packet[324];
+        bool observed = FzeroShimMenuValues(g_ram, sizeof(g_ram), menu_values) &&
+            FzeroTelemetryBuild(&route_telemetry, g_ram, sizeof(g_ram), input, packet) == sizeof(packet);
+        if (observed) {
+          for (unsigned i = 0; i < 12; ++i) menu[i] = (uint32_t)menu_values[i];
+          observed = FzeroSessionControlWitnessFrame(&g_session_control, &g_session_ui,
+              &g_playthrough, (uint64_t)frames, input, state, menu,
+              route_telemetry.speed_mps, route_telemetry.total_distance_m);
+        }
+        if (!observed) {
+          abort_playthrough("ordinary route witness source invalid");
+          FzeroSessionFail(&g_session_ui, "Route witness source invalid");
+          replay_failed = true; running = 0; break;
+        }
       }
       diagnostic_start = FzeroDiagnosticsBegin();
       FzeroDrawPpuFrame();

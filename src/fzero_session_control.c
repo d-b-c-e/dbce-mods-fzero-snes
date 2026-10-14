@@ -1,5 +1,6 @@
 #include "fzero_session_control.h"
 #include <errno.h>
+#include <math.h>
 #include <string.h>
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -54,14 +55,33 @@ static bool write_status(FILE *file, const FzeroSessionControl *c,
                          const FzeroSessionUi *ui, const FzeroPlaythrough *p) {
   /* All strings are fixed tokens or validated hex, so no lossy JSON escaping.
    * The existing game log/UI retains the descriptive error. */
-  return fprintf(file, "{\"schema\":\"fzero.session-status@1\",\"requestId\":\"%s\","
+  if (fprintf(file, "{\"schema\":\"fzero.session-status@1\",\"requestId\":\"%s\","
       "\"action\":\"%s\",\"state\":\"%s\",\"processId\":%u,"
       "\"processCreationFileTime\":%llu,\"frames\":%llu,\"total\":%llu,"
-      "\"effectiveRomSha256\":\"%s\",\"outputMuted\":%s}\n",
+      "\"effectiveRomSha256\":\"%s\",\"outputMuted\":%s",
       c->request_id, c->action == FZERO_SESSION_RECORD ? "record" : "replay", state_name(ui->state),
       (unsigned)c->process_id, (unsigned long long)c->creation_file_time,
       (unsigned long long)p->frames, (unsigned long long)p->total, c->rom_sha256,
-      c->muted ? "true" : "false") > 0 && fflush(file) == 0;
+      c->muted ? "true" : "false") < 0) return false;
+  if (c->witness_enabled) {
+    bool witness_live = c->witness_valid && ui->state == FZERO_SESSION_REC;
+    if (fprintf(file, ",\"routeWitness\":{\"valid\":%s,\"limited\":%s",
+        witness_live ? "true" : "false", c->witness_limit ? "true" : "false") < 0) return false;
+    if (witness_live && fprintf(file,
+        ",\"simulationFrame\":%llu,\"inputWord\":%u,\"state54\":%u,\"state55\":%u,\"state56\":%u,"
+        "\"selection\":%u,\"training\":%u,\"transition\":%u,\"car\":%u,\"course\":%u,\"league\":%u,"
+        "\"deluxeCar\":%u,\"deluxeRival\":%u,\"deluxePanel\":%u,\"deluxeAccept\":%u,\"deluxeTrack\":%u,\"state5b\":%u,"
+        "\"speedMps\":%.6f,\"distanceM\":%.6f",
+        (unsigned long long)c->witness_frame, (unsigned)c->witness_input,
+        (unsigned)c->witness_state[0], (unsigned)c->witness_state[1], (unsigned)c->witness_state[2],
+        (unsigned)c->witness_menu[0], (unsigned)c->witness_menu[1], (unsigned)c->witness_menu[2],
+        (unsigned)c->witness_menu[3], (unsigned)c->witness_menu[4], (unsigned)c->witness_menu[5],
+        (unsigned)c->witness_menu[6], (unsigned)c->witness_menu[7], (unsigned)c->witness_menu[8],
+        (unsigned)c->witness_menu[9], (unsigned)c->witness_menu[10], (unsigned)c->witness_menu[11],
+        c->witness_speed_mps, c->witness_distance_m) < 0) return false;
+    if (fputc('}', file) == EOF) return false;
+  }
+  return fputs("}\n", file) >= 0 && fflush(file) == 0;
 }
 bool FzeroSessionControlOpen(FzeroSessionControl *c, const char *path,
     const char *id, enum FzeroSessionMode action, bool muted) {
@@ -137,7 +157,8 @@ bool FzeroSessionControlPublish(FzeroSessionControl *c, const FzeroSessionUi *ui
     c->published = false;
   }
   if (c->published && c->published_state == ui->state &&
-      p->frames >= c->published_frames && p->frames - c->published_frames < 60) return true;
+      p->frames >= c->published_frames && p->frames - c->published_frames <
+          (c->witness_enabled && !c->witness_limit ? 1u : 60u)) return true;
   FILE *file = fopen(c->temporary, "wbx");
   if (!file) return false;
   c->owns_temporary = true;
@@ -151,4 +172,38 @@ bool FzeroSessionControlPublish(FzeroSessionControl *c, const FzeroSessionUi *ui
 #endif
   if (ok) { c->owns_temporary = c->pending_valid = false; c->published = true; c->published_state = ui->state; c->published_frames = p->frames; }
   return ok;
+}
+bool FzeroSessionControlWitnessEnable(FzeroSessionControl *c) {
+  if (!c || !c->enabled || !c->muted || c->action != FZERO_SESSION_RECORD || c->witness_enabled)
+    return false;
+  c->witness_enabled = true;
+  return true;
+}
+bool FzeroSessionControlWitnessFrame(FzeroSessionControl *c, const FzeroSessionUi *ui,
+    const FzeroPlaythrough *p, uint64_t simulation_frame, uint32_t input,
+    const uint8_t state[3], const uint32_t menu[12], double speed_mps, double distance_m) {
+  if (!c || !c->witness_enabled || !ui || ui->state != FZERO_SESSION_REC || !p || p->mode != 1 ||
+      !state || !menu || p->frames != simulation_frame + 1 ||
+      !isfinite(speed_mps) || !isfinite(distance_m) || speed_mps < 0 || distance_m < 0)
+    return false;
+  if (c->witness_limit) return true;
+  if (c->witness_valid && simulation_frame <= c->witness_frame) return false;
+  if (p->frames > 6000) {
+    c->witness_limit = true;
+    c->witness_valid = false;
+    c->published = false;
+    (void)FzeroSessionControlPublish(c, ui, p);
+    return true;
+  }
+  c->witness_frame = simulation_frame;
+  c->witness_input = input;
+  memcpy(c->witness_state, state, sizeof(c->witness_state));
+  memcpy(c->witness_menu, menu, sizeof(c->witness_menu));
+  c->witness_speed_mps = speed_mps;
+  c->witness_distance_m = distance_m;
+  c->witness_valid = true;
+  /* Publication may be temporarily blocked by a reader. The recorder keeps
+   * running; the route driver must refuse stale status frames. */
+  (void)FzeroSessionControlPublish(c, ui, p);
+  return true;
 }

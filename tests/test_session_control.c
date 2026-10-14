@@ -14,6 +14,11 @@ static void contains(const char *path, const char *text) {
   size_t n = fread(bytes, 1, sizeof(bytes) - 1, f); CHECK(n > 0 && feof(f)); CHECK(fclose(f) == 0);
   CHECK(strstr(bytes, text) != NULL);
 }
+static void lacks(const char *path, const char *text) {
+  char bytes[2048] = {0}; FILE *f = fopen(path, "rb"); CHECK(f != NULL);
+  size_t n = fread(bytes, 1, sizeof(bytes) - 1, f); CHECK(n > 0 && feof(f)); CHECK(fclose(f) == 0);
+  CHECK(strstr(bytes, text) == NULL);
+}
 int main(void) {
   char dir[MAX_PATH], path[MAX_PATH], tape[MAX_PATH];
   CHECK(GetTempPathA(sizeof(dir), dir) != 0);
@@ -44,8 +49,10 @@ int main(void) {
   CHECK(!FzeroSessionControlOpen(&c, path, id, FZERO_SESSION_PREVIEW, true));
   CHECK(FzeroSessionControlOpen(&c, path, id, FZERO_SESSION_RECORD, false));
   CHECK(c.process_id == GetCurrentProcessId() && c.creation_file_time > 0 && !c.muted);
+  CHECK(!FzeroSessionControlWitnessEnable(&c)); /* unmuted sessions cannot opt in */
   CHECK(!FzeroSessionControlOpen(&other, path, id, FZERO_SESSION_RECORD, false));
   contains(path, "\"state\":\"starting\"");
+  lacks(path, "routeWitness"); /* default-off status stays byte-shape compatible */
   CHECK(FzeroPlaythroughRecordOpen(&p, tape, sha));
   FzeroSessionBegin(&ui, 1, false); FzeroSessionControlRom(&c, sha);
   CHECK(FzeroSessionControlPublish(&c, &ui, &p));
@@ -107,6 +114,45 @@ int main(void) {
   }
   CHECK(FzeroPlaythroughClose(&reader));
   CHECK(remove(c.stop_path) == 0); CHECK(remove(path) == 0); CHECK(remove(tape) == 0);
+  CHECK(FzeroSessionControlOpen(&c, path, id, FZERO_SESSION_RECORD, true));
+  CHECK(FzeroSessionControlWitnessEnable(&c));
+  CHECK(!FzeroSessionControlWitnessEnable(&c));
+  CHECK(FzeroPlaythroughRecordOpen(&p, tape, sha)); FzeroSessionBegin(&ui, 1, false);
+  FzeroSessionControlRom(&c, sha);
+  CHECK(FzeroSessionControlPublish(&c, &ui, &p));
+  contains(path, "\"routeWitness\":{\"valid\":false,\"limited\":false}");
+  uint8_t state[3] = {0, 1, 0};
+  uint32_t menu[12] = {0}; menu[1] = 1;
+  CHECK(!FzeroSessionControlWitnessFrame(&c, &ui, &p, 0, 0, state, menu, 0, 0));
+  CHECK(FzeroPlaythroughRecordFrame(&p, 0x40000100, ram, sizeof(ram)));
+  CHECK(FzeroSessionControlWitnessFrame(&c, &ui, &p, 0, 0x40000100, state, menu, 0, 0));
+  contains(path, "\"requestId\":\"0123456789abcdef0123456789abcdef\"");
+  contains(path, "\"processCreationFileTime\":");
+  contains(path, "\"frames\":1"); contains(path, "\"simulationFrame\":0");
+  contains(path, "\"inputWord\":1073742080"); contains(path, "\"training\":1");
+  CHECK(!FzeroSessionControlWitnessFrame(&c, &ui, &p, 0, 0, state, menu, 0, 0));
+  state[0] = 2; state[1] = 2; state[2] = 2; menu[11] = 0;
+  CHECK(FzeroPlaythroughRecordFrame(&p, 0x40000081, ram, sizeof(ram)));
+  CHECK(FzeroSessionControlWitnessFrame(&c, &ui, &p, 1, 0x40000081, state, menu, 0, 0));
+  contains(path, "\"simulationFrame\":1"); contains(path, "\"state54\":2,\"state55\":2,\"state56\":2");
+  state[1] = 3; state[2] = 0;
+  CHECK(FzeroPlaythroughRecordFrame(&p, 0x40000081, ram, sizeof(ram)));
+  CHECK(FzeroSessionControlWitnessFrame(&c, &ui, &p, 2, 0x40000081, state, menu, 2.5, 1.25));
+  contains(path, "\"simulationFrame\":2"); contains(path, "\"speedMps\":2.500000");
+  contains(path, "\"training\":1"); contains(path, "\"state5b\":0");
+  CHECK(!FzeroSessionControlWitnessFrame(&c, &ui, &p, 2, 0, state, menu, -1, 0));
+  FzeroSessionUi terminal_view = ui; terminal_view.state = FZERO_SESSION_SAVED;
+  CHECK(FzeroSessionControlPublish(&c, &terminal_view, &p));
+  contains(path, "\"routeWitness\":{\"valid\":false,\"limited\":false}");
+  p.frames = 6001; /* synthetic cap boundary; no extra tape bytes are written */
+  CHECK(FzeroSessionControlWitnessFrame(&c, &ui, &p, 6000, 0, state, menu, 0, 0));
+  contains(path, "\"routeWitness\":{\"valid\":false,\"limited\":true}");
+  p.frames = 3;
+  CHECK(FzeroSessionFinish(&ui, &p, true, 100));
+  CHECK(FzeroSessionControlPublish(&c, &ui, &p));
+  contains(path, "\"state\":\"saved\"");
+  contains(path, "\"routeWitness\":{\"valid\":false,\"limited\":true}");
+  CHECK(remove(path) == 0); CHECK(remove(tape) == 0);
   printf("ordinary session control: %u checks\n", checks);
   return 0;
 }

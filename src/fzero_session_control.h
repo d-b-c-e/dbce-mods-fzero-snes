@@ -6,10 +6,14 @@
 typedef struct {
   char path[2048], stop_path[2056], temporary[2056], request_id[33], rom_sha256[65];
   uint32_t process_id;
-  uint64_t creation_file_time, published_frames;
+  uint64_t creation_file_time, published_frames, witness_frame;
+  uint32_t witness_input, witness_menu[12];
+  uint8_t witness_state[3];
+  double witness_speed_mps, witness_distance_m;
   enum FzeroSessionMode action;
   enum FzeroSessionState published_state;
   bool enabled, muted, published, stopped, owns_temporary, pending_valid;
+  bool witness_enabled, witness_valid, witness_limit;
 } FzeroSessionControl;
 
 /* Claims a fresh status path and refuses stale status/stop/temporary files.
@@ -29,3 +33,11 @@ int FzeroSessionControlStop(FzeroSessionControl *control, const FzeroSessionUi *
  * and Verified are the existing recorder's states, never inferred from exit. */
 bool FzeroSessionControlPublish(FzeroSessionControl *control, const FzeroSessionUi *ui,
     const FzeroPlaythrough *playthrough);
+/* Optional, read-only snapshot in the existing atomic status JSON. It is
+ * bounded to 6000 recorded frames and never creates a second tape or input API.
+ * One successful post-frame tape write must precede each published snapshot. */
+bool FzeroSessionControlWitnessEnable(FzeroSessionControl *control);
+bool FzeroSessionControlWitnessFrame(FzeroSessionControl *control,
+    const FzeroSessionUi *ui, const FzeroPlaythrough *playthrough,
+    uint64_t simulation_frame, uint32_t input, const uint8_t state[3],
+    const uint32_t menu[12], double speed_mps, double distance_m);
