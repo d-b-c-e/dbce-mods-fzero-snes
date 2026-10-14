@@ -23,42 +23,82 @@ int main(void) {
     for (int replay=0; replay<2; ++replay)
       for (int shim=0; shim<2; ++shim)
         CHECK(FzeroControlsStartupMayWrite(script,replay,shim) == !(script||replay||shim));
+  /* Stock and Deluxe use the same gameplay scene boundary. Practice's
+   * training flag does not change it; menu, countdown and ending stay out. */
+  uint8_t scene[0x59]={0};
+  CHECK(!FzeroShimGameplayState(NULL,sizeof(scene)));
+  CHECK(!FzeroShimGameplayState(scene,0x55));
+  scene[0x54]=1; scene[0x55]=1; CHECK(!FzeroShimGameplayState(scene,sizeof(scene)));
+  scene[0x54]=2; scene[0x55]=1; CHECK(!FzeroShimGameplayState(scene,sizeof(scene)));
+  scene[0x55]=2; CHECK(!FzeroShimGameplayState(scene,sizeof(scene)));
+  scene[0x55]=3; CHECK(FzeroShimGameplayState(scene,sizeof(scene)));
+  scene[0x58]=1; CHECK(FzeroShimGameplayState(scene,sizeof(scene))); /* Practice */
+  scene[0x55]=6; CHECK(FzeroShimGameplayState(scene,sizeof(scene)));
+  scene[0x54]=3; CHECK(!FzeroShimGameplayState(scene,sizeof(scene)));
+  /* A live wheel offset must not navigate menus. Explicit nav actions and
+   * pedals remain independent, including when the analog PDM is reset. */
+  FzeroShimMap menu_map; FzeroShimMapInit(&menu_map,100,50,.5f);
+  dbce_shim_frame mf=frame(); uint32_t menu_word=0;
+  mf.action[0].value=.25f;
+  CHECK(FzeroShimMapFrame(&menu_map,&mf,&menu_word,0) && menu_word==0);
+  CHECK(menu_map.steering.phase==0 && menu_map.steering.direction==0);
+  static const unsigned menu_bits[] = {8,0,3,2,4,5};
+  for (int i=0; i<6; ++i) {
+    mf.seq++; mf.action[9+i].value=1;
+    CHECK(FzeroShimMapFrame(&menu_map,&mf,&menu_word,0) && menu_word==(1u<<menu_bits[i]));
+    mf.action[9+i].value=0;
+  }
+  mf.seq++; mf.action[15].value=1; mf.action[1].value=1;
+  CHECK(FzeroShimMapFrame(&menu_map,&mf,&menu_word,0) && menu_word==0x41);
+  mf.seq++; mf.action[15].value=0; mf.action[16].value=1;
+  CHECK(FzeroShimMapFrame(&menu_map,&mf,&menu_word,0) && menu_word==0x81);
+  CHECK(menu_map.steering.phase==0 && menu_map.steering.direction==0);
+  mf.seq++; mf.action[16].value=0; mf.action[1].value=0;
+  CHECK(FzeroShimMapFrame(&menu_map,&mf,&menu_word,1));
+  FzeroShimMap fresh; FzeroShimMapInit(&fresh,100,50,.5f);
+  uint32_t fresh_word=0;
+  CHECK(FzeroShimMapFrame(&fresh,&mf,&fresh_word,1) && menu_word==fresh_word);
+  mf.seq++; CHECK(FzeroShimMapFrame(&menu_map,&mf,&menu_word,0) && menu_word==0);
+  CHECK(menu_map.steering.phase==0 && menu_map.steering.direction==0);
+  mf.seq++; CHECK(FzeroShimMapFrame(&menu_map,&mf,&menu_word,1));
+  FzeroShimMapInit(&fresh,100,50,.5f);
+  CHECK(FzeroShimMapFrame(&fresh,&mf,&fresh_word,1) && menu_word==fresh_word);
   FzeroShimMap map; FzeroShimMapInit(&map,100,100,.5f);
   dbce_shim_frame f = frame(); uint32_t word;
-  CHECK(FzeroShimMapFrame(&map,&f,&word) && word == 0);
-  CHECK(!FzeroShimMapFrame(&map,&f,&word) && word == 0); // no second PDM advancement
-  f.seq = 0; CHECK(!FzeroShimMapFrame(&map,&f,&word));
-  f.seq = 2; f.abi = 1; CHECK(!FzeroShimMapFrame(&map,&f,&word));
-  f.abi = 2; f.struct_size--; CHECK(!FzeroShimMapFrame(&map,&f,&word)); f.struct_size++;
-  f.action[0].value = -1; CHECK(FzeroShimMapFrame(&map,&f,&word) && word == 0x40);
-  f.seq++; f.action[0].value = 1; CHECK(FzeroShimMapFrame(&map,&f,&word) && word == 0x80);
+  CHECK(FzeroShimMapFrame(&map,&f,&word,1) && word == 0);
+  CHECK(!FzeroShimMapFrame(&map,&f,&word,1) && word == 0); // no second PDM advancement
+  f.seq = 0; CHECK(!FzeroShimMapFrame(&map,&f,&word,1));
+  f.seq = 2; f.abi = 1; CHECK(!FzeroShimMapFrame(&map,&f,&word,1));
+  f.abi = 2; f.struct_size--; CHECK(!FzeroShimMapFrame(&map,&f,&word,1)); f.struct_size++;
+  f.action[0].value = -1; CHECK(FzeroShimMapFrame(&map,&f,&word,1) && word == 0x40);
+  f.seq++; f.action[0].value = 1; CHECK(FzeroShimMapFrame(&map,&f,&word,1) && word == 0x80);
   f.action[0].value = 0;
   static const unsigned bits[] = {8,0,3,2,4,5,6,7};
   for (int i=0; i<8; ++i) {
     f.seq++; f.action[9+i].value = 1;
-    CHECK(FzeroShimMapFrame(&map,&f,&word) && word == (1u<<bits[i]));
+    CHECK(FzeroShimMapFrame(&map,&f,&word,1) && word == (1u<<bits[i]));
     f.action[9+i].value = 0;
   }
   f.seq++; f.action[1].value = .5f; f.action[2].value = .5f;
-  CHECK(FzeroShimMapFrame(&map,&f,&word) && word == 0);
+  CHECK(FzeroShimMapFrame(&map,&f,&word,1) && word == 0);
   f.seq++; f.action[1].value = .51f; f.action[2].value = .51f;
-  CHECK(FzeroShimMapFrame(&map,&f,&word) && word == 3);
+  CHECK(FzeroShimMapFrame(&map,&f,&word,1) && word == 3);
   // Unsupported generic actions never invent SNES shoulder/boost mappings.
   f = frame(); f.seq = 100;
   for (int i=3; i<9; ++i) f.action[i].value = 1;
   for (int i=17; i<31; ++i) f.action[i].value = 1;
-  CHECK(FzeroShimMapFrame(&map,&f,&word) && word == 0);
+  CHECK(FzeroShimMapFrame(&map,&f,&word,1) && word == 0);
   f = frame(); f.seq = 101;
   for (int status=0; status<=13; ++status) {
     if (status==12) continue;
     for (int i=0; i<31; ++i) { f.action[i].value=1; f.action[i].status=(uint8_t)status; }
-    f.seq++; CHECK(FzeroShimMapFrame(&map,&f,&word) && word == 0);
+    f.seq++; CHECK(FzeroShimMapFrame(&map,&f,&word,1) && word == 0);
     CHECK(map.steering.phase == 0);
   }
   for (int i=0; i<31; ++i) { f.action[i].value=NAN; f.action[i].status=12; }
-  f.seq++; CHECK(FzeroShimMapFrame(&map,&f,&word) && word == 0);
+  f.seq++; CHECK(FzeroShimMapFrame(&map,&f,&word,1) && word == 0);
   for (int i=0; i<31; ++i) f.action[i].value=INFINITY;
-  f.seq++; CHECK(FzeroShimMapFrame(&map,&f,&word) && word == 0);
+  f.seq++; CHECK(FzeroShimMapFrame(&map,&f,&word,1) && word == 0);
 
   /* The ordinary compatibility path preserves digital extras and only
    * explicitly unbound generic buttons. Every unavailable state stays owned
@@ -74,7 +114,7 @@ int main(void) {
   f.abi=1;CHECK(FzeroShimLegacyButtonMask(&f)==0);
   f=frame();FzeroShimMapInit(&map,100,50,.5f);
   f.action[0].value=.25f;f.action[1].value=f.action[2].value=1;
-  CHECK(FzeroShimMapFrame(&map,&f,&word));
+  CHECK(FzeroShimMapFrame(&map,&f,&word,1));
   f.seq++;f.action[13].value=1;
   CHECK(FzeroShimMapOverlayFrame(&map,&f,&word) && word==0x10);
   CHECK(map.steering.phase==0 && map.steering.direction==0);
@@ -94,7 +134,7 @@ int main(void) {
   for (int n=0; n<120; ++n) {
     f.seq=(uint64_t)n+1; f.action[0].value = n<60 ? .25f : -.25f;
     f.action[1].value = 1;
-    CHECK(FzeroShimMapFrame(&map,&f,&word));
+    CHECK(FzeroShimMapFrame(&map,&f,&word,1));
     int axis=(int)roundf(f.action[0].value*(n<60 ? 32767.f : 32768.f));
     uint32_t steering = FzeroAnalogSteeringReadTuned(&legacy,axis,0,100,50);
     CHECK(word==(steering|1u));
@@ -112,7 +152,7 @@ int main(void) {
   }
   CHECK(FzeroPlaythroughClose(&playback)); CHECK(remove(path)==0);
   f.seq=121; f.action[0].value=.1f;
-  CHECK(FzeroShimMapFrame(&map,&f,&word));
+  CHECK(FzeroShimMapFrame(&map,&f,&word,1));
   FzeroShimMapNeutral(&map); CHECK(map.steering.phase==0 && map.steering.direction==0);
   /* Read-only evidence uses exact widths and refuses truncated bank 7F. */
   static uint8_t menu_ram[0x20000]; double menu[FZERO_SHIM_MENU_VALUES];

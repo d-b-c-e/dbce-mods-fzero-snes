@@ -77,10 +77,11 @@ int main(int argc,char **argv) {
     CHECK(started);
     if(mode=="unexpected") _putenv_s("FZERO_FAKE_ORDINARY_LATCH","1");
     if(mode=="missing") {_putenv_s("FZERO_FAKE_MISSING","1");_putenv_s("FZERO_FAKE_UNBOUND","1");}
-    uint32_t word=0;
-    if(mode=="unexpected") CHECK(!FzeroShimInput(&word) && !FzeroShimStop());
+    uint32_t word=0; uint8_t scene[0x56]{};
+    scene[0x54]=2; scene[0x55]=3;
+    if(mode=="unexpected") CHECK(!FzeroShimInput(&word,scene,sizeof(scene)) && !FzeroShimStop());
     else {
-     CHECK(FzeroShimInput(&word));
+     CHECK(FzeroShimInput(&word,scene,sizeof(scene)));
      if(mode=="missing") {
       CHECK((word&0xc0)==0); // no steering fallback
       CHECK((FzeroShimSupplementalMask()&0x100)==0); // missing Confirm never falls back
@@ -88,10 +89,10 @@ int main(int argc,char **argv) {
      }
      CHECK(FzeroShimConsumed(0,word,nullptr,0));
      _putenv_s("FZERO_FAKE_BAD_RECORD","1"); // ordinary must never call shared capture
-     CHECK(FzeroShimInput(&word));
+     CHECK(FzeroShimInput(&word,scene,sizeof(scene)));
      FzeroShimNeutral(); // host overlay cancels this pending guest frame
      CHECK(FzeroShimOverlayInput(&word) && word==0); // pedal/steering never navigate host UI
-     CHECK(FzeroShimInput(&word));
+     CHECK(FzeroShimInput(&word,scene,sizeof(scene)));
      uint32_t consumed=FzeroShimGuestWord(word | 0x400u | 0x40000000u);
      CHECK(FzeroShimConsumed(1,consumed,nullptr,0));
      // Same final Core + keyboard (SNES L here) word enters the actual .fzpt

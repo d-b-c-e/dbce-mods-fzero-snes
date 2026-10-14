@@ -64,6 +64,13 @@ by this Shared candidate; keyboard SNES bindings remain available. A visible
 limitation banner discloses this. Existing legacy bindings stay in the file for
 Native; there is no silent fallback to another device reader.
 
+The private Shared candidate uses the explicit menu navigation actions and
+keyboard in menus. Its analog steering reaches the guest only in the same
+gameplay state used by force and telemetry, and resets its pulse phase outside
+that state. This prevents a wheel offset from choosing a menu item; Native SDL
+stick navigation and the owner's profile remain unchanged. A changed ordinary
+Practice recording and replay are still needed to qualify this source fix.
+
 Private Deluxe checks on October 12 verified a 900-frame ordinary Shared
 at-rest original and fresh graphical replay, with visible REC/Saved/REPLAY and
 all memory checkpoints matching. A separate injected Practice drive has 2,351

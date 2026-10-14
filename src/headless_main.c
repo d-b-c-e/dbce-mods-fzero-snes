@@ -672,6 +672,15 @@ int main(int argc, char **argv) {
               frame, g_ram[0x54], g_ram[0x55], g_ram[0x56], g_ram[0x58], g_ram[0x81],
               g_ram[0x45], g_ram[0x46], g_ram[0x47], g_ram[0x48], g_ram[0x49],
               g_ram[0x180], g_ram[0x181], g_ram[0x182], g_ram[0x183], g_snes->ppu->inidisp);
+    /* Opt-in read-only menu witness for a sealed tape replay. The normal
+     * playback still verifies its per-frame WRAM hash before this trace. */
+    if (getenv("FZERO_MENU_TRACE") && g_ram[0x54] == 1)
+      fprintf(stderr, "[fzero-menu] frame=%ld input=%08x state=%02x,%02x,%02x training=%u transition=%u car=%u panel=%u accept=%u\n",
+              frame, frame_input, g_ram[0x54], g_ram[0x55], g_ram[0x56],
+              g_ram[0x58], g_ram[0x60],
+              (unsigned)(g_ram[0x14c84] | ((unsigned)g_ram[0x14c85] << 8)),
+              (unsigned)(g_ram[0x14c92] | ((unsigned)g_ram[0x14c93] << 8)),
+              (unsigned)(g_ram[0x14c98] | ((unsigned)g_ram[0x14c99] << 8)));
     if (g_fail || !FzeroLastLleResult()) {
       fprintf(stderr, "fzero_native: runtime failure frame=%ld pc=$%06x bus_fault=%d execution=%d state=%02x,%02x,%02x car=%02x\n",
               frame, (unsigned)FzeroResumePc(), g_fail, FzeroLastLleResult(),

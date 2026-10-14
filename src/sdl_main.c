@@ -841,7 +841,7 @@ static bool session_live_input(void *context, uint32_t *word) {
   uint32_t input;
   if (FzeroShimUsingInput()) {
     uint32_t shim_word = 0;
-    if (!FzeroShimInput(&shim_word)) {
+    if (!FzeroShimInput(&shim_word, g_ram, sizeof(g_ram))) {
       return false;
     }
     /* Shared owns mapped inputs; no SDL controller is opened. Legacy wheel

@@ -92,6 +92,27 @@ class OrdinaryRouteChecks(unittest.TestCase):
             with self.assertRaises(route.Refused):
                 route.read_json(path)
 
+    def test_refusal_retains_last_rejected_menu_guard(self):
+        with tempfile.TemporaryDirectory() as folder:
+            stream = self.stream(Path(folder))
+            stream.accept(status(0))
+            last = witness(1, state=(1, 1, 0), word=route.PORT | route.RIGHT,
+                           deluxeCar=4, transition=0)
+            stream.accept(status(1, routeWitness=last))
+            stream.guard_step = 2
+            output = StringIO()
+            with redirect_stdout(output):
+                route.emit_refusal_witness(stream)
+            snapshot = json.loads(output.getvalue())["refusalWitness"]
+            self.assertEqual(snapshot["step"], 2)
+            self.assertEqual(snapshot["simulationFrame"], 1)
+            self.assertEqual(snapshot["inputWord"], route.PORT | route.RIGHT)
+            self.assertEqual(tuple(snapshot[key] for key in ("state54", "state55", "state56")),
+                             (1, 1, 0))
+            self.assertEqual((snapshot["transition"], snapshot["deluxeCar"],
+                              snapshot["deluxePanel"], snapshot["deluxeAccept"]),
+                             (0, 4, 0, 0))
+
     def test_transient_status_miss_waits_for_next_row(self):
         with tempfile.TemporaryDirectory() as folder:
             stream = self.stream(Path(folder))

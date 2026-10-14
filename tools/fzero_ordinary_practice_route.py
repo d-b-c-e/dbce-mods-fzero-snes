@@ -86,6 +86,8 @@ class StatusStream:
         self.created = self.launch["processCreationFileTime"]
         self.last_frame = -1
         self.last_new = time.monotonic()
+        self.last_row = None
+        self.guard_step = None
         self.intervals_ms = []
         self.guard = lambda: None
 
@@ -136,6 +138,7 @@ class StatusStream:
             self.intervals_ms.append((now - self.last_new) * 1000 / (frame - self.last_frame))
         self.last_frame = frame
         self.last_new = now
+        self.last_row = witness
         return witness
 
     def timing(self):
@@ -167,6 +170,20 @@ class StatusStream:
 
 def state(row):
     return tuple(row["state" + str(i)] for i in (54, 55, 56))
+
+
+def emit_refusal_witness(stream):
+    """Retain the last exact menu guard fields before status loses its witness."""
+    row = stream.last_row
+    if row is None:
+        return
+    fields = ("simulationFrame", "inputWord", "state54", "state55", "state56",
+              "selection", "training", "transition", "car", "course", "league",
+              "deluxeCar", "deluxeRival", "deluxePanel", "deluxeAccept",
+              "deluxeTrack", "state5b", "speedMps", "distanceM")
+    print(json.dumps({"refusalWitness": {"step": stream.guard_step,
+                                        **{field: row[field] for field in fields}}},
+                     sort_keys=True), flush=True)
 
 
 def practice(row):
@@ -364,6 +381,7 @@ class Keyboard:
 
 
 def wait_for(stream, predicate, deadline, key=None, pressed=False, minimum_frames=1, step=None):
+    stream.guard_step = step
     count = 0
     while True:
         row = stream.next(deadline)
@@ -387,6 +405,7 @@ def pulse(stream, keyboard, name, current, next_step, deadline, next_ready=None)
     wait_for(stream, lambda r: ready(current, r), deadline, name, False, 9, current)
     keyboard.down(name)
     try:
+        stream.guard_step = current + 1
         first = None
         hold_deadline = min(deadline, time.monotonic() + .35)
         while True:
@@ -477,6 +496,9 @@ def main():
     stream.guard = keyboard.check
     try:
         drive(stream, keyboard, time.monotonic() + args.seconds)
+    except Refused:
+        emit_refusal_witness(stream)
+        raise
     finally:
         keyboard.close()
         print(json.dumps({"framePacing": stream.timing()}), flush=True)

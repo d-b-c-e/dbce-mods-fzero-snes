@@ -297,14 +297,15 @@ int FzeroShimStart(void *window, const char *legacy_guid) {
   return 0;
 #endif
 }
-int FzeroShimInput(uint32_t *word) {
+int FzeroShimInput(uint32_t *word, const uint8_t *ram, size_t ram_size) {
   if (word) *word = 0;
-  if (!FzeroShimUsingInput() || failed || !handle || !word) return 0;
+  if (!FzeroShimUsingInput() || failed || !handle || !word || !ram || ram_size <= 0x55) return 0;
   if (pending) return refuse("previous simulation input was not consumed");
   if (requested && std::chrono::duration<double>(Clock::now()-started).count() >= kSeconds)
     return refuse("240-second diagnostic deadline exceeded");
   frame = {}; frame.struct_size = sizeof(frame);
-  if (tick(handle, &frame) != DBCE_SHIM_OK || !FzeroShimMapFrame(&map, &frame, word))
+  if (tick(handle, &frame) != DBCE_SHIM_OK ||
+      !FzeroShimMapFrame(&map, &frame, word, FzeroShimGameplayState(ram, ram_size)))
     return refuse("input tick/sequence/layout failed");
   if (latched) {
     if (!frame.latched || !frame.suppress_native || frame.run < 1 || frame.run > 4)

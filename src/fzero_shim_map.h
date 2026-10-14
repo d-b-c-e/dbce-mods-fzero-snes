@@ -30,10 +30,15 @@ typedef struct FzeroShimMap {
 void FzeroShimMapInit(FzeroShimMap *s, int range_percent, int response_percent,
                       float pedal_threshold);
 void FzeroShimMapNeutral(FzeroShimMap *s);
+/* The same stock/Deluxe race-state boundary used by force and telemetry.
+ * Before this boundary, only explicit digital nav may create menu directions. */
+int FzeroShimGameplayState(const uint8_t *ram, size_t ram_size);
 /* Called exactly once at each emulated simulation boundary, never on render
- * frames or overlay reads. Duplicate/out-of-order frames refuse, rather than
- * advancing the steering pulse twice. Only finite Live values are delivered. */
-int FzeroShimMapFrame(FzeroShimMap *s, const dbce_shim_frame *frame, uint32_t *word);
+ * frames or overlay reads. Duplicate/out-of-order frames refuse. Outside the
+ * verified race state, analog steering is suppressed and its PDM reset; the
+ * independent digital navigation actions remain available. */
+int FzeroShimMapFrame(FzeroShimMap *s, const dbce_shim_frame *frame, uint32_t *word,
+                      int gameplay);
 /* Ordinary host overlays poll digital navigation without advancing the steering
  * PDM or recording a guest frame. Same sequence/layout checks as gameplay. */
 int FzeroShimMapOverlayFrame(FzeroShimMap *s, const dbce_shim_frame *frame, uint32_t *word);

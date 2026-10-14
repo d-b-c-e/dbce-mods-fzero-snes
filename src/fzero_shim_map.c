@@ -28,6 +28,9 @@ void FzeroShimMapInit(FzeroShimMap *s, int range, int response, float threshold)
   s->pedal_threshold = isfinite(threshold) && threshold >= 0 && threshold <= 1 ? threshold : .5f;
 }
 void FzeroShimMapNeutral(FzeroShimMap *s) { FzeroAnalogSteeringReset(&s->steering); }
+int FzeroShimGameplayState(const uint8_t *ram, size_t ram_size) {
+  return ram && ram_size > 0x55 && ram[0x54] == 2 && ram[0x55] >= 3;
+}
 static float applied(const dbce_shim_action *a, int signed_axis) {
   /* Status::Live is 12 in the pinned ABI; every other status is neutral. */
   if (a->status != 12 || !isfinite(a->value)) return 0;
@@ -52,14 +55,19 @@ static uint32_t digital_word(const dbce_shim_frame *f) {
     if (applied(&f->action[9+i], 0) > .5f) word |= 1u << bits[i];
   return word;
 }
-int FzeroShimMapFrame(FzeroShimMap *s, const dbce_shim_frame *f, uint32_t *word) {
+int FzeroShimMapFrame(FzeroShimMap *s, const dbce_shim_frame *f, uint32_t *word,
+                      int gameplay) {
   if (!valid_frame(s,f,word)) return 0;
-  float steer = applied(&f->action[0], 1);
-  int axis = (int)roundf(steer * (steer < 0 ? 32768.f : 32767.f));
-  /* Core already applied the profile's calibrated deadzone. Preserve the
-   * game's independent range/response curve and PDM, without a second zone. */
-  *word = FzeroAnalogSteeringReadTuned(&s->steering, axis, 0,
-                                      s->range_percent, s->response_percent);
+  if (gameplay) {
+    float steer = applied(&f->action[0], 1);
+    int axis = (int)roundf(steer * (steer < 0 ? 32768.f : 32767.f));
+    /* Core already applied the profile's calibrated deadzone. Preserve the
+     * game's independent range/response curve and PDM, without a second zone. */
+    *word = FzeroAnalogSteeringReadTuned(&s->steering, axis, 0,
+                                        s->range_percent, s->response_percent);
+  } else {
+    FzeroShimMapNeutral(s);
+  }
   if (applied(&f->action[1], 0) > s->pedal_threshold) *word |= 1u;  /* SNES B / gas */
   if (applied(&f->action[2], 0) > s->pedal_threshold) *word |= 2u;  /* SNES Y / brake */
   *word |= digital_word(f);

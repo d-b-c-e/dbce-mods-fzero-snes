@@ -76,11 +76,11 @@ int main(int argc,char **argv) {
      if(mode=="provenance") _putenv_s("FZERO_FAKE_NO_PROVENANCE","1");
      uint32_t word=0;
      if(mode=="expired" || mode=="provenance") {
-       CHECK(!FzeroShimInput(&word)); CHECK(!FzeroShimStop());
+       CHECK(!FzeroShimInput(&word,ram,sizeof(ram))); CHECK(!FzeroShimStop());
      } else {
-     CHECK(FzeroShimInput(&word)); CHECK(!FzeroShimCompleted());
+     CHECK(FzeroShimInput(&word,ram,sizeof(ram))); CHECK(!FzeroShimCompleted());
      if(mode=="pending") {
-       CHECK(!FzeroShimInput(&word)); CHECK(!FzeroShimStop());
+       CHECK(!FzeroShimInput(&word,ram,sizeof(ram))); CHECK(!FzeroShimStop());
      } else if(mode=="record") {
        _putenv_s("FZERO_FAKE_BAD_RECORD","1");
        CHECK(!FzeroShimConsumed(0,word,ram,sizeof(ram))); CHECK(!FzeroShimStop());
@@ -102,7 +102,7 @@ int main(int argc,char **argv) {
        std::ostringstream expected; expected<<"1 0 "<<consumed<<"\n";
        CHECK(read(run/"consumed.spy")==expected.str());
        CHECK(!read(run/"signals.spy").empty());
-       CHECK(FzeroShimInput(&word)); CHECK((FzeroShimCompleted()!=0)==latched);
+       CHECK(FzeroShimInput(&word,ram,sizeof(ram))); CHECK((FzeroShimCompleted()!=0)==latched);
        if(latched) CHECK(word==0);
        CHECK(FzeroShimConsumed(1,word,ram,sizeof(ram)));
        if(mode=="stop") _putenv_s("FZERO_FAKE_BAD_STOP","1");
