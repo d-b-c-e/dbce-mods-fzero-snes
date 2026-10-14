@@ -339,7 +339,7 @@ The corrected private recipe leaves real companion validation intact. No consume
 change or repeated game attempt was needed. Owner state and rollback passed for
 both copies. The older stock/Deluxe diagnostic tapes remain immutable.
 
-The next meaningful ordinary driving qualification can use the existing keyboard
+At that checkpoint, the next meaningful ordinary driving qualification could use the existing keyboard
 passthrough with explicitly synthetic input and the exact Deluxe Practice route;
 it would exercise ordinary consumed keyboard input, not Shared axis normalization.
 The existing Core injection transport remains diagnostic-only and is refused by
@@ -386,11 +386,70 @@ timing summaries to stdout. It sends no Stop, changes no configuration and
 never drives replay; the existing companion owns Stop/seal/close and replay.
 These status-poll intervals are not a substitute for game frame-time
 diagnostics. Mufa closed the driver's ROM, status-read, startup and key-hold
-review findings. The posted-key transport and private runner still need
-disposable runtime qualification.
+review findings. The posted-key transport and private runner still needed
+disposable runtime qualification at that source-only checkpoint.
 The driver's `--release-only` mode sends idempotent key-ups for exactly
 Down/X/Z/Right to the same request's verified live game HWND after the route
 process exits; it cannot press a key. If that exact process exited or its PID
 was reused, release is a reported no-op because its SDL key state is gone.
 The private runner must keep its lease and copy intact if the driver remains
 live or cleanup fails against a still-live process.
+
+## October 13 ordinary Deluxe Practice and sealed cold replay
+
+Clean local `main` `9604802057691dc9ea78cc8ac78b33d1b8c1ba2d` gates the
+Shared analog steering path to the same stock/Deluxe gameplay predicate used
+by FFB and telemetry. The schema-1 Controls profile, native ABI-2 DLL, backend,
+deadzone and force settings were not retuned. Focused source fixtures passed
+CTest 26/26 and route Python 12/12. A private Deluxe graphical candidate was
+built from that commit at SHA-256
+`076A1B2E3BD125C23F90C50C689D51DF0B828A86E9445F13E17912B8240FD5C6`.
+
+One muted installed-companion `-Record -InputOrigin automated -RouteWitness`
+attempt on a disposable copy used the reviewed synthetic Down/X/Z/Right
+keyboard route. It reached live player Practice driving at zero-based frame
+1,813, speed 30.65 m/s and distance 383.53 m, then saved a 1,838-frame tape
+with normal game exit. The original wrapper refused before cold replay because
+its screenshot-timing scaffold demanded an all-zero 180-frame post-route tail.
+Every input word carries the `0x40000000` active-port marker; intermittent
+Right PDM after the driving witness is real recorded input. The tail refusal
+is retained as a failed runner result, not a failed drive or successful replay.
+
+A replay-only wrapper restaged the exact candidate into the original disposable
+app path required by the recording descriptor, without recording or changing
+the tape. Its first invocation was refused before game launch: the companion
+compares descriptor SHA text case-sensitively and received uppercase text.
+The corrected wrapper passed the freshly computed lowercase SHA. The native
+status was `verified`, 1,838/1,838 frames, output muted; the companion reported
+pass, normal game closure and exit code 0. This is the game's full per-frame
+WRAM checkpoint verification of the existing input/state pair, not a synthetic
+test of a new format. The tape, state and descriptor hashes were unchanged:
+
+| Sealed runtime07 artifact | SHA-256 |
+|---|---|
+| `recording/recording.fzpt` | `CD95C7C14FA3706BDC6773BCB9D30B4A48685A710EAF874B81A3164FFB914E09` |
+| `recording/recording.fzpt.state` | `18BDA07046CD36C3DCECA4CA26D38FA0D7317ED325FF29390AF34C54DC8042DB` |
+| `recording/recording.json` | `EC27C4D3458863F5FDA8E8426A3A3E214A2D7C4E4F89218AFCB534D0C1DB32B1` |
+
+The owned-window WGC capture during replay has SHA-256
+`C367374F77BB616BD23A8E0629F47440D3656F479B7486D2F8D5A15AF1F6F185`.
+Status read 1,200 frames immediately before and after capture; its visible
+overlay reads 1,242/1,838 and shows a car on the Practice track. This is
+contextual visual evidence, not an exact scanout-frame measurement or owner
+visual acceptance. The disposable receipt was rolled back, all 77 owner and
+65 protected-copy entries matched, and the rig lease was released. Raw
+evidence is `E:/fz-ordinary-practice-runtime07` and
+`E:/fz-ordinary-practice-replay08`; the portfolio handoff is
+`E:/Source/dbce-project-mgmt/artifacts/fzero-ordinary-driving-20261013`.
+
+The current Wheelkit consumer already has F-Zero recording discovery, the
+existing companion/receipt adapter and shared Play with recording/Play
+recording UI. Its direct-ROM command previously omitted `-Rom` when
+`fzero.sfc` existed without a `rom.cfg` selection. The local source fix now
+passes that exact installed ROM and preserves an existing `rom.cfg` route;
+focused Wheelkit session tests passed 59/59. Current Wheelkit contract and
+library discovery read this real sealed pair as 1,838 frames, protocol
+`FZeroLaunchSession`, playable, with automated origin. That source/offline
+result is separate from a Wheelkit UI launch or owner installation. Physical
+wheel axes, force, Ctrl+F11 owner use, owner-attended visual acceptance and
+public distribution remain unqualified.

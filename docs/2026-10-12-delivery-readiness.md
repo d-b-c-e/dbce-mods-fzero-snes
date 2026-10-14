@@ -1,10 +1,9 @@
 # Shared input and recording delivery checkpoint
 
-Source is on `codex/shared-shim-diagnostic`, based directly on main
-`e77d0f99ea4d69d7dabecca73fc5246d1010db80`. Canonical merge target:
-`E:/Source/games/dbce-mods-fzero-snes`, branch `main`. At this checkpoint it can
-fast-forward. Recheck the target before merging; use the DBCE origin, not the
-upstream mstan remote. No installed copy, default backend or force tune changed.
+Current local `main` is `9604802057691dc9ea78cc8ac78b33d1b8c1ba2d`.
+The earlier `codex/shared-shim-diagnostic` branch and stock `51999e3`
+checkpoint below remain historical evidence. No owner-installed copy, default
+backend or force tune changed; this local F-Zero commit is not publicly pushed.
 
 ## Delivery implemented
 
@@ -17,6 +16,21 @@ partial/exit4, separate from successful game verification. See the
 [stock evidence and hashes](2026-10-12-shim-diagnostic.md#october-13-stock-applied-controls-diagnostic-practice-and-fresh-replay).
 No owner installation, public package, ordinary moving-input or Wheelkit Play
 With Recording qualification follows from this diagnostic.
+
+Later ordinary Deluxe evidence supersedes the moving-input gap for its narrow
+scope. Clean local `9604802` gated Shared analog steering outside gameplay.
+The installed private companion on a disposable copy recorded explicitly
+synthetic keyboard navigation and a moving Practice drive, sealing 1,838 frames.
+The original runner failed its all-zero/180-frame tail guard before replay;
+bit 30 is the input-port marker and continued Right PDM is valid recorded input.
+A separate replay-only run of the unchanged tape passed all 1,838 WRAM
+checkpoints with output muted and normal exit. The first replay-only admission
+failed before game launch on uppercase SHA text and is retained separately.
+An owned WGC frame shows active Practice replay, with status at 1,200 frames
+around capture and on-screen overlay at 1,242/1,838; it is not an exact scanout
+timestamp or owner visual acceptance. See the hub's
+`artifacts/fzero-ordinary-driving-20261013/replay08-outcome.json`. This did not
+exercise physical wheel axes, force, an owner installation, or Wheelkit's UI.
 
 - Existing direct-ROM `--record` and `--replay`, rendered REC/Saved/Error and
   REPLAY/Verified, using `.fzpt` plus its initial-state sibling. The unchanged
@@ -39,12 +53,12 @@ With Recording qualification follows from this diagnostic.
 
 | Area | Current boundary | Next implementation/check |
 |---|---|---|
-| Wheelkit | No recording discovery or Play Recording entry for this consumer | Call the existing CLI, retain tape/state and the pinned game/config case; expose capability limits, no new format. |
-| Controls Apply | Hash-bound Shared writer `09c9223` exists; exact Applied profile admitted ordinarily and reused by the stock diagnostic | Preserve native routing/FFB refusal; physical binding/calibration and representative ordinary driving remain separate checks. |
+| Wheelkit | Current Wheelkit has F-Zero capability/discovery and shared Play with recording/Play recording UI; its command omitted `-Rom` for a direct `fzero.sfc` copy with no `rom.cfg` | Local source now passes the installed direct ROM when no launcher selection exists, while preserving `rom.cfg`; focused Wheelkit tests passed 59/59 and the real 1,838-frame pair is discoverable/CanPlay. This is not an owner-installed UI run. |
+| Controls Apply | Hash-bound Shared writer `09c9223` exists; the ordinary Deluxe Practice capture reused the retained schema-1 profile without retune | Preserve native routing/FFB refusal; physical binding/calibration and owner-driven behavior remain separate checks. |
 | Launcher | Ordinary Shared currently requires an explicit ROM and refuses `--launcher` | Replace the launcher's SDL steering/device preview with the same owned snapshot path before admitting it. Native launcher remains unchanged. |
 | Wheel-only SNES extras | X/Y/L/R and host save/rewind are unavailable under Shared; keyboard remains | Optional raw digital snapshot from the existing Core-owned epoch plus exact legacy-device identity; no second SDL open, no unrelated action aliases. |
 | Shared physical FFB | Shared+enabled FFB is explicitly refused | Reuse the single-owner toolkit/provider bridge being developed for OutRun, then source and muted qualification before attended force checks. No new competing force lease. |
-| Actual owner controls | At-rest ordinary capture is not a moving owner drive | Fresh attended Shared drive once complete wheel-button/force delivery is ready; keep the injected Practice case as diagnostic evidence. |
+| Actual owner controls | The moving ordinary Practice capture used explicitly synthetic keyboard input, not the owner's physical wheel | Fresh attended Shared drive once complete wheel-button/force delivery is ready; keep the private Practice tape as synthetic-input evidence. |
 | Ctrl+F11 | Production key routing and stop behavior tested offline; graphical runs used frame bounds/normal close | One attended stop-key check, no OS-key injection in the unattended wrapper. |
 | Installed delivery | Stream Deck still launches the existing Native launcher; installer owns only launcher and WheelFfb | Add an explicit optional Shared owned-file receipt and rollback when the complete launcher/force path is ready; never silently flip the owner's backend. |
 | Public package | No new binary release; current DLL is private-only and Deluxe contains embedded cartridge data | Resolve shim source/notices and Deluxe distribution separately. Review the clean stock receipt and public first-launch preservation before promotion. |
@@ -58,8 +72,8 @@ receipt, and an explicit owned-file install/rollback contract. The private stock
 stage now closes the clean build/runtime prerequisite for its tested scope;
 public redistribution and owner-launcher integration remain unresolved. Do not
 silently enable Shared, relabel a Deluxe executable, or map boost/lean to gears
-or camera. The smallest next product seam is Wheelkit direct-ROM recording
-routing over the existing CLI/pair; launcher preview, extra controls and force
+or camera. The local Wheelkit direct-ROM command fix still needs deployment/
+owner use; launcher preview, extra controls and force
 ownership each need their own real consumer path before advertising parity.
 
 ## Offline delivery validation

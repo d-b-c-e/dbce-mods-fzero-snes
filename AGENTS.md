@@ -4,13 +4,16 @@ Public packaging review (2026-10-05): read docs/PUBLIC-PACKAGING.md. Public fork
 
 # Agent notes
 
-October 13 private Shared checkpoint: clean stock source `51999e3` and unchanged
-native `9B8A036F` have production Controls Apply/ordinary 900-frame idle proof plus
-stock diagnostic Practice and fresh snapshot replay with 2,213 exact frames.
-Read `docs/2026-10-12-shim-diagnostic.md` and `docs/2026-10-12-delivery-readiness.md`
-before further qualification. Replay capture exit4 remains a partial failed
-burst despite retained REC/REPLAY/Verified images. This is not physical binding,
-ordinary Wheelkit Play With Recording, force or installed-delivery acceptance.
+October 13 private Shared checkpoint: clean local source `9604802` and unchanged
+native `9B8A036F` have a muted ordinary Deluxe Practice drive from launch,
+sealed at 1,838 frames, and a later cold replay that verified all 1,838 WRAM
+checkpoints with normal exit. The route used explicitly synthetic keyboard
+input; the first runner's neutral-tail guard refused before replay, and the
+first replay-only wrapper was refused before game launch on SHA text case.
+Those failed results remain separate evidence. Read
+`docs/2026-10-12-recording-cli.md` and `docs/2026-10-12-delivery-readiness.md`
+before further qualification. This is not physical binding, force, owner
+installation, public distribution, or owner-attended visual acceptance.
 Keep public origin untouched and private assets out of this source repository.
 
 ## Toolkit standards

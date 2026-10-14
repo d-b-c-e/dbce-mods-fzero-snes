@@ -9,7 +9,7 @@ Audited 2026-10-04 (read-only standards audit); STD-001 and STD-010 revised 2026
 | Standard | Title | Status | Notes |
 |---|---|---|---|
 | STD-001 | One mod per game | partial | wheel/FFB/telemetry/triple/recording merged with main on claude/fzero-main-merge (2026-10-04, merge of codex/triple-wheel-integration a1a1267; Release MSVC build with embedded BS Deluxe and 15/15 ctest pass); now merged to main b7eb125; previous staging branch is historical. codex/analog-wheel, codex/force-feedback, codex/telemetry hold superseded early versions (no unique work worth merging) |
-| STD-002 | Recording and playback from launch | partial | October 12 private Deluxe player Practice original: 2,351 exact consumed words and cold WRAM checkpoints. New explicit CLI graphically replays that original and a fresh 900-frame preview; rendered REC/REPLAY/Saved/Verified checked. Not installed; Ctrl+F11 and owner recording still pending. See docs/2026-10-12-recording-cli.md. |
+| STD-002 | Recording and playback from launch | partial | October 13 private ordinary Shared Deluxe Practice route sealed 1,838 frames with explicit synthetic keyboard driving; a separate cold replay verified all 1,838 WRAM checkpoints and exited normally. The initial neutral-tail refusal and replay-only SHA-case admission refusal remain separate. Current Wheelkit already has F-Zero discovery/shared UI; a local source-only direct-ROM argument fix passed focused tests. Owner installation, Ctrl+F11 attended use and physical inputs/force remain unqualified. See docs/2026-10-12-recording-cli.md. |
 | STD-003 | Normalized FFB strength | partial | Device-free production-model synthetic component trace; spring/damper/road remain distinct, default40 unchanged. Recorded reference and physical normalization pending. See docs/FFB-COMPARISON.md. |
 | STD-004 | Consistent settings UX | partial | settings in the recomp launcher Mods page; F6/F8 taken by save slots/rewind (sdl_main.c:2020,2481-2503) |
 | STD-005 | Camera numpad layout 8/2 9/3 4/6 7/1 +/- 5 | n/a | no 3D camera rig; Mode 7 fixed chase view |
@@ -124,3 +124,18 @@ driving, physical-axis, force-signal or FFB qualification, owner install, schema
 promotion or public push. The previous bf4c63a candidate has no automated
 capability. Exact source/build/tape/screenshot evidence is recorded in
 `docs/2026-10-12-recording-cli.md`.
+
+The later clean local `9604802` Shared-only gameplay gate preserved the profile
+and native ABI. A single muted ordinary Deluxe route with explicitly synthetic
+Down/X/Z/Right keys reached player Practice driving at frame 1,813 (30.65 m/s,
+383.53 m) and sealed 1,838 frames. The original runner refused its artificial
+all-zero/180-frame tail before replay; the port marker is bit 30 and post-route
+Right PDM remains legitimate input. A replay-only wrapper then verified all
+1,838 WRAM checkpoints from that unchanged pair with normal exit and output
+muted. Its first invocation's uppercase descriptor SHA was refused before game
+launch; the corrected lowercase argument passed. The owned-window WGC capture
+shows a Practice replay frame, but is not owner visual acceptance. Owner 77/77
+and disposable protected 65/65 files matched after rollback; no owner install,
+physical wheel/force, profile retune or public push occurred. Exact evidence is
+in the portfolio hub's `artifacts/fzero-ordinary-driving-20261013` and
+`E:/fz-ordinary-practice-runtime07` / `E:/fz-ordinary-practice-replay08`.
