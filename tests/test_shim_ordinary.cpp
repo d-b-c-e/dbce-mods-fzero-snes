@@ -34,8 +34,10 @@ int main(int argc,char **argv) {
  const bool extras=mode.rfind("extras",0)==0;
  const std::string extras_profile="[Extras]\r\nSchema=1\r\nGame=fzero-snes\r\nDeclaration=c4ffc4c85f1b7f72437e5871bdec57f9d5b997a62a9fdd3fd2208fefa0d98fb1\r\nfzero-snes.x=button 9 dev={11111111-2222-3333-4444-555555555555}\r\n";
  const std::string extra_section=extras && mode!="extrasnosection" ? extras_profile : "";
- const std::string original="[Input]\r\nBackend="+std::string(mode=="native"?"Native":mode=="unknown"?"Typo":"Shared")+
-  "\r\nSharedExtras="+(extras || mode=="native" || mode=="replay"?"1":"0")+"\r\n"+profile+extra_section+
+ const bool extras_first=mode=="extrasfirst" || mode=="extrasbom";
+ const std::string original=(mode=="extrasbom"?std::string("\xef\xbb\xbf"):"")+
+  (extras_first?extra_section:"")+"[Input]\r\nBackend="+std::string(mode=="native"?"Native":mode=="unknown"?"Typo":"Shared")+
+  "\r\nSharedExtras="+(extras || mode=="native" || mode=="replay"?"1":"0")+"\r\n"+profile+(extras_first?"":extra_section)+
   (mode=="extrasduplicate"?extras_profile:"")+"[ForceFeedback]\r\nEnabled="+(force?"1":"0")+"\r\nStrength=12\r\n[Telemetry]\r\nEnabled=1\r\n";
  {std::ofstream f(cfg,std::ios::binary);f<<original;}
  if(mode=="session") _putenv_s("FZERO_SHIM_SESSION_NONCE","noordinaryinjection");

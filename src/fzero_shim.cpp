@@ -72,7 +72,8 @@ bool read_profile(const char *path) {
   if (!in) return refuse("config.ini missing");
   std::string all((std::istreambuf_iterator<char>(in)), {});
   if (all.size() > 1024 * 1024) return refuse("config.ini exceeds 1 MiB");
-  size_t at = all.compare(0, 3, "\xef\xbb\xbf") == 0 ? 3 : 0;
+  const size_t start = all.compare(0, 3, "\xef\xbb\xbf") == 0 ? 3 : 0;
+  size_t at = start;
   size_t begin = std::string::npos, end = all.size();
   for (; at < all.size();) {
     auto newline = all.find('\n', at);
@@ -91,7 +92,7 @@ bool read_profile(const char *path) {
   profile = all.substr(begin, end-begin); // exact bytes; Core owns binding validation.
   if (use_extras) {
     size_t extra_begin = std::string::npos, extra_end = all.size();
-    for (size_t pos = 0; pos < all.size();) {
+    for (size_t pos = start; pos < all.size();) {
       auto nl = all.find('\n', pos);
       auto next = nl == std::string::npos ? all.size() : nl + 1;
       auto line = trim(all.substr(pos, next-pos));
