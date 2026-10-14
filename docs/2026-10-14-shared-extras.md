@@ -56,8 +56,9 @@ Base `PIN.json`, CMake's private runtime hash and package receipts retain
 it. This candidate cannot yet be advertised or installed as working extra
 buttons.
 
-The next concrete slice is review of an extras-capable private native build,
-then a distinct source/binary pin plus CMake/stager/installer/receipt adoption.
+An extras-capable private native build is now retained and checked as described
+below. The next concrete slice is reviewed, explicit source/binary pin plus
+CMake/stager/installer/receipt adoption.
 Bind the four declared actions explicitly through `[Extras]` schema 1 with
 the declaration hash above and actual instance/product identities; preserve
 the owner's Controls, legacy native keys and recordings. Wheelkit's extra
@@ -144,3 +145,64 @@ change the raw hash through link timestamps, so do not pin historical D26
 from its receipt alone. A new payload then needs focused consumer validation
 and explicit private CMake/stager/installer/receipt adoption. No shared-source
 modification or x86 rebuild is needed for this F-Zero slice.
+
+## Retained x64 native candidate
+
+After coordinator assignment `106960` and explicit slot handoff `107087`,
+dine built clean detached source `ea568c258d2373de55efabf1b16b0776990fb2cd`
+in `E:/Source/toolkits/.worktrees/dine-fzero-shim-ea568c2-20261014`, without
+source edits, using the existing command:
+
+```powershell
+pwsh -NoProfile -File native/shim/build_test.ps1 -Arch x64 -Crt MT
+```
+
+The new DLL SHA-256 is
+`BF6455E63696A93B37C19DABF09B1E0606F26B0534BCE828417B1DF602DD8A7A`.
+The actual receipt records x64, MT, clang 19.1.5, clean source, all 26 declared
+exports and DINPUT8/bcrypt/KERNEL32 imports. Actual device-free results:
+
+| Fixture | Checks passed |
+| --- | ---: |
+| Core | 192 |
+| Extras | 72 |
+| DirectInput fake provider | 106 |
+| Provider host | 38 |
+| Native ABI | 223 |
+| Copied-provider bridge | 78 |
+
+Polling/scheduling assertions can vary these counts; use this actual build log,
+not the historical D26 counts. The DLL is not hash-identical to that removed
+historical binary and is not assigned its pin.
+
+`tools/check_shim_dll_contract.py` verified the real artifact against its clean
+receipt: 14 consumer-required exports, five pure ABI/layout queries, all 31
+ordered common action names and their out-of-range bounds. Base ABI is 2,
+frame 296 bytes, open args 128 bytes; extras ABI is 1, frame 296 bytes. The
+checker never invokes provider open/tick/record/stop. This contract check is
+separate from the consumer's 36/36 ABI-fake fixtures, physical bindings and any
+rendered game.
+
+The batch retained its originals under `build-dine-extras-offline/native-ea568c2`.
+Read-only, byte-verified archival copies are at:
+
+```text
+E:/Source/_archive/2026-10-14/fzero-shim-ea568c2-bf6455e6
+```
+
+The archive includes `dbce_shim.dll`, `build-receipt.json`, `build-tests.log`,
+`source.zip` of the tracked native closure and license, `LICENSE`, the exact
+checker, `consumer-contract.json`, its log, lease receipt and `SHA256SUMS`.
+Source ZIP SHA-256:
+`d2c06a4447d4d5ef1c08fa97d0c677513b6806af37c19894dcae28b33aa5aab9`.
+Receipt SHA-256:
+`071bbf06ba493b63d8829f72bbd1d8ae61588f3af958651220ae625897da463e`.
+The archived checker is exactly the one used for this result.
+
+Lease `edaacc0e3b234abc9aab990baf101c7b` was acquired at
+`2026-10-14T15:29:50.9077080-05:00` and released by the wrapper's `finally`.
+The source worktree is clean and retained. No shared source edits, consumer
+repin, installation, game launch, real provider/input/force call or UI takeover
+occurred. The owner's updated advance-notice restriction was honored.
+Next: reviewed explicit private pin/staging/receipt adoption, then a separately
+authorized muted disposable runtime handoff; attended hardware remains open.
