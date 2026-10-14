@@ -32,7 +32,7 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 if (!$BuildDir) { $BuildDir = Join-Path $repo 'build-merge' }
 $launcher = 'FZeroSNESRecomp-wheel-launcher.exe'
-$sharedOwned = @('dbce_shim.dll', 'shared-input/dbce_shim.h', 'shared-input/PIN.json', 'shared-input/PROVENANCE.md')
+$sharedOwned = @('dbce_shim.dll', 'shared-input/dbce_shim.h', 'shared-input/PIN.json', 'shared-input/PROVENANCE.md', 'shared-input/dbce_shim_extras.h')
 $owned = @($launcher, 'WheelFfb.dll', 'tools/Recording.ps1') + @(if ($PrivateSharedInput) { $sharedOwned })
 $receiptName = 'install-receipt.json'
 $transactionFiles = @($owned) + $receiptName
@@ -49,7 +49,7 @@ function Recording-Capability([bool]$PrivateShared, [string]$LinkedText) {
 }
 function Assert-SharedOwnershipTransition([bool]$Requested, $PreviousReceipt) {
     if ($Requested -or !$PreviousReceipt) { return }
-    $privatePaths = @('dbce_shim.dll', 'shared-input/dbce_shim.h', 'shared-input/PIN.json', 'shared-input/PROVENANCE.md')
+    $privatePaths = @('dbce_shim.dll', 'shared-input/dbce_shim.h', 'shared-input/PIN.json', 'shared-input/PROVENANCE.md', 'shared-input/dbce_shim_extras.h')
     $ownedPrivate = @($PreviousReceipt.files | Where-Object { $_.name -and $_.name.Replace('\','/') -in $privatePaths })
     if ($null -ne $PreviousReceipt.privateSharedInput -or $ownedPrivate.Count) {
         throw 'The previous install owns private Shared files. Keep -PrivateSharedInput or roll back that Shared install first; Native installation cannot withdraw ownership while leaving its files behind. Nothing changed.'
@@ -63,12 +63,15 @@ function Private-SharedSources([string]$SourceRoot, [string]$BuildRoot) {
     if (!(Test-Path -LiteralPath $pinPath -PathType Leaf) -or (Get-Item -LiteralPath $pinPath).Length -gt 65536) { throw 'Missing private Shared source pin.' }
     $pin = Get-Content -LiteralPath $pinPath -Raw | ConvertFrom-Json
     $keys = @($pin.files.PSObject.Properties.Name)
+    $extras = 'dbce_shim_extras.h' -cin $keys
     if ($pin.schema -cne 'dbce.fzero-shared-input-pin' -or $pin.version -ne 1 -or $pin.abi -ne 2 -or
         $pin.distribution -cne 'private-only' -or $pin.sourceRevision -cnotmatch '^[0-9a-f]{40}$' -or
-        $keys.Count -ne 2 -or 'dbce_shim.dll' -cnotin $keys -or 'dbce_shim.h' -cnotin $keys) { throw 'Invalid private Shared source pin.' }
+        $keys.Count -ne $(if ($extras) { 3 } else { 2 }) -or 'dbce_shim.dll' -cnotin $keys -or 'dbce_shim.h' -cnotin $keys -or
+        $(if ($extras) { $pin.extrasAbi -ne 1 } else { $null -ne $pin.extrasAbi })) { throw 'Invalid private Shared source pin.' }
     $files = @{'dbce_shim.dll'=(Join-Path $BuildRoot 'dbce_shim.dll'); 'shared-input/dbce_shim.h'=(Join-Path $vendor 'dbce_shim.h')
         'shared-input/PIN.json'=$pinPath; 'shared-input/PROVENANCE.md'=(Join-Path $vendor 'PROVENANCE.md')}
-    foreach ($name in @('dbce_shim.dll','dbce_shim.h')) {
+    if ($extras) { $files['shared-input/dbce_shim_extras.h'] = Join-Path $vendor 'dbce_shim_extras.h' }
+    foreach ($name in $keys) {
         $key = if ($name -ceq 'dbce_shim.dll') { $name } else { 'shared-input/' + $name }
         $expected = $pin.files.$name
         if ($expected -cnotmatch '^[0-9a-f]{64}$' -or (HashOrNull $files[$key]) -ine $expected) { throw "Private Shared source/build pin differs: $name" }
@@ -81,7 +84,9 @@ function Private-SharedSources([string]$SourceRoot, [string]$BuildRoot) {
             $current = [IO.Path]::GetDirectoryName($current)
         }
     }
-    @{ files=$files; metadata=[ordered]@{ abi=2; distribution='private-only'; sourceRevision=$pin.sourceRevision; runtimeSha256=$pin.files.'dbce_shim.dll' } }
+    $metadata=[ordered]@{ abi=2; distribution='private-only'; sourceRevision=$pin.sourceRevision; runtimeSha256=$pin.files.'dbce_shim.dll' }
+    if ($extras) { $metadata.extrasAbi=1 }
+    @{ files=$files; metadata=$metadata }
 }
 function Restore-Files([string]$from, $state) {
     # Fixed owned paths only; validate every backup before the first mutation.
@@ -160,6 +165,9 @@ $shared = $null
 if ($PrivateSharedInput) {
     $shared = Private-SharedSources $repo $BuildDir
     foreach ($name in $shared.files.Keys) { $sources[$name] = $shared.files[$name] }
+    # Legacy four-file pins remain readable; a new extras pin owns five files.
+    $owned = @($launcher, 'WheelFfb.dll', 'tools/Recording.ps1') + @($shared.files.Keys)
+    $transactionFiles = @($owned) + $receiptName
 }
 $nativePin = @(Get-Content -LiteralPath (Join-Path $repo 'lib/toolkit/MANIFEST.txt') |
     Where-Object { $_ -match '^[0-9A-Fa-f]{64}\s+native/WheelFfb\.dll\s*$' })
@@ -189,7 +197,8 @@ if (-not $changes.Count -and (Test-Path -LiteralPath $oldReceiptPath)) {
     $sharedMatches = if ($PrivateSharedInput) {
         $oldReceipt.privateSharedInput.abi -eq 2 -and $oldReceipt.privateSharedInput.distribution -ceq 'private-only' -and
         $oldReceipt.privateSharedInput.sourceRevision -ceq $shared.metadata.sourceRevision -and
-        $oldReceipt.privateSharedInput.runtimeSha256 -ceq $shared.metadata.runtimeSha256
+        $oldReceipt.privateSharedInput.runtimeSha256 -ceq $shared.metadata.runtimeSha256 -and
+        $oldReceipt.privateSharedInput.extrasAbi -eq $shared.metadata.extrasAbi
     } else { !$oldReceipt.privateSharedInput }
     $inventoryMatches = @($oldReceipt.files).Count -eq $owned.Count
     foreach ($name in $owned) {

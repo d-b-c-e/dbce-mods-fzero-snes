@@ -46,6 +46,24 @@ try {
     $provenance=Join-Path $vendor 'PROVENANCE.md'; $old=[IO.File]::ReadAllBytes($provenance); [IO.File]::Delete($provenance)
     Refuses { Private-SharedSources $root $build } 'Missing private provenance must refuse.'
     [IO.File]::WriteAllBytes($provenance,$old)
+    # The new candidate owns the additive header; legacy four-file pins above
+    # still validate without gaining extras admission.
+    $extraHeader=Join-Path $vendor 'dbce_shim_extras.h'
+    [IO.File]::WriteAllText($extraHeader,'fixture extras ABI1 header')
+    $pin.extrasAbi=1
+    $pin.files.'dbce_shim_extras.h'=(HashOrNull $extraHeader).ToLowerInvariant()
+    [IO.File]::WriteAllText($pinPath,($pin | ConvertTo-Json -Depth 4))
+    $shared=Private-SharedSources $root $build
+    Check ($shared.files.Count -eq 5 -and $shared.files.ContainsKey('shared-input/dbce_shim_extras.h') -and $shared.metadata.extrasAbi -eq 1) 'Extras pin must own five paths and exact extension metadata.'
+    $old=[IO.File]::ReadAllBytes($extraHeader);[IO.File]::WriteAllText($extraHeader,'changed')
+    Refuses { Private-SharedSources $root $build } 'Changed additive header must refuse.'
+    [IO.File]::Delete($extraHeader)
+    Refuses { Private-SharedSources $root $build } 'Missing additive header must refuse.'
+    [IO.File]::WriteAllBytes($extraHeader,$old)
+    $pin.extrasAbi=2;[IO.File]::WriteAllText($pinPath,($pin | ConvertTo-Json -Depth 4))
+    Refuses { Private-SharedSources $root $build } 'Unknown extras ABI must refuse.'
+    $pin.extrasAbi=1;[IO.File]::WriteAllText($pinPath,($pin | ConvertTo-Json -Depth 4))
+    $sharedNames+= 'shared-input/dbce_shim_extras.h'
     $launcher='FZeroSNESRecomp-wheel-launcher.exe'; $receiptName='install-receipt.json'
     $restorableFiles=@($launcher,'WheelFfb.dll','tools/Recording.ps1',$receiptName)+$sharedNames
     $state=@{files=@()}

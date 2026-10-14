@@ -1,59 +1,63 @@
-# Shared input shim: private diagnostic dependency
+# Shared input shim: private extras-capable candidate
 
-The ABI 2 header source is pinned to `d-b-c-e/outrun2-decomp`,
-`codex/shim-device-path`, **f49cfc559f065b778967a7c94068a75df538ec69**.
-This is the same reviewed native build used by DRIVE; it includes the exact
-owned-handle HID interface-path report on top of `eea0660`.
+The current optional private source/staging pin is the clean reusable wheel
+toolkit source `ea568c258d2373de55efabf1b16b0776990fb2cd`, x64/MT,
+clang 19.1.5. Its native closure is identical to toolkit `88ccd1d`; no F-Zero,
+OutRun decomp, cartridge or other game data is included in that native source.
+The retained native source/license snapshot and actual DLL are at
+`E:/Source/_archive/2026-10-14/fzero-shim-ea568c2-bf6455e6`.
 
 | File | SHA-256 |
-|---|---|
-| `dbce_shim.h` | `3c63b472fc78770e8b9fc90ae92debbf979eedd7f8c68800f56b8690f4f65b74` |
-| private `dbce_shim.dll` | `9b8a036f664cf8f45cccf82b98e5e4376f93215b60eac50b6db965bf498015d8` |
+| --- | --- |
+| `dbce_shim.h` | `f590a9f77a81999cae8b4e7c6b8ecd83eade44724564bf35f3591d725ac0c0fa` |
+| `dbce_shim_extras.h` | `1c65f15097e61bb3175f9ed3721458b775a05091515bfce208c407fc9c261912` |
+| private `dbce_shim.dll` | `bf6455e63696a93b37c19dabf09b1e0606f26b0534bce828417b1df602dd8a7a` |
 
-The header byte pin is the reviewed Windows **CRLF** representation (8,698
-bytes), retained exactly in Git with `-text`; fresh Windows checkouts must keep
-the same hash. The upstream Git blob uses LF (8,573 bytes, SHA256
-`ce9c25b9d5c9386b5eacc4763cfbcbdc1d8af9d6326b524a009cb1eee2f7b5e3`).
-Normalizing CRLF to LF yields that upstream blob exactly; no declarations differ.
-This byte-reproducibility note supplies no additional license or distribution grant.
+Both headers are byte-exact copies of that source's Windows checkout, retained
+with `-text` so a fresh checkout preserves their hash. The base header is
+10,098 bytes in CRLF form; normalized LF is 9,961 bytes, SHA-256
+`429c343b83fc2f2192b9de62bf98cdb6127ceed12ecf2e3c3e4a945e208668c7`.
+The extras header is unchanged from the earlier vendored header at toolkit
+`88ccd1d` (last header change `ea568c2`). Base ABI 2, the 296-byte common frame,
+128-byte x64 open args and the 31 common actions remain. The additive extras
+ABI is 1 with a 296-byte frame. The base header adds the optional pure profile
+inspection declaration and x86 layout notes; F-Zero remains an x64 consumer.
 
-The DLL is **not tracked or included by default**. For a private candidate,
-pass `-DFZERO_SHIM_DLL=<reviewed DLL>`; CMake verifies that hash and stages it
-beside the graphical executable. The loader checks ABI, struct sizes and every
-action name before opening. A diagnostic launch without the DLL refuses.
-Default Native launches do not load it. The opt-in ordinary Shared option
-also loads this pinned ABI, without capture or injection. Shared+FFB remains
-refused until force/read ownership is integrated and qualified.
+The actual native build passed device-free Core 192, extras 72, provider 106,
+host 38, ABI 223 and bridge 78 checks. Its receipt lists all 26 declared exports,
+clean source, compiler and DINPUT8/bcrypt/KERNEL32 imports. F-Zero's pure checker
+validated its 14 required exports, five ABI/layout values, 31 common actions
+and bounds without provider calls. This establishes a native artifact contract,
+not physical bindings, a rendered game, force, installation or public delivery.
 
-`PIN.json` provides the same exact hashes for private staging. The stock-only
-stager admits it only with `--private-shared-input`, retains this provenance and
-the header, and marks the receipt private. The public packager refuses both
-that receipt and `dbce_shim.dll`. The ordinary Shared runtime has narrow private
-at-rest recording/replay proof, not full owner-control or force qualification;
-see `docs/2026-10-12-ordinary-shared-input.md`.
+## Private staging and compatibility
 
-The target builds `windows/shim` and `windows/host` with the shared controls and
-session headers, independently of OutRun's reconstructed runtime. Its reviewed
-build used Visual Studio 2022 ClangCL x64, Release, `-DOR2_XBOX=ON`, target
-`dbce_shim`. Shared native checks at the pin: Core 163, provider 106, ABI 132.
+The DLL is not tracked or included by default. Explicit `FZERO_SHIM_DLL`
+accepts this exact retained hash for new private builds. The stock stager's
+`--private-shared-input` and the optional private installer source use the
+existing `PIN.json` route and own five files: DLL, base header, extras header,
+PIN and this provenance. Receipts carry `extrasAbi=1` only for that verified
+extra header inventory. These source changes do not install a game or rewrite
+the owner's configuration.
 
-No redistribution grant for this provisional target is asserted. F-Zero's root
-license does not license this dependency. Extraction into the reusable toolkit
-and complete source/license notices remain required before public distribution.
-Do not add this DLL to the public player-package allowlist on this evidence.
+Older private installs and immutable recordings retain the original direct
+provider `9b8a036f664cf8f45cccf82b98e5e4376f93215b60eac50b6db965bf498015d8`
+from `f49cfc559f065b778967a7c94068a75df538ec69`, with base header
+`3c63b472fc78770e8b9fc90ae92debbf979eedd7f8c68800f56b8690f4f65b74`.
+The updated companion still accepts their exact four-file ownership for
+ordinary Shared with extras off. It refuses `SharedExtras=1` on such a receipt;
+the game also refuses missing extension exports before opening a provider.
+Native/default and replay do not open Shared. Enabled Shared FFB and the legacy
+launcher remain refused. New X/Y/L/R bindings are explicit `[Extras]` actions,
+not aliases or conversions of the older SDL bindings.
 
-## October 14 declared-extras source seam
+## Source terms and public boundary
 
-`dbce_shim_extras.h` is copied byte-for-byte from the reusable wheel toolkit's
-`native/shim/shim_dll/dbce_shim_extras.h` at
-`88ccd1d86fc1ab7088986ca279adcb7d44f9ccb6` (last header change `ea568c2`).
-Its SHA-256 is
-`1c65f15097e61bb3175f9ed3721458b775a05091515bfce208c407fc9c261912`.
-This is the additive extras ABI 1 header, alongside base ABI 2. The `-text`
-attribute preserves the inspected Windows bytes. No DLL or base PIN changed.
-
-The current pinned private DLL predates this extension. `SharedExtras=1`
-therefore refuses that runtime before opening a provider. An extension-capable
-private DLL needs its own source/binary review and explicit pin/staging update
-before this opt-in consumer can be delivered. The source seam and an ABI fake
-do not establish physical input, force or redistribution qualification.
+The toolkit's `native/shim/PROVENANCE.md` describes DBCE authorship and the
+source transfer from OutRun; these toolkit files use its MIT `LICENSE`.
+That license, the exact native source ZIP and actual clean binary receipt are
+retained with this candidate. This does not change F-Zero's public package
+policy: the public packager still refuses a private receipt or DLL, and does
+not admit embedded Deluxe/cartridge data. Public packaging/notices review and
+consumer/runtime/physical qualification remain separate. See
+`docs/2026-10-14-shared-extras.md` for build, review and next-action evidence.

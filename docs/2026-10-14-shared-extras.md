@@ -51,10 +51,11 @@ preserved and was not rerun or relabeled as extras evidence.
 
 Only the existing extras header was vendored from toolkit `88ccd1d`; no shared
 toolkit or Wheelkit paths were edited. See [provenance](../vendor/dbce-shim/PROVENANCE.md).
-Base `PIN.json`, CMake's private runtime hash and package receipts retain
-`9B8A036F...015D8`. That DLL predates extras, so the new opt-in route refuses
-it. This candidate cannot yet be advertised or installed as working extra
-buttons.
+The original source checkpoint retained `9B8A036F...015D8`; the private
+adoption follow-up below changes the new-build source pin to the archived
+`BF6455E6...DD8A7A` candidate. Existing installed receipts retain their exact
+old pin. This candidate cannot yet be advertised or installed as qualified
+working extra buttons.
 
 An extras-capable private native build is now retained and checked as described
 below. The next concrete slice is reviewed, explicit source/binary pin plus
@@ -204,5 +205,39 @@ Lease `edaacc0e3b234abc9aab990baf101c7b` was acquired at
 The source worktree is clean and retained. No shared source edits, consumer
 repin, installation, game launch, real provider/input/force call or UI takeover
 occurred. The owner's updated advance-notice restriction was honored.
-Next: reviewed explicit private pin/staging/receipt adoption, then a separately
-authorized muted disposable runtime handoff; attended hardware remains open.
+Next at this checkpoint: reviewed explicit private pin/staging/receipt adoption,
+then a separately authorized muted disposable runtime handoff; attended
+hardware remains open.
+
+## Private source/staging adoption
+
+Coordinator assignment `107274` authorizes source/provenance/staging adoption
+of the exact retained BF6455 artifact. The base header is refreshed byte-exact
+from clean `ea568c2` (Windows CRLF SHA-256 `F590A9F7...AC0C0FA`); the already
+vendored extras header remains `1C65F150...261912`. `PIN.json` version 1 gains
+the additive header hash and `extrasAbi=1`. CMake's optional private DLL check
+uses BF6455; no DLL is added to Git or the public payload.
+
+The existing stock stager and optional private installer source now verify and
+own five files when that extras pin is present. Legacy two-entry PINs still
+produce the original four-file inventory. The companion checks exact owned
+files, source/runtime/header hashes and matching extras ABI metadata. It
+retains four-file legacy admission with extras off, refuses opted-in extras
+against that old inventory before a child launch, and requires the fifth
+owned/header-pinned file for a new candidate. Native/default routing, force
+refusal, configuration bytes and original tape/state/descriptor are preserved.
+There is no installation or new full game build in this source/staging slice.
+
+| Dependency | Common ordinary Shared | `SharedExtras=1` | New private build pin |
+| --- | --- | --- | --- |
+| Old 9B8A / four files | Legacy exact receipt remains admissible with extras off | Companion refuses missing ownership; game refuses missing exports | Refused by the new CMake hash pin |
+| New BF6455 / five files | Same common ABI contract, source/offline checks only | Requires explicit bindings, owned extras header and ABI 1; runtime still unqualified | Exact retained private candidate |
+
+Focused package fixtures cover both inventories, missing/mutated extras
+header, unsupported extras ABI, old-receipt extras refusal and temporary
+rollback preservation. Public packaging still refuses private receipts/DLLs
+and embedded Deluxe. The queued validation batch uses only these focused
+fixtures, the existing ROM-free consumer subset and dependency-only staging
+through `private_shared_files`; it does not produce a full player package,
+invoke owner installation or start a game. Final batch results follow after
+the coordinator's serialized slot handoff.

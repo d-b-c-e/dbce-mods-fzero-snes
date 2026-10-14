@@ -175,6 +175,40 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(contract["profile"], "config.ini")
         self.assertEqual(contract["settings"], "config.ini")
 
+    def test_private_extras_staging_requires_exact_fifth_file_and_extension_pin(self):
+        vendor = self.root / "vendor/dbce-shim"
+        vendor.mkdir(parents=True)
+        build = self.base / "extras-build"
+        build.mkdir()
+        dll, header, extra = pe(), b"ABI2 fixture", b"extras ABI1 fixture"
+        (build / "dbce_shim.dll").write_bytes(dll)
+        (vendor / "dbce_shim.h").write_bytes(header)
+        (vendor / "dbce_shim_extras.h").write_bytes(extra)
+        (vendor / "PROVENANCE.md").write_bytes(b"private-only")
+        pin = {"schema": "dbce.fzero-shared-input-pin", "version": 1, "abi": 2, "extrasAbi": 1,
+               "sourceRevision": "5" * 40, "distribution": "private-only",
+               "files": {"dbce_shim.dll": pack.digest(dll), "dbce_shim.h": pack.digest(header),
+                         "dbce_shim_extras.h": pack.digest(extra)}}
+        def write_pin():
+            (vendor / "PIN.json").write_text(json.dumps(pin))
+        write_pin()
+        files, receipt = stage.private_shared_files(build, self.root)
+        self.assertEqual(len(files), 5)
+        self.assertEqual(files["shared-input/dbce_shim_extras.h"], extra)
+        self.assertEqual(receipt["extrasAbi"], 1)
+        self.assertEqual(receipt["controls"]["optIn"]["default"], "Native")
+        (vendor / "dbce_shim_extras.h").write_bytes(extra + b"changed")
+        with self.assertRaisesRegex(ValueError, "differ from source pin"):
+            stage.private_shared_files(build, self.root)
+        (vendor / "dbce_shim_extras.h").unlink()
+        with self.assertRaises(FileNotFoundError):
+            stage.private_shared_files(build, self.root)
+        (vendor / "dbce_shim_extras.h").write_bytes(extra)
+        pin["extrasAbi"] = 2
+        write_pin()
+        with self.assertRaisesRegex(ValueError, "Invalid private"):
+            stage.private_shared_files(build, self.root)
+
     def test_private_payload_receipt_reuses_outer_inventory_without_self_hash(self):
         folder = self.base / "receipts"
         (folder / "payload").mkdir(parents=True)
@@ -203,6 +237,7 @@ class PackageTests(unittest.TestCase):
         pin = json.loads((vendor / "PIN.json").read_text())
         self.assertEqual(pin["distribution"], "private-only")
         self.assertEqual(pin["files"]["dbce_shim.h"], pack.digest((vendor / "dbce_shim.h").read_bytes()))
+        self.assertEqual(pin["files"]["dbce_shim_extras.h"], pack.digest((vendor / "dbce_shim_extras.h").read_bytes()))
         self.assertIn(pin["files"]["dbce_shim.dll"], (pack.ROOT / "CMakeLists.txt").read_text())
         for value in pin["files"].values():
             self.assertIn(value, (vendor / "PROVENANCE.md").read_text())

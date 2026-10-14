@@ -77,20 +77,25 @@ def private_shared_files(build, root=ROOT):
     vendor = root / "vendor/dbce-shim"
     pin_bytes = (vendor / "PIN.json").read_bytes()
     pin = json.loads(pin_bytes)
+    base_files = {"dbce_shim.dll", "dbce_shim.h"}
+    extras = "dbce_shim_extras.h" in pin.get("files", {})
     if pin.get("schema") != "dbce.fzero-shared-input-pin" or pin.get("version") != 1 or \
             pin.get("abi") != 2 or pin.get("distribution") != "private-only" or \
             not re.fullmatch(r"[0-9a-f]{40}", pin.get("sourceRevision", "")) or \
-            set(pin.get("files", {})) != {"dbce_shim.dll", "dbce_shim.h"}:
+            set(pin.get("files", {})) != base_files | ({"dbce_shim_extras.h"} if extras else set()) or \
+            (pin.get("extrasAbi") != 1 if extras else "extrasAbi" in pin):
         raise ValueError("Invalid private shared-input source pin")
     files = {"dbce_shim.dll": (build / "dbce_shim.dll").read_bytes(),
              "shared-input/dbce_shim.h": (vendor / "dbce_shim.h").read_bytes(),
              "shared-input/PIN.json": pin_bytes,
              "shared-input/PROVENANCE.md": (vendor / "PROVENANCE.md").read_bytes()}
+    if extras:
+        files["shared-input/dbce_shim_extras.h"] = (vendor / "dbce_shim_extras.h").read_bytes()
     for name, expected in pin["files"].items():
         key = name if name.endswith(".dll") else "shared-input/" + name
         if not isinstance(expected, str) or not re.fullmatch(r"[0-9a-f]{64}", expected) or digest(files[key]) != expected:
             raise ValueError(f"Private shared-input bytes differ from source pin: {name}")
-    return files, {"abi": 2, "distribution": "private-only",
+    return files, {"abi": 2, "distribution": "private-only", **({"extrasAbi": 1} if extras else {}),
                    "sourceRevision": pin["sourceRevision"],
                    "runtimeSha256": pin["files"]["dbce_shim.dll"],
                    "controls": shared_controls_contract()}

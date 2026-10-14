@@ -126,6 +126,33 @@ try {
     $receipt.privateSharedInput.sourceRevision='b' * 40
     Refuses { SessionRecordBackend $root $receipt } 'Metadata/source disagreement must refuse.'
     $receipt.privateSharedInput.sourceRevision=$pin.sourceRevision
+    [IO.File]::WriteAllText((Join-Path $root 'config.ini'), "[Input]`nBackend=Shared`nSharedExtras=1`n")
+    Refuses { SessionRecordBackend $root $receipt } 'Legacy four-file receipt must refuse declared extras before launch.'
+    $extraPath=Join-Path $root 'shared-input/dbce_shim_extras.h'
+    [IO.File]::WriteAllText($extraPath,'fixture extras ABI1 header')
+    $pin.extrasAbi=1
+    $pin.files.'dbce_shim_extras.h'=SessionHash $extraPath
+    $receipt.privateSharedInput.extrasAbi=1
+    $receipt.files+=@{name='shared-input/dbce_shim_extras.h';sha256=SessionHash $extraPath}
+    [IO.File]::WriteAllText($pinPath,($pin | ConvertTo-Json -Depth 4))
+    ($receipt.files | Where-Object name -eq 'shared-input/PIN.json').sha256=SessionHash $pinPath
+    foreach($flag in @('0','1')) {
+        $extrasConfig="[Input]`nBackend=Shared`nSharedExtras=$flag`n"
+        [IO.File]::WriteAllText((Join-Path $root 'config.ini'),$extrasConfig)
+        SessionRecordBackend $root $receipt
+        Check ([IO.File]::ReadAllText((Join-Path $root 'config.ini')) -ceq $extrasConfig) 'Extras admission rewrote settings.'
+    }
+    $old=[IO.File]::ReadAllBytes($extraPath);[IO.File]::WriteAllText($extraPath,'changed')
+    Refuses { SessionRecordBackend $root $receipt } 'Changed extras header must refuse before launch.'
+    [IO.File]::Delete($extraPath)
+    Refuses { SessionRecordBackend $root $receipt } 'Missing extras header must refuse before launch.'
+    [IO.File]::WriteAllBytes($extraPath,$old)
+    $receipt.privateSharedInput.extrasAbi=2
+    Refuses { SessionRecordBackend $root $receipt } 'Extras ABI metadata mismatch must refuse.'
+    $receipt.privateSharedInput.extrasAbi=1
+    [IO.File]::WriteAllText((Join-Path $root 'config.ini'), "[Input]`nBackend=Shared`nSharedExtras=2`n")
+    Refuses { SessionRecordBackend $root $receipt } 'Unsupported extras flag must refuse.'
+    [IO.File]::WriteAllText((Join-Path $root 'config.ini'), "[Input]`nBackend=Shared`n")
     $pin.files.'dbce_shim.dll'='c' * 64
     [IO.File]::WriteAllText($pinPath, ($pin | ConvertTo-Json -Depth 4))
     ($receipt.files | Where-Object name -eq 'shared-input/PIN.json').sha256=SessionHash $pinPath

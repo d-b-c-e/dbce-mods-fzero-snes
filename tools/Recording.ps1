@@ -111,15 +111,33 @@ function SessionRecordBackend([string]$Root, $Receipt) {
     }
     $pin = SessionJson (SessionBound $Root 'shared-input/PIN.json')
     $shared = $Receipt.privateSharedInput
+    $extras = $pin.files -is [Collections.IDictionary] -and 'dbce_shim_extras.h' -cin @($pin.files.Keys)
     if ($pin.schema -cne 'dbce.fzero-shared-input-pin' -or $pin.version -ne 1 -or $pin.abi -ne 2 -or
         $pin.distribution -cne 'private-only' -or $pin.sourceRevision -cnotmatch '^[0-9a-f]{40}$' -or
-        $pin.files -isnot [Collections.IDictionary] -or $pin.files.Count -ne 2 -or
+        $pin.files -isnot [Collections.IDictionary] -or $pin.files.Count -ne $(if ($extras) { 3 } else { 2 }) -or
         'dbce_shim.dll' -cnotin @($pin.files.Keys) -or 'dbce_shim.h' -cnotin @($pin.files.Keys) -or
         $pin.files.'dbce_shim.dll' -cnotmatch '^[0-9a-f]{64}$' -or $pin.files.'dbce_shim.h' -cnotmatch '^[0-9a-f]{64}$' -or
         $shared.abi -ne 2 -or $shared.distribution -cne 'private-only' -or $shared.sourceRevision -cne $pin.sourceRevision -or
         $shared.runtimeSha256 -cne $pin.files.'dbce_shim.dll' -or
         (SessionHash (SessionBound $Root 'dbce_shim.dll')) -cne $pin.files.'dbce_shim.dll' -or
-        (SessionHash (SessionBound $Root 'shared-input/dbce_shim.h')) -cne $pin.files.'dbce_shim.h') { throw 'Installed Shared metadata and actual source/runtime pins disagree.' }
+        (SessionHash (SessionBound $Root 'shared-input/dbce_shim.h')) -cne $pin.files.'dbce_shim.h' -or
+        $(if ($extras) { $pin.extrasAbi -ne 1 -or $shared.extrasAbi -ne 1 } else { $null -ne $pin.extrasAbi -or $null -ne $shared.extrasAbi })) { throw 'Installed Shared metadata and actual source/runtime pins disagree.' }
+    if ($extras) {
+        $name = 'shared-input/dbce_shim_extras.h'
+        $entries = @($Receipt.files | Where-Object { $_.name -ieq $name })
+        $expected = $pin.files.'dbce_shim_extras.h'
+        if ($entries.Count -ne 1 -or $entries[0].name -cne $name -or $expected -cnotmatch '^[0-9a-f]{64}$' -or
+            $entries[0].sha256 -ine $expected -or (SessionHash (SessionBound $Root $name)) -cne $expected) {
+            throw 'Installed Shared extras ownership/source pin differs.'
+        }
+    }
+    $extraValue = [regex]::Match((SessionIni $config 'Input' 'SharedExtras' '0'), '^[+-]?\d+')
+    $extraEnabled = [long]0
+    if (!$extraValue.Success -or ![long]::TryParse($extraValue.Value, [Globalization.NumberStyles]::AllowLeadingSign,
+            [Globalization.CultureInfo]::InvariantCulture, [ref]$extraEnabled) -or $extraEnabled -notin @(0,1)) {
+        throw 'SharedExtras must be 0 or 1.'
+    }
+    if ($extraEnabled -eq 1 -and !$extras) { throw 'SharedExtras requires installed ownership of the extras-capable private pin.' }
 }
 function SessionAutomatedStart($Start, [string]$Root, $Receipt, [string]$Id) {
     if ($Receipt.session.automatedRecord -ne $true -or
