@@ -64,6 +64,17 @@ try {
     Refuses { Private-SharedSources $root $build } 'Unknown extras ABI must refuse.'
     $pin.extrasAbi=1;[IO.File]::WriteAllText($pinPath,($pin | ConvertTo-Json -Depth 4))
     $sharedNames+= 'shared-input/dbce_shim_extras.h'
+    $legacyNames=@($sharedNames | Where-Object { $_ -cne 'shared-input/dbce_shim_extras.h' })
+    $fiveReceipt=@{privateSharedInput=@{abi=2;extrasAbi=1};files=@($sharedNames | ForEach-Object { @{name=$_} })}
+    Refuses { Assert-SharedOwnershipTransition $true $fiveReceipt $legacyNames } 'Five-file ownership must refuse legacy source downgrade before mutation.'
+    Refuses { Assert-SharedOwnershipTransition $true @{privateSharedInput=@{abi=2;extrasAbi=1};files=@()} $legacyNames } 'Extras metadata alone must not lose ownership through a legacy downgrade.'
+    Assert-SharedOwnershipTransition $true $fiveReceipt $sharedNames
+    Check $true 'Five-file source must preserve five-file ownership.'
+    $fourReceipt=@{privateSharedInput=@{abi=2};files=@($legacyNames | ForEach-Object { @{name=$_} })}
+    Assert-SharedOwnershipTransition $true $fourReceipt $legacyNames
+    Check $true 'Legacy source must preserve legacy ownership.'
+    Assert-SharedOwnershipTransition $true $fourReceipt $sharedNames
+    Check $true 'Legacy ownership may upgrade to the additive five-file source.'
     $launcher='FZeroSNESRecomp-wheel-launcher.exe'; $receiptName='install-receipt.json'
     $restorableFiles=@($launcher,'WheelFfb.dll','tools/Recording.ps1',$receiptName)+$sharedNames
     $state=@{files=@()}

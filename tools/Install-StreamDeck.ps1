@@ -47,10 +47,19 @@ function Recording-Capability([bool]$PrivateShared, [string]$LinkedText) {
         recordBackends=@('Native') + @(if ($PrivateShared) { 'Shared' })
         automatedRecordBackends=@(if ($PrivateShared) { 'Shared' }) }
 }
-function Assert-SharedOwnershipTransition([bool]$Requested, $PreviousReceipt) {
-    if ($Requested -or !$PreviousReceipt) { return }
+function Assert-SharedOwnershipTransition([bool]$Requested, $PreviousReceipt, $IncomingPrivatePaths=$null) {
+    if (!$PreviousReceipt) { return }
     $privatePaths = @('dbce_shim.dll', 'shared-input/dbce_shim.h', 'shared-input/PIN.json', 'shared-input/PROVENANCE.md', 'shared-input/dbce_shim_extras.h')
     $ownedPrivate = @($PreviousReceipt.files | Where-Object { $_.name -and $_.name.Replace('\','/') -in $privatePaths })
+    if ($Requested) {
+        if ($null -eq $IncomingPrivatePaths) { return } # source pin is checked later
+        $withdrawn = @($ownedPrivate | Where-Object { $_.name.Replace('\','/') -cnotin $IncomingPrivatePaths })
+        $lostExtras = $PreviousReceipt.privateSharedInput.extrasAbi -eq 1 -and 'shared-input/dbce_shim_extras.h' -cnotin $IncomingPrivatePaths
+        if ($withdrawn.Count -or $lostExtras) {
+            throw 'The previous private Shared install owns files absent from this source pin. Keep the extras-capable private pin or roll back that Shared install first; a legacy downgrade cannot withdraw ownership while leaving files behind. Nothing changed.'
+        }
+        return
+    }
     if ($null -ne $PreviousReceipt.privateSharedInput -or $ownedPrivate.Count) {
         throw 'The previous install owns private Shared files. Keep -PrivateSharedInput or roll back that Shared install first; Native installation cannot withdraw ownership while leaving its files behind. Nothing changed.'
     }
@@ -164,6 +173,7 @@ $sources = @{ $launcher = $built; 'WheelFfb.dll' = (Join-Path $BuildDir 'WheelFf
 $shared = $null
 if ($PrivateSharedInput) {
     $shared = Private-SharedSources $repo $BuildDir
+    Assert-SharedOwnershipTransition $true $oldReceipt @($shared.files.Keys)
     foreach ($name in $shared.files.Keys) { $sources[$name] = $shared.files[$name] }
     # Legacy four-file pins remain readable; a new extras pin owns five files.
     $owned = @($launcher, 'WheelFfb.dll', 'tools/Recording.ps1') + @($shared.files.Keys)

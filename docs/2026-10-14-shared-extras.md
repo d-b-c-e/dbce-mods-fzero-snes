@@ -239,5 +239,60 @@ rollback preservation. Public packaging still refuses private receipts/DLLs
 and embedded Deluxe. The queued validation batch uses only these focused
 fixtures, the existing ROM-free consumer subset and dependency-only staging
 through `private_shared_files`; it does not produce a full player package,
-invoke owner installation or start a game. Final batch results follow after
-the coordinator's serialized slot handoff.
+invoke owner installation or start a game.
+
+Adoption implementation is committed as
+`fd52deb873a8fffd7852cb5be301c6615ce55401`. After explicit slot assignment
+`107753`, the wrapper `build-dine-extras-offline/Validate-Adoption.ps1`
+required that exact clean HEAD and passed the focused batch:
+
+| Check | Result |
+| --- | --- |
+| Unified package fixtures | 33/33 tests, 8.379 seconds |
+| Private installer pin/inventory/rollback helpers | 34 checks, synthetic temporary target only |
+| Ordinary recording companion helpers | 51 checks, no child launch or DLL load |
+| ROM-free MSVC Release consumer rebuild | Passed, no compiler warnings |
+| Consumer mapper/ordinary/diagnostic CTest subset | 36/36 cases, 1.15 seconds |
+| Actual BF6455 dependency-only stage | Five exact files, all copied hashes verified |
+
+Logs and staged component are under
+`build-dine-extras-offline/private-adoption-fd52deb`. The existing
+`private_shared_files` helper reads the actual immutable archived BF6455 DLL
+plus current exact source pins/headers/provenance; its staged result is
+`dependency-stage/dependency-stage-result.json`, explicitly
+`dependencyOnly=true` and `fullGamePackage=false`. It declares no game
+executable or installed session capability. This is verified component
+staging, not a full clean graphical player build/package or owner delivery.
+
+Lease `230bb10b3789495caa48c550b436d272` began at
+`2026-10-14T15:42:51.5665794-05:00` and released after the whole batch.
+The prior failing/34-case/36-case consumer evidence and native source/artifact
+remain retained. No owner files were an install target; no settings/profile,
+original recording, physical output, app/UI/focus or display topology changed.
+
+This closes the scoped source, native artifact and private dependency-staging
+work. Next: independent pin/ownership source review, then a separately
+authorized fresh graphical private candidate and muted disposable ordinary
+extras-input/cold replay qualification with explicit bindings. Owner notice
+is required before any future runtime takeover. Launcher preview, dedicated
+host save/rewind actions, Shared force ownership, Wheelkit extra-binding UI,
+multi-device and attended hardware/visual acceptance remain distinct open
+work; the three-screen implementation is not promoted by these checks.
+
+## Ownership downgrade follow-up
+
+Coordinator source review `107806` identified a five-file-to-legacy edge in
+`fd52deb`: the private-to-Native guard returned for any requested private
+install, and a legacy source pin could omit the previously owned extras
+header from the rewritten receipt while leaving that file in place.
+The pure guard/receipt projection reproduced admission with five prior paths
+and four incoming paths, without owner mutation. The retained report is
+`private-adoption-fd52deb/downgrade-repro.json`.
+
+The existing transition guard now takes an optional incoming private path
+inventory. The installer calls it after source pin verification and before
+copy/backup; withdrawn owned files or an extras-ABI receipt against a legacy
+inventory refuse with an explicit keep-pin/rollback instruction. Narrow
+fixtures refuse five-to-four and metadata-only extras loss, and retain
+four-to-four, four-to-five and five-to-five admission. This adds no cleanup
+of owner files and does not require a full native/consumer/package rerun.
