@@ -60,7 +60,8 @@ if(BUILD_TESTING)
         set_target_properties(fzero_shim_ordinary_tests PROPERTIES
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/shim-fixture")
         add_dependencies(fzero_shim_ordinary_tests fzero_shim_fake)
-        foreach(mode normal native replay force forcechanged unknown session profile profileinfo missing unexpected launcher)
+        foreach(mode normal native replay force forcechanged unknown session profile profileinfo missing unexpected launcher
+            extras extrasmissing extrasseq extrascount extrasabi extrasinfo extrasnosection extrasduplicate)
             add_test(NAME fzero_shim_ordinary_${mode} COMMAND fzero_shim_ordinary_tests ${mode})
         endforeach()
     endif()

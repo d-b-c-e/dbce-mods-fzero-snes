@@ -41,3 +41,19 @@ No redistribution grant for this provisional target is asserted. F-Zero's root
 license does not license this dependency. Extraction into the reusable toolkit
 and complete source/license notices remain required before public distribution.
 Do not add this DLL to the public player-package allowlist on this evidence.
+
+## October 14 declared-extras source seam
+
+`dbce_shim_extras.h` is copied byte-for-byte from the reusable wheel toolkit's
+`native/shim/shim_dll/dbce_shim_extras.h` at
+`88ccd1d86fc1ab7088986ca279adcb7d44f9ccb6` (last header change `ea568c2`).
+Its SHA-256 is
+`1c65f15097e61bb3175f9ed3721458b775a05091515bfce208c407fc9c261912`.
+This is the additive extras ABI 1 header, alongside base ABI 2. The `-text`
+attribute preserves the inspected Windows bytes. No DLL or base PIN changed.
+
+The current pinned private DLL predates this extension. `SharedExtras=1`
+therefore refuses that runtime before opening a provider. An extension-capable
+private DLL needs its own source/binary review and explicit pin/staging update
+before this opt-in consumer can be delivered. The source seam and an ABI fake
+do not establish physical input, force or redistribution qualification.

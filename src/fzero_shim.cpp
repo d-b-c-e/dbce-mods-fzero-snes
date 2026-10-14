@@ -22,6 +22,7 @@ extern "C" {
 
 namespace {
 bool requested, ordinary, failed, latched, completed, host_persistence, host_debug;
+bool use_extras;
 std::string config_path, profile, recording_path, save_root, session_nonce;
 std::filesystem::path session_file, batch_file;
 FzeroFfbState force_state{};
@@ -51,6 +52,10 @@ using Tick = int32_t (*)(void *, dbce_shim_frame *);
 using Record = int32_t (*)(void *, uint64_t, const double *, int32_t);
 using Text = int32_t (*)(void *, char *, int32_t, int32_t *);
 Open open2; Tick tick; Record record; Text stop, profile_info;
+using OpenExtras = int32_t (*)(const wchar_t *, const char *, const char *, int32_t,
+    const char *, void *, const char *, int32_t, void **, char *, int32_t);
+using TickExtras = int32_t (*)(void *, uint32_t, dbce_shim_frame *, dbce_shim_extras_frame *);
+OpenExtras open_extras; TickExtras tick_extras; Text extras_info;
 
 bool refuse(const char *why) {
   failed = true;
@@ -84,6 +89,26 @@ bool read_profile(const char *path) {
   }
   if (begin == std::string::npos || end-begin > 65536) return refuse("missing/oversized Controls section");
   profile = all.substr(begin, end-begin); // exact bytes; Core owns binding validation.
+  if (use_extras) {
+    size_t extra_begin = std::string::npos, extra_end = all.size();
+    for (size_t pos = 0; pos < all.size();) {
+      auto nl = all.find('\n', pos);
+      auto next = nl == std::string::npos ? all.size() : nl + 1;
+      auto line = trim(all.substr(pos, next-pos));
+      for (char &c : line) if (c >= 'A' && c <= 'Z') c += 'a'-'A';
+      if (!line.empty() && line[0] == '[') {
+        if (line == "[extras]") {
+          if (extra_begin != std::string::npos) return refuse("duplicate Extras section");
+          extra_begin = pos;
+        } else if (extra_begin != std::string::npos && extra_end == all.size()) extra_end = pos;
+      }
+      pos = next;
+    }
+    if (extra_begin == std::string::npos || extra_end-extra_begin > 65536)
+      return refuse("SharedExtras requires one bounded Extras section");
+    if (!profile.empty() && profile.back() != '\n') profile += '\n';
+    profile += all.substr(extra_begin, extra_end-extra_begin);
+  }
   return true;
 }
 bool ordinary_force_disabled() {
@@ -120,6 +145,16 @@ bool load() {
     const char *actual = name(i);
     if (!actual || std::strcmp(actual, kFzeroShimActions[i])) return refuse("shim action order mismatch");
   }
+  if (use_extras) {
+    auto extras_abi = entry<Int>(module, "dbce_shim_extras_abi_version");
+    auto extras_size = entry<Int>(module, "dbce_shim_extras_frame_size");
+    open_extras = entry<OpenExtras>(module, "dbce_shim_open_extras");
+    tick_extras = entry<TickExtras>(module, "dbce_shim_tick_extras");
+    extras_info = entry<Text>(module, "dbce_shim_extras_info");
+    if (!extras_abi || !extras_size || !open_extras || !tick_extras || !extras_info ||
+        extras_abi() != DBCE_SHIM_EXTRAS_ABI || extras_size() != sizeof(dbce_shim_extras_frame))
+      return refuse("SharedExtras requires a reviewed extras-capable shim; current private pin may predate this extension");
+  }
   return !name(DBCE_SHIM_ACTIONS) || refuse("shim has unknown extra actions");
 }
 #endif
@@ -152,6 +187,10 @@ int FzeroShimPrepare(const char *config, int direct_rom, int replay, int script,
     if (selection != "shared") return refuse("Input Backend must be Native or Shared");
     ordinary = true;
     config_path = config;
+    int extras = 0;
+    FzeroIniReadInt(config, "Input", "SharedExtras", &extras);
+    if (extras != 0 && extras != 1) return refuse("SharedExtras must be 0 or 1");
+    use_extras = extras == 1;
     // Temporary source candidate: the legacy launcher can open SDL devices for
     // steering preview. Do not admit that path until it uses the owned reader.
     if (!direct_rom) return refuse("Shared input currently requires an explicit ROM without --launcher; legacy wheel extras are unavailable");
@@ -252,16 +291,29 @@ int FzeroShimStart(void *window, const char *legacy_guid) {
       a.adapter_version = "fzero-shim-diagnostic-3"; a.hz = kHz; a.seconds = kSeconds;
     }
     char why[512]{};
-    if (open2(&a, &handle, why, sizeof(why)) != DBCE_SHIM_OK || !handle) return refuse(why);
+    int opened = use_extras
+      ? open_extras(a.folder, a.nonce, a.profile, a.profile_len, a.unsupported, a.hwnd,
+          kFzeroShimExtrasDeclaration, (int32_t)std::strlen(kFzeroShimExtrasDeclaration), &handle, why, sizeof(why))
+      : open2(&a, &handle, why, sizeof(why));
+    if (opened != DBCE_SHIM_OK || !handle) return refuse(why);
     if (ordinary) {
       char info[4096]{}; int32_t needed = 0;
       if (profile_info(handle,info,sizeof(info),&needed) != DBCE_SHIM_OK || needed <= 0 ||
           needed > sizeof(info) || info[needed-1] != '\0' ||
           std::memchr(info,'\0',needed-1) || std::strncmp(info,"ok=1\n",5))
         return refuse("ordinary shared profile was not accepted by Core");
+      const int32_t profile_needed = needed;
+      if (use_extras) {
+        char extras_report[32768]{}; needed = 0;
+        if (extras_info(handle, extras_report, sizeof(extras_report), &needed) != DBCE_SHIM_OK ||
+            needed <= 1 || needed > sizeof(extras_report) || extras_report[needed-1] != '\0' ||
+            std::memchr(extras_report, '\0', needed-1))
+          return refuse("ordinary extras report unavailable or truncated");
+        std::fprintf(stderr, "[fzero-shim] ordinary extras plan:\n%.*s\n", needed-1, extras_report);
+      }
       // Keep Core's own revision and exact-byte hash, once at ordinary startup.
       // The existing flat profile_info response is evidence, not a new schema.
-      std::fprintf(stderr,"[fzero-shim] ordinary profile accepted:\n%.*s",needed-1,info);
+      std::fprintf(stderr,"[fzero-shim] ordinary profile accepted:\n%.*s",profile_needed-1,info);
       std::fflush(stderr);
     }
     int range = 100, response = 50, threshold = 0;
@@ -287,9 +339,10 @@ int FzeroShimStart(void *window, const char *legacy_guid) {
       origin.close(); if (!origin) return refuse("origin receipt write failed");
     }
     started = Clock::now();
+    if (use_extras) std::fprintf(stderr, "[fzero-shim] declared X/Y/L/R extras enabled; same owned tick; no legacy binding fallback\n");
     std::fprintf(stderr, "[fzero-shim] ABI 2 %s opened; steering range=%d response=%d; Core calibration; keyboard=%s; %s\n",
       ordinary ? "ordinary input" : "capture", range, response, latched ? "suppressed" : "retained",
-      ordinary ? "SDL devices disabled; legacy wheel X/Y/L/R/save/rewind and unbound buttons unavailable; keyboard retained; physical FFB unavailable until ownership bridge" : "native SDL controller lane disabled");
+      ordinary ? "SDL devices disabled; X/Y/L/R require declared SharedExtras; legacy wheel save/rewind and unbound buttons unavailable; keyboard retained; physical FFB unavailable until ownership bridge" : "native SDL controller lane disabled");
     return 1;
   } catch (const std::exception &e) { return refuse(e.what()); }
 #else
@@ -297,14 +350,22 @@ int FzeroShimStart(void *window, const char *legacy_guid) {
   return 0;
 #endif
 }
+static int input_tick(uint32_t *extras_word) {
+  *extras_word = 0;
+  frame = {}; frame.struct_size = sizeof(frame);
+  if (!use_extras) return tick(handle, &frame) == DBCE_SHIM_OK;
+  dbce_shim_extras_frame extras{}; extras.struct_size = sizeof(extras);
+  return tick_extras(handle, 0, &frame, &extras) == DBCE_SHIM_OK &&
+      FzeroShimExtrasWord(&frame, &extras, extras_word);
+}
 int FzeroShimInput(uint32_t *word, const uint8_t *ram, size_t ram_size) {
   if (word) *word = 0;
   if (!FzeroShimUsingInput() || failed || !handle || !word || !ram || ram_size <= 0x55) return 0;
   if (pending) return refuse("previous simulation input was not consumed");
   if (requested && std::chrono::duration<double>(Clock::now()-started).count() >= kSeconds)
     return refuse("240-second diagnostic deadline exceeded");
-  frame = {}; frame.struct_size = sizeof(frame);
-  if (tick(handle, &frame) != DBCE_SHIM_OK ||
+  uint32_t extras_word = 0;
+  if (!input_tick(&extras_word) ||
       !FzeroShimMapFrame(&map, &frame, word, FzeroShimGameplayState(ram, ram_size)))
     return refuse("input tick/sequence/layout failed");
   if (latched) {
@@ -316,15 +377,17 @@ int FzeroShimInput(uint32_t *word, const uint8_t *ram, size_t ram_size) {
   } else if (frame.latched || frame.suppress_native || frame.run != 0)
     return refuse("ordinary/capture-only provider unexpectedly owns keyboard lane");
   pending = true;
+  *word |= extras_word;
   return 1;
 }
 int FzeroShimOverlayInput(uint32_t *word) {
   if (word) *word = 0;
   if (!ordinary || failed || !handle || !word || pending) return 0;
-  frame = {}; frame.struct_size = sizeof(frame);
-  if (tick(handle,&frame) != DBCE_SHIM_OK || !FzeroShimMapOverlayFrame(&map,&frame,word) ||
+  uint32_t extras_word = 0;
+  if (!input_tick(&extras_word) || !FzeroShimMapOverlayFrame(&map,&frame,word) ||
       frame.latched || frame.suppress_native || frame.run != 0)
     return refuse("ordinary overlay input failed");
+  *word |= extras_word;
   return 1;
 }
 uint32_t FzeroShimSupplementalMask(void) {

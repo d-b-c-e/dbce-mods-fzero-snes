@@ -3,6 +3,7 @@
 #define DBCE_SHIM_BUILD
 #include <cstddef>
 #include "../vendor/dbce-shim/dbce_shim.h"
+#include "../vendor/dbce-shim/dbce_shim_extras.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -14,7 +15,7 @@ static const char *names[] = {
  "confirm","back","start","select","navUp","navDown","navLeft","navRight","camera","lookBack",
  "reset","horn","modMenu","muteFfb","gear1","gear2","gear3","gear4","gear5","gear6","gear7","gear8"
 };
-struct Fake { uint64_t seq=0; bool latched=false, capture=false; std::filesystem::path folder; };
+struct Fake { uint64_t seq=0; bool latched=false, capture=false, extras=false; std::filesystem::path folder; };
 static bool flag(const char *name) { auto s=std::getenv(name); return s && *s; }
 int32_t dbce_shim_abi_version(void) { return flag("FZERO_FAKE_BAD_ABI") ? 1 : 2; }
 int32_t dbce_shim_frame_size(void) { return sizeof(dbce_shim_frame); }
@@ -47,7 +48,7 @@ int32_t dbce_shim_profile_info(void *,char *text,int32_t len,int32_t *needed) {
  if(flag("FZERO_FAKE_BAD_PROFILE_INFO")) text[*needed-1]='x';
  return 0;
 }
-int32_t dbce_shim_tick(void *handle,dbce_shim_frame *out) {
+static int32_t fill_tick(void *handle,dbce_shim_frame *out) {
  auto f=static_cast<Fake *>(handle);
  if (!f || !out || out->struct_size!=296) return -1;
  *out={}; out->struct_size=296; out->abi=2; out->seq=++f->seq;
@@ -63,6 +64,42 @@ int32_t dbce_shim_tick(void *handle,dbce_shim_frame *out) {
    if(flag("FZERO_FAKE_NO_PROVENANCE")) out->action[0].injected=0;
  }
  return 0;
+}
+int32_t dbce_shim_tick(void *handle,dbce_shim_frame *out) {
+ auto f=static_cast<Fake *>(handle);
+ if (f && f->extras) return DBCE_SHIM_REFUSED; // common and extras cannot poll separately
+ return fill_tick(handle,out);
+}
+int32_t dbce_shim_extras_abi_version(void) { return flag("FZERO_FAKE_BAD_EXTRAS_ABI") ? 0 : DBCE_SHIM_EXTRAS_ABI; }
+int32_t dbce_shim_extras_frame_size(void) { return sizeof(dbce_shim_extras_frame); }
+int32_t dbce_shim_open_extras(const wchar_t *folder,const char *nonce,const char *profile,int32_t profile_len,
+ const char *unsupported,void *hwnd,const char *declaration,int32_t declaration_len,void **out,char *why,int32_t len) {
+ dbce_shim_open_args a{};a.struct_size=sizeof(a);a.folder=folder;a.nonce=nonce;a.profile=profile;
+ a.profile_len=profile_len;a.unsupported=unsupported;a.hwnd=hwnd;
+ if (!declaration || declaration_len<=0) return DBCE_SHIM_BAD_ARGUMENT;
+ int r=dbce_shim_open2(&a,out,why,len);if(r) return r;
+ auto f=static_cast<Fake *>(*out);f->extras=true;
+ std::ofstream d(f->folder/"declaration.spy",std::ios::binary);d.write(declaration,declaration_len);
+ return DBCE_SHIM_OK;
+}
+int32_t dbce_shim_tick_extras(void *handle,uint32_t contexts,dbce_shim_frame *out,dbce_shim_extras_frame *x) {
+ auto f=static_cast<Fake *>(handle);
+ if (!f || !f->extras || contexts || !x || x->struct_size!=sizeof(*x)) return DBCE_SHIM_BAD_ARGUMENT;
+ int r=fill_tick(handle,out);if(r) return r;
+ *x={};x->struct_size=sizeof(*x);x->abi=DBCE_SHIM_EXTRAS_ABI;x->seq=out->seq;x->count=4;
+ for(int i=0;i<4;++i){x->slot[i].status=flag("FZERO_FAKE_EXTRAS_MISSING")?3:12;x->slot[i].value=1;}
+ if(flag("FZERO_FAKE_EXTRAS_SEQ")) ++x->seq;
+ if(flag("FZERO_FAKE_EXTRAS_COUNT")) --x->count;
+ std::ofstream(f->folder/"extras-tick.spy",std::ios::app|std::ios::binary)<<out->seq<<"\n";
+ return DBCE_SHIM_OK;
+}
+int32_t dbce_shim_extras_info(void *,char *text,int32_t len,int32_t *needed) {
+ const char *info="{\"acceptedSchema\":1,\"game\":\"fzero-snes\"}";
+ *needed=(int32_t)std::strlen(info)+1;
+ if(len<*needed) return DBCE_SHIM_BAD_ARGUMENT;
+ std::memcpy(text,info,*needed);
+ if(flag("FZERO_FAKE_BAD_EXTRAS_INFO")) *needed=len+1;
+ return DBCE_SHIM_OK;
 }
 int32_t dbce_shim_record(void *handle,uint64_t seq,const double *v,int32_t count) {
  auto f=static_cast<Fake *>(handle);

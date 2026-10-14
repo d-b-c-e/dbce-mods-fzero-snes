@@ -844,8 +844,8 @@ static bool session_live_input(void *context, uint32_t *word) {
     if (!FzeroShimInput(&shim_word, g_ram, sizeof(g_ram))) {
       return false;
     }
-    /* Shared owns mapped inputs; no SDL controller is opened. Legacy wheel
-     * extras remain unavailable until they can use the same owned snapshot.
+    /* Shared owns mapped inputs; no SDL controller is opened. Opt-in declared
+     * X/Y/L/R extras use the same Core tick, never legacy wheel bindings.
      * Keyboard SNES extras remain available outside a latched diagnostic. */
     input = (FzeroShimLatched() ? 0 : keyboard_input()) | shim_word | (1u << 30);
   } else {

@@ -21,6 +21,32 @@ const char kFzeroShimUnsupported[] =
   "gear5=F-Zero has no gearbox\ngear6=F-Zero has no gearbox\n"
   "gear7=F-Zero has no gearbox\ngear8=F-Zero has no gearbox\n";
 
+const char kFzeroShimExtrasDeclaration[] =
+  "game fzero-snes\n"
+  "fzero-snes.x digital\n"
+  "fzero-snes.y digital\n"
+  "fzero-snes.l digital\n"
+  "fzero-snes.r digital\n";
+
+int FzeroShimExtrasWord(const dbce_shim_frame *f,
+                       const dbce_shim_extras_frame *x, uint32_t *word) {
+  if (word) *word = 0;
+  if (!word || !f || !x || f->struct_size != sizeof(*f) || f->abi != DBCE_SHIM_ABI ||
+      x->struct_size != sizeof(*x) || x->abi != DBCE_SHIM_EXTRAS_ABI ||
+      x->seq != f->seq || x->count != 4 || x->contexts != 0) return 0;
+  static const unsigned bits[] = {9, 1, 10, 11};
+  uint32_t result = 0;
+  for (int i = 0; i < 4; ++i) {
+    const dbce_shim_action *a = &x->slot[i];
+    // Ordinary extras never admit injected provenance; device faults and
+    // rearming stay neutral. Host save/rewind are not part of this declaration.
+    if (a->injected || !isfinite(a->value) || a->value < 0 || a->value > 1) return 0;
+    if (a->status == 12 && a->value > .5f) result |= 1u << bits[i];
+  }
+  *word = result;
+  return 1;
+}
+
 void FzeroShimMapInit(FzeroShimMap *s, int range, int response, float threshold) {
   memset(s, 0, sizeof(*s));
   s->range_percent = range;

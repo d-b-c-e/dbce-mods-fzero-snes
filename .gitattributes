@@ -4,6 +4,7 @@ licenses/fonts/*-OFL.txt text eol=lf
 /lib/toolkit/source-to-binary-manifest.json -text
 # Keep the reviewed ABI header's provenance hash stable across checkouts.
 /vendor/dbce-shim/dbce_shim.h -text
+/vendor/dbce-shim/dbce_shim_extras.h -text
 # Future archive exports only; tracked files and repository history stay intact.
 /assets/img/boxart.tga export-ignore
 /docs/screenshots export-ignore

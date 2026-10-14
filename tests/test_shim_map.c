@@ -16,6 +16,36 @@ static dbce_shim_frame frame(void) {
 int main(void) {
   CHECK(sizeof(dbce_shim_frame) == 296);
   CHECK(sizeof(dbce_shim_open_args) == 128);
+  CHECK(sizeof(dbce_shim_extras_frame) == 296);
+  dbce_shim_frame common = frame();
+  dbce_shim_extras_frame extra = {0};
+  extra.struct_size = sizeof(extra); extra.abi = DBCE_SHIM_EXTRAS_ABI;
+  extra.seq = common.seq; extra.count = 4;
+  uint32_t extra_word = 0;
+  static const unsigned extra_bits[] = {9,1,10,11};
+  for (int i=0;i<4;++i) {
+    extra.slot[i].status=12; extra.slot[i].value=1;
+    CHECK(FzeroShimExtrasWord(&common,&extra,&extra_word) && extra_word==(1u<<extra_bits[i]));
+    extra.slot[i].value=0;
+  }
+  for (int i=0;i<4;++i) extra.slot[i].value=1;
+  CHECK(FzeroShimExtrasWord(&common,&extra,&extra_word) && extra_word==0xe02u);
+  for (int status=0;status<=14;++status) {
+    if(status==12) continue;
+    for(int i=0;i<4;++i) extra.slot[i].status=(uint8_t)status;
+    CHECK(FzeroShimExtrasWord(&common,&extra,&extra_word) && extra_word==0);
+  }
+  for(int i=0;i<4;++i) extra.slot[i].status=12;
+  extra.seq++; CHECK(!FzeroShimExtrasWord(&common,&extra,&extra_word) && extra_word==0); extra.seq--;
+  extra.count=3; CHECK(!FzeroShimExtrasWord(&common,&extra,&extra_word) && extra_word==0); extra.count=4;
+  extra.struct_size--; CHECK(!FzeroShimExtrasWord(&common,&extra,&extra_word)); extra.struct_size++;
+  extra.abi=0; CHECK(!FzeroShimExtrasWord(&common,&extra,&extra_word)); extra.abi=DBCE_SHIM_EXTRAS_ABI;
+  extra.contexts=1; CHECK(!FzeroShimExtrasWord(&common,&extra,&extra_word)); extra.contexts=0;
+  extra.slot[3].value=NAN; CHECK(!FzeroShimExtrasWord(&common,&extra,&extra_word) && extra_word==0);
+  extra.slot[3].value=1; extra.slot[3].injected=1;
+  CHECK(!FzeroShimExtrasWord(&common,&extra,&extra_word) && extra_word==0); extra.slot[3].injected=0;
+  extra.slot[3].value=2; CHECK(!FzeroShimExtrasWord(&common,&extra,&extra_word) && extra_word==0);
+  CHECK(!FzeroShimExtrasWord(NULL,&extra,&extra_word));
   CHECK(FzeroShimGuestWord(0x400000f1u)==0x40000001u);
   CHECK(FzeroShimGuestWord(0x400f00f1u)==0x40000001u);
   CHECK(FzeroShimGuestWord(0x40040041u)==0x40040041u);

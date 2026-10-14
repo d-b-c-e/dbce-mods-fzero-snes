@@ -8,6 +8,7 @@
 #define __declspec(x)
 #endif
 #include "../vendor/dbce-shim/dbce_shim.h"
+#include "../vendor/dbce-shim/dbce_shim_extras.h"
 #ifndef _WIN32
 #undef __declspec
 #endif
@@ -20,6 +21,11 @@ extern "C" {
  * actions; those are deliberately NOT aliased onto unrelated racing actions. */
 extern const char *const kFzeroShimActions[DBCE_SHIM_ACTIONS];
 extern const char kFzeroShimUnsupported[];
+/* Declaration order is also the four scalar slots: X, Y, L, R. No generic
+ * action aliases or migration of legacy SDL button indices. */
+extern const char kFzeroShimExtrasDeclaration[];
+int FzeroShimExtrasWord(const dbce_shim_frame *frame,
+                       const dbce_shim_extras_frame *extras, uint32_t *word);
 typedef struct FzeroShimMap {
   FzeroAnalogSteering steering;
   uint64_t last_seq;
