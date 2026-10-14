@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 spec = importlib.util.spec_from_file_location(
@@ -98,9 +98,77 @@ class OrdinaryRouteChecks(unittest.TestCase):
 
     def test_runner_cleanup_is_fixed_keyups_only(self):
         sent = []
-        with patch.object(route.Keyboard, "_send", lambda sender, name, up=False: sent.append((name, up))):
-            route.Keyboard.release_fixed()
+        stream = Mock(pid=123, created=456, launch={"exe": "C:/copy/game.exe"})
+        with patch.object(route, "StatusStream", return_value=stream) as owned, \
+                patch.object(route.Keyboard, "__init__", return_value=None) as initial, \
+                patch.object(route.Keyboard, "_send",
+                             lambda sender, name, up=False: sent.append((name, up))):
+            route.Keyboard.release_fixed("C:/result", "a" * 32)
+        owned.assert_called_once_with("C:/result", "a" * 32)
+        initial.assert_called_once_with(123, 456, "C:/copy/game.exe", window_wait=0)
         self.assertEqual(sent, [("Down", True), ("X", True), ("Z", True), ("Right", True)])
+
+    def test_exact_window_posted_edges_and_refusal(self):
+        sender = route.Keyboard.__new__(route.Keyboard)
+        sender.window = 789
+        sender.check = Mock()
+        sender.user = Mock()
+        sender.user.MapVirtualKeyW.side_effect = lambda vk, mode: {
+            0x28: 0xe050, 0x27: 0xe04d, 0x58: 0x2d, 0x5a: 0x2c}[vk] if mode == 4 else 0
+        sender.user.PostMessageW.return_value = 1
+        sender._send("Down")
+        sender._send("Down", True)
+        sender._send("X")
+        sender._send("Right", True)
+        self.assertEqual(sender.user.PostMessageW.call_args_list[0].args,
+                         (789, 0x100, 0x28, 1 | (0x50 << 16) | 0x1000000))
+        self.assertEqual(sender.user.PostMessageW.call_args_list[1].args,
+                         (789, 0x101, 0x28, 1 | (0x50 << 16) | 0x1000000 | 0xc0000000))
+        self.assertEqual(sender.user.PostMessageW.call_args_list[2].args,
+                         (789, 0x100, 0x58, 1 | (0x2d << 16)))
+        self.assertEqual(sender.check.call_count, 4)
+        sender.user.PostMessageW.return_value = 0
+        with self.assertRaisesRegex(route.Refused, "PostMessageW refused"):
+            sender._send("Z")
+        sender.user.MapVirtualKeyW.return_value = 0xe11d
+        sender.user.MapVirtualKeyW.side_effect = None
+        with self.assertRaisesRegex(route.Refused, "unsupported"):
+            sender._send("Z")
+
+    def test_window_identity_checked_before_each_edge(self):
+        sender = route.Keyboard.__new__(route.Keyboard)
+        sender.window = 789
+        sender._process_owned = Mock()
+        sender._window = Mock(side_effect=[789, 790])
+        sender.user = Mock()
+        sender.user.MapVirtualKeyW.return_value = 0x2d
+        sender.user.PostMessageW.return_value = 1
+        sender._send("X")
+        with self.assertRaisesRegex(route.Refused, "window changed"):
+            sender._send("X", True)
+        self.assertEqual(sender.user.PostMessageW.call_count, 1)
+
+    def test_process_creation_and_path_identity(self):
+        sender = route.Keyboard.__new__(route.Keyboard)
+        sender.pid, sender.created = 123, 456
+        sender.exe = str(Path(__file__).resolve()).casefold()
+        sender.kernel = Mock()
+        sender.kernel.OpenProcess.return_value = 77
+        sender.kernel.GetProcessTimes.side_effect = lambda handle, born, *rest: (
+            setattr(born._obj, "dwLowDateTime", 456) or 1)
+        sender.kernel.QueryFullProcessImageNameW.side_effect = lambda handle, flags, image, size: (
+            setattr(image, "value", str(Path(__file__).resolve())) or 1)
+        sender.kernel.GetExitCodeProcess.side_effect = lambda handle, code: (
+            setattr(code._obj, "value", 259) or 1)
+        sender._process_owned()
+        sender.kernel.CloseHandle.assert_called_once_with(77)
+        sender.created = 457
+        with self.assertRaisesRegex(route.Refused, "reused"):
+            sender._process_owned()
+        sender.created = 456
+        sender.exe = str(Path(__file__).resolve().parent).casefold()
+        with self.assertRaisesRegex(route.Refused, "path changed"):
+            sender._process_owned()
 
     def test_practice_guards_reject_attract_and_wrong_menu(self):
         accepted = (

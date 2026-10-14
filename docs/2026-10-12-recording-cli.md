@@ -372,8 +372,9 @@ Mufa passed the witness as a passive source provider; the route driver and
 disposable runtime remain unqualified.
 
 The separate `tools/fzero_ordinary_practice_route.py` candidate reads the
-fresh companion/status pair for one request and verifies PID plus creation
-FILETIME against the live foreground game before sending keyboard scan codes.
+fresh companion/status pair for one request and verifies PID, creation
+FILETIME, executable path, and the unique visible SDL window before posting
+keyboard edges to that exact HWND. It never changes foreground focus.
 It requires an advancing post-frame witness and observed release before each
 Down/X menu pulse. Every pulse must appear in the consumed word and lead to
 the exact next Practice selector. It then requires the player countdown before
@@ -382,9 +383,9 @@ timing summaries to stdout. It sends no Stop, changes no configuration and
 never drives replay; the existing companion owns Stop/seal/close and replay.
 These status-poll intervals are not a substitute for game frame-time
 diagnostics. Mufa closed the driver's ROM, status-read, startup and key-hold
-review findings. The private runner still needs its fixed-key release cleanup
-review before any disposable run.
+review findings. The posted-key transport and private runner still need
+disposable runtime qualification.
 The driver's `--release-only` mode sends idempotent key-ups for exactly
-Down/X/Z/Right after the route process exits; it cannot press a key or attach
-to a recording. The private runner must keep its lease and copy intact if the
-driver remains live or this cleanup fails.
+Down/X/Z/Right to the same request's verified live game HWND after the route
+process exits; it cannot press a key. The private runner must keep its lease
+and copy intact if the driver remains live or this cleanup fails.

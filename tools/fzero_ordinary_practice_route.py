@@ -202,27 +202,34 @@ def ready(step, row, countdown=False, moving=False):
 
 
 class Keyboard:
-    """Win32 SendInput with exact foreground-process checks and release cleanup."""
-    def __init__(self, pid, created):
+    """Post bounded keys only to the exact owned SDL game window."""
+    def __init__(self, pid, created, exe, window_wait=10):
         if sys.platform != "win32":
             raise Refused("synthetic keyboard route is Windows-only")
         self.user = ctypes.WinDLL("user32", use_last_error=True)
         self.kernel = ctypes.WinDLL("kernel32", use_last_error=True)
-        self.user.GetForegroundWindow.restype = wintypes.HWND
         self.user.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
         self.user.IsWindowVisible.argtypes = [wintypes.HWND]
-        self.user.SetForegroundWindow.argtypes = [wintypes.HWND]
+        self.user.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+        self.user.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+        self.user.MapVirtualKeyW.argtypes = [wintypes.UINT, wintypes.UINT]
+        self.user.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
         self.kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
         self.kernel.OpenProcess.restype = wintypes.HANDLE
         self.kernel.GetProcessTimes.argtypes = [wintypes.HANDLE, ctypes.c_void_p, ctypes.c_void_p,
                                                 ctypes.c_void_p, ctypes.c_void_p]
         self.kernel.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+        self.kernel.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD,
+                                                           wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
         self.kernel.CloseHandle.argtypes = [wintypes.HANDLE]
         self.pid, self.created = pid, created
+        try:
+            self.exe = str(Path(exe).resolve(strict=True)).casefold()
+        except (OSError, TypeError) as exc:
+            raise Refused("owned game path is unavailable") from exc
         self.held = set()
         self._process_owned()
-        self.before = self.user.GetForegroundWindow()
-        window_deadline = time.monotonic() + 10
+        window_deadline = time.monotonic() + window_wait
         while True:
             try:
                 self.window = self._window()
@@ -232,12 +239,7 @@ class Keyboard:
                 if time.monotonic() >= window_deadline:
                     raise
                 time.sleep(.05)
-        if not self._foreground_owned() and not self.user.SetForegroundWindow(self.window):
-            if self.before:
-                self.user.SetForegroundWindow(self.before)
-            raise Refused("cannot focus exact owned game window")
-        if not self._foreground_owned():
-            raise Refused("exact game window is not foreground")
+        self.check()
 
     def _process_owned(self):
         handle = self.kernel.OpenProcess(0x1000, False, self.pid)
@@ -254,6 +256,16 @@ class Keyboard:
             actual = (created.dwHighDateTime << 32) | created.dwLowDateTime
             if actual != self.created:
                 raise Refused("process ID was reused")
+            image = ctypes.create_unicode_buffer(32768)
+            size = wintypes.DWORD(len(image))
+            if not self.kernel.QueryFullProcessImageNameW(handle, 0, image, ctypes.byref(size)):
+                raise Refused("cannot verify owned process path")
+            try:
+                actual_path = str(Path(image.value).resolve(strict=True)).casefold()
+            except OSError as exc:
+                raise Refused("owned game process path is unavailable") from exc
+            if actual_path != self.exe:
+                raise Refused("owned game process path changed")
             exit_code = wintypes.DWORD()
             if not self.kernel.GetExitCodeProcess(handle, ctypes.byref(exit_code)) or exit_code.value != 259:
                 raise Refused("owned game process exited")
@@ -267,47 +279,36 @@ class Keyboard:
             pid = wintypes.DWORD()
             self.user.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
             if pid.value == self.pid and self.user.IsWindowVisible(hwnd):
-                found.append(hwnd)
+                kind = ctypes.create_unicode_buffer(256)
+                title = ctypes.create_unicode_buffer(256)
+                if (self.user.GetClassNameW(hwnd, kind, len(kind)) and
+                        self.user.GetWindowTextW(hwnd, title, len(title)) and
+                        kind.value == "SDL_app" and title.value.startswith("F-Zero")):
+                    found.append(hwnd)
             return True
         self.user.EnumWindows(callback(visit), 0)
         if len(found) != 1:
             raise Refused("expected one visible owned game window")
         return found[0]
 
-    def _foreground_owned(self):
-        hwnd = self.user.GetForegroundWindow()
-        pid = wintypes.DWORD()
-        self.user.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-        return hwnd == self.window and pid.value == self.pid
-
     def check(self):
         self._process_owned()
-        if not self._foreground_owned():
-            raise Refused("game lost foreground during route")
+        if self._window() != self.window:
+            raise Refused("owned SDL game window changed during route")
 
     def _send(self, name, up=False):
-        class KEYBDINPUT(ctypes.Structure):
-            _fields_ = [("wVk", wintypes.WORD), ("wScan", wintypes.WORD),
-                        ("dwFlags", wintypes.DWORD), ("time", wintypes.DWORD),
-                        ("dwExtraInfo", ctypes.c_size_t)]
-        class MOUSEINPUT(ctypes.Structure):
-            _fields_ = [("dx", wintypes.LONG), ("dy", wintypes.LONG),
-                        ("mouseData", wintypes.DWORD), ("dwFlags", wintypes.DWORD),
-                        ("time", wintypes.DWORD), ("dwExtraInfo", ctypes.c_size_t)]
-        class HARDWAREINPUT(ctypes.Structure):
-            _fields_ = [("uMsg", wintypes.DWORD), ("wParamL", wintypes.WORD), ("wParamH", wintypes.WORD)]
-        class UNION(ctypes.Union):
-            _fields_ = [("mi", MOUSEINPUT), ("ki", KEYBDINPUT), ("hi", HARDWAREINPUT)]
-        class INPUT(ctypes.Structure):
-            _fields_ = [("type", wintypes.DWORD), ("u", UNION)]
+        self.check()
         vk = KEYS[name][0]
-        scan = self.user.MapVirtualKeyW(vk, 0)
-        if not scan:
-            raise Refused("keyboard scan code unavailable")
-        flags = 0x0008 | (0x0001 if name in ("Down", "Right") else 0) | (0x0002 if up else 0)
-        event = INPUT(1, UNION(ki=KEYBDINPUT(0, scan, flags, 0, 0)))
-        if self.user.SendInput(1, ctypes.byref(event), ctypes.sizeof(INPUT)) != 1:
-            raise Refused("SendInput refused a keyboard event")
+        scan = self.user.MapVirtualKeyW(vk, 4)  # MAPVK_VK_TO_VSC_EX
+        if not scan or scan & 0xff00 not in (0, 0xe000):
+            raise Refused("keyboard scan code unavailable or unsupported")
+        # WM_KEY*: repeat=1, scan in bits 16-23, E0 in bit 24;
+        # key-up sets previous-state and transition bits.
+        lparam = 1 | ((scan & 0xff) << 16) | (0x1000000 if scan & 0xff00 else 0)
+        if up:
+            lparam |= 0xc0000000
+        if not self.user.PostMessageW(self.window, 0x101 if up else 0x100, vk, lparam):
+            raise Refused("PostMessageW refused owned game key edge")
 
     def down(self, name):
         self.check()
@@ -326,16 +327,14 @@ class Keyboard:
                 self.up(name)
             except Refused as exc:
                 errors.append(exc)
-        if self.before and self.before != self.window and self._foreground_owned():
-            self.user.SetForegroundWindow(self.before)
         if errors:
             raise errors[0]
 
     @staticmethod
-    def release_fixed():
-        """Runner-finally cleanup after driver exit: key-ups only, no focus or key-down."""
-        sender = Keyboard.__new__(Keyboard)
-        sender.user = ctypes.WinDLL("user32", use_last_error=True)
+    def release_fixed(result, request_id):
+        """Runner cleanup: four key-ups to this request's live owned SDL HWND."""
+        stream = StatusStream(result, request_id)
+        sender = Keyboard(stream.pid, stream.created, stream.launch.get("exe"), window_wait=0)
         errors = []
         for name in ("Down", "X", "Z", "Right"):
             try:
@@ -444,20 +443,18 @@ def main():
     parser.add_argument("--release-only", action="store_true",
                         help="after driver exit, send only fixed Down/X/Z/Right key-ups")
     args = parser.parse_args()
-    if args.release_only:
-        if args.result or args.request_id:
-            raise Refused("fixed-key release cannot join a route")
-        Keyboard.release_fixed()
-        return
     if not args.result or not args.request_id:
         raise Refused("route requires one result folder and request ID")
     if (len(args.request_id) != 32 or any(c not in "0123456789abcdef" for c in args.request_id) or
             not 30 <= args.seconds <= 100):
         raise Refused("invalid bounded route request")
+    if args.release_only:
+        Keyboard.release_fixed(args.result, args.request_id)
+        return
     stream = StatusStream(args.result, args.request_id)
     first = stream.next(time.monotonic() + 15)
     require_state(0, first)  # Attach early, before the bounded window wait.
-    keyboard = Keyboard(stream.pid, stream.created)
+    keyboard = Keyboard(stream.pid, stream.created, stream.launch.get("exe"))
     stream.last_new = time.monotonic()  # Window startup is not status-frame pacing.
     stream.guard = keyboard.check
     try:
