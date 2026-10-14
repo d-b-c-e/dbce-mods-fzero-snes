@@ -327,3 +327,19 @@ be combined in `open_impl`. Do not open another SDL/DirectInput reader or
 enable FFB to bypass that limitation. A coordinated owned-reader/force bridge
 needs its own default-off source design, identity/epoch and offline lifecycle
 fixtures before any muted runtime or attended force acceptance.
+
+## Private descriptor source candidate
+
+Coordinator-approved follow-up now publishes `privateSharedInput.extras` using
+the exact C4FFC4 declaration, schema 1, ABI 1 and SNES X/Y/L/R presentation.
+Both private staging and installer dependency helpers emit the descriptor.
+Their linked-consumer guard requires the exact declaration plus NUL and the
+`SharedExtras` plus NUL marker before accepting the five-file private consumer.
+Legacy four-file and public package behavior remains covered by existing fixtures.
+
+Wheelkit integration is isolated at
+`E:\Source\toolkits\.worktrees\dine-fzero-game-controls-20261014`, preserving
+catalog/profile key `f-zero` and native declaration `fzero-snes`. It uses the
+existing binder, standard Extras writer and reviewed transactional Apply for
+explicit Shared/SharedExtras=1 only. No owner install or game launch is part of
+this source slice. Independent review and focused offline validation are pending.

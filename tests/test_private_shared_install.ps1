@@ -55,6 +55,11 @@ try {
     [IO.File]::WriteAllText($pinPath,($pin | ConvertTo-Json -Depth 4))
     $shared=Private-SharedSources $root $build
     Check ($shared.files.Count -eq 5 -and $shared.files.ContainsKey('shared-input/dbce_shim_extras.h') -and $shared.metadata.extrasAbi -eq 1) 'Extras pin must own five paths and exact extension metadata.'
+    $descriptor=Shared-ExtrasDescriptor
+    Check ($shared.metadata.extras.declarationSha256 -ceq 'c4ffc4c85f1b7f72437e5871bdec57f9d5b997a62a9fdd3fd2208fefa0d98fb1' -and $descriptor.presentation.Count -eq 4) 'Private extras receipt must match exact four-button declaration.'
+    Refuses { Assert-SharedExtrasConsumer 'old consumer' } 'Older linked consumer must not gain a descriptor from new DLL/header alone.'
+    Assert-SharedExtrasConsumer ($descriptor.declaration+[char]0+'SharedExtras'+[char]0)
+    Check $true 'Actual declaration and opt-in marker must admit descriptor publication.'
     $old=[IO.File]::ReadAllBytes($extraHeader);[IO.File]::WriteAllText($extraHeader,'changed')
     Refuses { Private-SharedSources $root $build } 'Changed additive header must refuse.'
     [IO.File]::Delete($extraHeader)

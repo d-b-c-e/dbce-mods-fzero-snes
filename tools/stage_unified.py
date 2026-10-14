@@ -72,6 +72,18 @@ def shared_controls_contract():
             "unsupported": unsupported, "requires": {"directRom": True, "forceFeedbackDisabled": True}}
 
 
+def shared_extras_contract():
+    declaration = ("game fzero-snes\n"
+                   "fzero-snes.x digital\nfzero-snes.y digital\n"
+                   "fzero-snes.l digital\nfzero-snes.r digital\n")
+    return {"abi": 1, "acceptedSchema": 1, "declaration": declaration,
+            "declarationSha256": digest(declaration.encode("ascii")),
+            "presentation": [{"id": "fzero-snes." + name, "label": "SNES " + name.upper(),
+                              "group": "SNES buttons", "effects": "Guest button in menus and gameplay; keyboard retained.",
+                              "limits": "Requires explicit SharedExtras=1; no physical force qualification."}
+                             for name in ("x", "y", "l", "r")]}
+
+
 def private_shared_files(build, root=ROOT):
     """Explicit private add-on only; never infer permission from a nearby DLL."""
     vendor = root / "vendor/dbce-shim"
@@ -95,7 +107,7 @@ def private_shared_files(build, root=ROOT):
         key = name if name.endswith(".dll") else "shared-input/" + name
         if not isinstance(expected, str) or not re.fullmatch(r"[0-9a-f]{64}", expected) or digest(files[key]) != expected:
             raise ValueError(f"Private shared-input bytes differ from source pin: {name}")
-    return files, {"abi": 2, "distribution": "private-only", **({"extrasAbi": 1} if extras else {}),
+    return files, {"abi": 2, "distribution": "private-only", **({"extrasAbi": 1, "extras": shared_extras_contract()} if extras else {}),
                    "sourceRevision": pin["sourceRevision"],
                    "runtimeSha256": pin["files"]["dbce_shim.dll"],
                    "controls": shared_controls_contract()}
@@ -109,9 +121,11 @@ def write_receipts(output, receipt):
         (output / "payload/build-receipt.json").write_text(data)
 
 
-def validate_shared_consumer(image, description):
+def validate_shared_consumer(image, description, extras=False):
     if description.encode() + b"\0" not in image or b"[fzero-shim]" not in image:
         raise ValueError("Private shared consumer lacks the clean linked source stamp or shim adapter")
+    if extras and (shared_extras_contract()["declaration"].encode("ascii") + b"\0" not in image or b"SharedExtras\0" not in image):
+        raise ValueError("Private shared extras consumer lacks the linked declaration or opt-in flag")
 
 
 def stage(build, output, private_shared_input=False):
@@ -165,8 +179,8 @@ def stage(build, output, private_shared_input=False):
         files[name] = (ROOT / name).read_bytes()
     shared = None
     if private_shared_input:
-        validate_shared_consumer(files["FZeroSNESRecomp.exe"], description)
         extra, shared = private_shared_files(build)
+        validate_shared_consumer(files["FZeroSNESRecomp.exe"], description, shared.get("extrasAbi") == 1)
         files.update(extra)
     pending = [n for n in files if n.lower().endswith((".exe", ".dll"))]
     while pending:

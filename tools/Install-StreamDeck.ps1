@@ -47,6 +47,22 @@ function Recording-Capability([bool]$PrivateShared, [string]$LinkedText) {
         recordBackends=@('Native') + @(if ($PrivateShared) { 'Shared' })
         automatedRecordBackends=@(if ($PrivateShared) { 'Shared' }) }
 }
+function Shared-ExtrasDescriptor {
+    $declaration = "game fzero-snes`nfzero-snes.x digital`nfzero-snes.y digital`nfzero-snes.l digital`nfzero-snes.r digital`n"
+    [ordered]@{ abi=1; acceptedSchema=1; declaration=$declaration
+        declarationSha256=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::ASCII.GetBytes($declaration))).ToLowerInvariant()
+        presentation=@(foreach($name in @('x','y','l','r')) {
+            [ordered]@{id=('fzero-snes.'+$name);label=('SNES '+$name.ToUpperInvariant());group='SNES buttons'
+                effects='Guest button in menus and gameplay; keyboard retained.'
+                limits='Requires explicit SharedExtras=1; no physical force qualification.'}
+        }) }
+}
+function Assert-SharedExtrasConsumer([string]$LinkedText) {
+    $extras=Shared-ExtrasDescriptor
+    if (!$LinkedText.Contains($extras.declaration+[char]0) -or !$LinkedText.Contains('SharedExtras'+[char]0)) {
+        throw 'Built Shared extras consumer lacks the linked declaration or opt-in flag. Nothing changed.'
+    }
+}
 function Assert-SharedOwnershipTransition([bool]$Requested, $PreviousReceipt, $IncomingPrivatePaths=$null) {
     if (!$PreviousReceipt) { return }
     $privatePaths = @('dbce_shim.dll', 'shared-input/dbce_shim.h', 'shared-input/PIN.json', 'shared-input/PROVENANCE.md', 'shared-input/dbce_shim_extras.h')
@@ -94,7 +110,7 @@ function Private-SharedSources([string]$SourceRoot, [string]$BuildRoot) {
         }
     }
     $metadata=[ordered]@{ abi=2; distribution='private-only'; sourceRevision=$pin.sourceRevision; runtimeSha256=$pin.files.'dbce_shim.dll' }
-    if ($extras) { $metadata.extrasAbi=1 }
+    if ($extras) { $metadata.extrasAbi=1; $metadata.extras=Shared-ExtrasDescriptor }
     @{ files=$files; metadata=$metadata }
 }
 function Restore-Files([string]$from, $state) {
@@ -201,6 +217,7 @@ if (!(Test-Path -LiteralPath $header) -or
     throw 'Build source stamp is stale or absent; reconfigure and rebuild from this clean commit. Nothing changed.'
 }
 $sessionCapability = Recording-Capability ([bool]$PrivateSharedInput) $linkedText
+if ($PrivateSharedInput -and $shared.metadata.extrasAbi -eq 1) { Assert-SharedExtrasConsumer $linkedText }
 $changes = @($owned | Where-Object { (HashOrNull $sources[$_]) -cne (HashOrNull (Join-Path $Target $_)) })
 if (-not $changes.Count -and (Test-Path -LiteralPath $oldReceiptPath)) {
     $expectedBackends = if ($PrivateSharedInput) { 'Native,Shared' } else { 'Native' }

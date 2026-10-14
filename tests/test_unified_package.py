@@ -196,6 +196,7 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(len(files), 5)
         self.assertEqual(files["shared-input/dbce_shim_extras.h"], extra)
         self.assertEqual(receipt["extrasAbi"], 1)
+        self.assertEqual(receipt["extras"], stage.shared_extras_contract())
         self.assertEqual(receipt["controls"]["optIn"]["default"], "Native")
         (vendor / "dbce_shim_extras.h").write_bytes(extra + b"changed")
         with self.assertRaisesRegex(ValueError, "differ from source pin"):
@@ -208,6 +209,24 @@ class PackageTests(unittest.TestCase):
         write_pin()
         with self.assertRaisesRegex(ValueError, "Invalid private"):
             stage.private_shared_files(build, self.root)
+
+    def test_extras_receipt_matches_guest_declaration_and_requires_linked_consumer(self):
+        source = (pack.ROOT / "src/fzero_shim_map.c").read_text()
+        block = source.split("const char kFzeroShimExtrasDeclaration[] =", 1)[1].split(";", 1)[0]
+        declaration = "".join(json.loads('"' + value + '"') for value in re.findall(r'"((?:[^"\\]|\\.)*)"', block))
+        extras = stage.shared_extras_contract()
+        self.assertEqual(extras["declaration"], declaration)
+        self.assertEqual(extras["declarationSha256"], pack.digest(declaration.encode("ascii")))
+        self.assertEqual(extras["acceptedSchema"], 1)
+        self.assertEqual([p["id"] for p in extras["presentation"]], ["fzero-snes." + x for x in ("x", "y", "l", "r")])
+        stamp = "fixture-clean"
+        common = stamp.encode() + b"\0[fzero-shim]"
+        valid = common + declaration.encode("ascii") + b"\0SharedExtras\0"
+        stage.validate_shared_consumer(valid, stamp, True)
+        for image in (common, common + declaration.encode("ascii"), common + b"SharedExtras\0"):
+            with self.assertRaisesRegex(ValueError, "linked declaration"):
+                stage.validate_shared_consumer(image, stamp, True)
+        stage.validate_shared_consumer(common, stamp)  # legacy common route remains independent
 
     def test_private_payload_receipt_reuses_outer_inventory_without_self_hash(self):
         folder = self.base / "receipts"
