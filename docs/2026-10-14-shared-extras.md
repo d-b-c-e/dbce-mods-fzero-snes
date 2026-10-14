@@ -90,3 +90,57 @@ and profile bytes, one combined tick per read, keyboard combination and actual
 `.fzpt` record/verify. Existing Native/replay/FFB refusal and diagnostic capture
 fixtures are included. This is an ABI fake, not real hardware or rendered
 runtime evidence.
+
+## Review closure and BOM follow-up
+
+Kiki's independent read-only review of `4856b02` found one P2: a UTF-8 BOM
+before an Extras-first header made the new section scan miss that header.
+Follow-up `fab3faa8b18a3625f5c230816c06d668bfef0437` uses one shared BOM offset
+for both section scans. New
+`extrasfirst` and `extrasbom` ordinary host fixtures exercise equivalent
+section ordering with/without a BOM, exact Core profile bytes, combined ticks
+and the actual tape record/verify path. MSVC Release builds passed without
+compiler warnings; the final focused subset is **36/36**, 0.91 seconds,
+with lease release confirmed. The earlier successful 34-case logs are retained
+as `build-34-pass.log` and `tests-34-pass.log`.
+
+Kiki inspected the follow-up diff and retained 36-case result and reported
+no remaining correctness finding (hcom `106799`). The reviewer did not rerun
+builds/tests; this closes source/offline review only.
+
+## Read-only native-adoption inventory
+
+The clean October 14 extras-capable native build receipt and log still exist:
+
+```text
+C:/Users/antho/AppData/Local/Temp/claude/E--Source-dbce-project-mgmt/
+ed7ad792-5fc2-49eb-a015-cb326eca9270/scratchpad/schema-helper-0914/
+receipt-x64.json
+build-x64.log
+```
+
+The receipt names source `ea568c258d2373de55efabf1b16b0776990fb2cd`, x64,
+static MT CRT, clang 19.1.5, `sourceChanged=false` and historical DLL SHA-256
+`D26ADBF75323E0BB52E8F9CD09F3DEC7614E68B015219E0582C2402B80819085`.
+It lists all five consumer-required extras exports among 26 exports, with
+DINPUT8/bcrypt/KERNEL32 imports. The retained native log passes Core 192,
+extras 72, provider 106, host 37, ABI 224 and bridge 77 checks. The receipt
+proves that earlier build result; it does not provide the DLL bytes today.
+
+Native closure (`native/shim`, `native/controls`, `native/session`) has no diff
+between `ea568c2` and current toolkit `88ccd1d`. Nene's original transcript
+exchange 1133 records removal of `extras-accepted-schema` after merge. Its
+`schema-and-helper.ps1` copied receipts/logs, not the DLL. The original native
+build directory is absent. No retained, hash-verifiable extras DLL was found
+in the inspected toolkit main build/distribution paths, isolated worktrees or
+hub native artifacts. Existing older binaries/receipts predate extras; the
+x86 ordinary-only variant is also unsuitable for the x64 F-Zero consumer.
+No dependency pin was changed from this inventory.
+
+The smallest next native step is one serialized, clean **x64-only** toolkit
+build at that source closure, retaining its DLL, clean receipt and exact
+source/license provenance in an immutable private artifact. Rebuilding may
+change the raw hash through link timestamps, so do not pin historical D26
+from its receipt alone. A new payload then needs focused consumer validation
+and explicit private CMake/stager/installer/receipt adoption. No shared-source
+modification or x86 rebuild is needed for this F-Zero slice.
