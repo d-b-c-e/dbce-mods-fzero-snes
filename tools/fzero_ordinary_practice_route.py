@@ -17,6 +17,8 @@ ROM = "419eed641cfa20013d1e9b8270062d90155051a441441a2118bf23846ac8d747"
 PORT = 1 << 30
 DOWN, A, B, RIGHT = 1 << 5, 1 << 8, 1 << 0, 1 << 7
 KEYS = {"Down": (0x28, DOWN), "X": (0x58, A), "Z": (0x5A, B), "Right": (0x27, RIGHT)}
+SCAN_CODES = {"Down": (0x50, True), "X": (0x2d, False),
+              "Z": (0x2c, False), "Right": (0x4d, True)}
 MAX_FRAMES = 6000
 ALLOWED = (
     {(0, 0, 0), (0, 1, 0)},
@@ -308,11 +310,15 @@ class Keyboard:
         self.check()
         vk = KEYS[name][0]
         scan = self.user.MapVirtualKeyW(vk, 4)  # MAPVK_VK_TO_VSC_EX
-        if not scan or scan & 0xff00 not in (0, 0xe000):
-            raise Refused("keyboard scan code unavailable or unsupported")
+        low, extended = SCAN_CODES[name]
+        # This Windows installation returns 0x50/0x4d, not E0 50/E0 4d,
+        # for the arrows. SDL maps the plain values to keypad 2/6. Require
+        # the expected physical scan, then encode the arrow E0 bit explicitly.
+        if scan not in ((low, 0xe000 | low) if extended else (low,)):
+            raise Refused("keyboard scan code unavailable or unexpected")
         # WM_KEY*: repeat=1, scan in bits 16-23, E0 in bit 24;
         # key-up sets previous-state and transition bits.
-        lparam = 1 | ((scan & 0xff) << 16) | (0x1000000 if scan & 0xff00 else 0)
+        lparam = 1 | (low << 16) | (0x1000000 if extended else 0)
         if up:
             lparam |= 0xc0000000
         if not self.user.PostMessageW(self.window, 0x101 if up else 0x100, vk, lparam):

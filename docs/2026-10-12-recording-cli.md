@@ -375,6 +375,9 @@ The separate `tools/fzero_ordinary_practice_route.py` candidate reads the
 fresh companion/status pair for one request and verifies PID, creation
 FILETIME, executable path, and the unique visible SDL window before posting
 keyboard edges to that exact HWND. It never changes foreground focus.
+Windows may return the keypad scan codes `0x50`/`0x4D` for the Down/Right
+virtual keys even with `MAPVK_VK_TO_VSC_EX`; the route pins those low bytes
+and sets the E0 extended bit explicitly so SDL reads arrows, not keypad 2/6.
 It requires an advancing post-frame witness and observed release before each
 Down/X menu pulse. Every pulse must appear in the consumed word and lead to
 the exact next Practice selector. It then requires the player countdown before

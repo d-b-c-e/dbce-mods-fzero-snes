@@ -141,13 +141,27 @@ class OrdinaryRouteChecks(unittest.TestCase):
         self.assertEqual(sender.user.PostMessageW.call_args_list[2].args,
                          (789, 0x100, 0x58, 1 | (0x2d << 16)))
         self.assertEqual(sender.check.call_count, 4)
+        # MAPVK_VK_TO_VSC_EX omits E0 for the arrows on this PC. The posted
+        # LPARAM must still name SDL's Down, never keypad 2.
+        sender.user.MapVirtualKeyW.side_effect = None
+        sender.user.MapVirtualKeyW.return_value = 0x50
+        sender._send("Down")
+        self.assertEqual(sender.user.PostMessageW.call_args.args,
+                         (789, 0x100, 0x28, 1 | (0x50 << 16) | 0x1000000))
+        sender.user.MapVirtualKeyW.return_value = 0x4d
+        sender._send("Right")
+        self.assertEqual(sender.user.PostMessageW.call_args.args,
+                         (789, 0x100, 0x27, 1 | (0x4d << 16) | 0x1000000))
         sender.user.PostMessageW.return_value = 0
+        sender.user.MapVirtualKeyW.return_value = 0x2c
         with self.assertRaisesRegex(route.Refused, "PostMessageW refused"):
             sender._send("Z")
         sender.user.MapVirtualKeyW.return_value = 0xe11d
-        sender.user.MapVirtualKeyW.side_effect = None
-        with self.assertRaisesRegex(route.Refused, "unsupported"):
+        with self.assertRaisesRegex(route.Refused, "unexpected"):
             sender._send("Z")
+        sender.user.MapVirtualKeyW.return_value = 0x4f
+        with self.assertRaisesRegex(route.Refused, "unexpected"):
+            sender._send("Down")
 
     def test_window_identity_checked_before_each_edge(self):
         sender = route.Keyboard.__new__(route.Keyboard)
