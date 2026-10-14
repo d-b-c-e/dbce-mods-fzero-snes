@@ -446,8 +446,13 @@ The current Wheelkit consumer already has F-Zero recording discovery, the
 existing companion/receipt adapter and shared Play with recording/Play
 recording UI. Its direct-ROM command previously omitted `-Rom` when
 `fzero.sfc` existed without a `rom.cfg` selection. The local source fix now
-passes that exact installed ROM and preserves an existing `rom.cfg` route;
-focused Wheelkit session tests passed 59/59. Current Wheelkit contract and
+passes the explicit launcher selection for recording, falling back to direct
+`fzero.sfc` only when no selection exists; replay passes the descriptor's
+original ROM even if the launcher selection later changes. Missing or invalid
+selection refuses before launch. Focused Wheelkit session tests passed 62/62.
+One receipt-staged disposable-copy command check resolved both actions against
+the unchanged 1,838-frame pair, then restored all pinned copy/tape files and
+released the shared lease without launching the game. Current Wheelkit contract and
 library discovery read this real sealed pair as 1,838 frames, protocol
 `FZeroLaunchSession`, playable, with automated origin. That source/offline
 result is separate from a Wheelkit UI launch or owner installation. Physical

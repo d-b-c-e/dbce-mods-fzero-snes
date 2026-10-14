@@ -53,7 +53,7 @@ exercise physical wheel axes, force, an owner installation, or Wheelkit's UI.
 
 | Area | Current boundary | Next implementation/check |
 |---|---|---|
-| Wheelkit | Current Wheelkit has F-Zero capability/discovery and shared Play with recording/Play recording UI; its command omitted `-Rom` for a direct `fzero.sfc` copy with no `rom.cfg` | Local source now passes the installed direct ROM when no launcher selection exists, while preserving `rom.cfg`; focused Wheelkit tests passed 59/59 and the real 1,838-frame pair is discoverable/CanPlay. This is not an owner-installed UI run. |
+| Wheelkit | Current Wheelkit has F-Zero capability/discovery and shared Play with recording/Play recording UI; its command omitted `-Rom` for a direct `fzero.sfc` copy with no `rom.cfg` | Local source now passes the current `rom.cfg` ROM for recording, direct `fzero.sfc` only when no selection exists, and the recorded descriptor ROM for replay. Missing/invalid selection refuses before launch. Focused tests passed 62/62; a receipt-staged disposable-copy command check resolved both actions against the unchanged 1,838-frame pair and rolled back. No game/UI launch or owner install. |
 | Controls Apply | Hash-bound Shared writer `09c9223` exists; the ordinary Deluxe Practice capture reused the retained schema-1 profile without retune | Preserve native routing/FFB refusal; physical binding/calibration and owner-driven behavior remain separate checks. |
 | Launcher | Ordinary Shared currently requires an explicit ROM and refuses `--launcher` | Replace the launcher's SDL steering/device preview with the same owned snapshot path before admitting it. Native launcher remains unchanged. |
 | Wheel-only SNES extras | X/Y/L/R and host save/rewind are unavailable under Shared; keyboard remains | Optional raw digital snapshot from the existing Core-owned epoch plus exact legacy-device identity; no second SDL open, no unrelated action aliases. |
@@ -72,7 +72,7 @@ receipt, and an explicit owned-file install/rollback contract. The private stock
 stage now closes the clean build/runtime prerequisite for its tested scope;
 public redistribution and owner-launcher integration remain unresolved. Do not
 silently enable Shared, relabel a Deluxe executable, or map boost/lean to gears
-or camera. The local Wheelkit direct-ROM command fix still needs deployment/
+or camera. The local Wheelkit ROM command fix still needs deployment/
 owner use; launcher preview, extra controls and force
 ownership each need their own real consumer path before advertising parity.
 
