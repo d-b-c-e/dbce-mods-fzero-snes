@@ -296,3 +296,34 @@ inventory refuse with an explicit keep-pin/rollback instruction. Narrow
 fixtures refuse five-to-four and metadata-only extras loss, and retain
 four-to-four, four-to-five and five-to-five admission. This adds no cleanup
 of owner files and does not require a full native/consumer/package rerun.
+
+Fix `dc227e6b03e5f0022de0beb0f98f3f662c30ce0e` passed the targeted private
+installer fixture with **39 checks** under explicit slot `107991`.
+Lease `322eef565acc43cfa4c0eea9dd5a1e2e` began at
+`2026-10-14T15:48:30.2243325-05:00` and released afterward. Logs are
+`build-dine-extras-offline/downgrade-fixture.log` and `downgrade-lease.json`.
+The coordinator closed this ownership edge after reading the source and log
+(`108108`). Prior package/companion/consumer/dependency-stage results remain
+valid for their scopes; no broad rerun, owner install, game or device call
+was needed.
+
+## Smallest proposed next source slice
+
+The new private receipt currently names only the 11 common actions and
+`extrasAbi=1`; it does not yet publish the four-action declaration/presentation
+through Wheelkit's game-controls route. The next useful source slice is a
+hash-bound F-Zero extras descriptor in the existing private controls receipt,
+then the existing Wheelkit game-controls route/writer for an already selected
+Shared backend and verified BF6455/five-file consumer. This would allow explicit
+physical button bindings through the established UI/profile writer, preserving
+Native keys, common Controls and saved bindings for unavailable providers.
+Receipt publication alone is not Applied or runtime qualification. Claim
+exact Wheelkit paths with the coordinator before any shared-source edits.
+
+Shared force ownership remains a larger, separate seam: current F-Zero FFB
+opens its own WheelFfb device/force lifecycle, and toolkit extras open is
+ordinary DirectInput-only; the copied-input bridge and extras cannot currently
+be combined in `open_impl`. Do not open another SDL/DirectInput reader or
+enable FFB to bypass that limitation. A coordinated owned-reader/force bridge
+needs its own default-off source design, identity/epoch and offline lifecycle
+fixtures before any muted runtime or attended force acceptance.
