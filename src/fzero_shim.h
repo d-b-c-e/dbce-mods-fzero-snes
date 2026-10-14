@@ -16,6 +16,9 @@ int FzeroShimRequested(void);
  * mandatory capture, deadline or suppressed keyboard. Native is the default. */
 int FzeroShimUsingInput(void);
 int FzeroShimOrdinary(void);
+/* Presentation capability only: the admitted ordinary handle has the four-slot declaration.
+ * This does not certify a binding, live device or physical input response. */
+int FzeroShimHasExtras(void);
 int FzeroShimLatched(void);
 int FzeroShimCompleted(void);
 const char *FzeroShimSaveRoot(void);
@@ -26,7 +29,7 @@ const char *FzeroShimRecordingPath(void);
 int FzeroShimStart(void *window, const char *legacy_sdl_guid);
 int FzeroShimInput(uint32_t *word, const uint8_t *ram, size_t ram_size);
 int FzeroShimOverlayInput(uint32_t *word);
-/* Always zero until extras can share Core's existing input owner. */
+/* Legacy SDL supplements stay off; declared extras use Core's existing input owner. */
 uint32_t FzeroShimSupplementalMask(void);
 int FzeroShimConsumed(uint64_t simulation_frame, uint32_t input, const uint8_t *ram, size_t ram_size);
 void FzeroShimNeutral(void);

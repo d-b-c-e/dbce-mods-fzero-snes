@@ -139,3 +139,15 @@ and disposable protected 65/65 files matched after rollback; no owner install,
 physical wheel/force, profile retune or public push occurred. Exact evidence is
 in the portfolio hub's `artifacts/fzero-ordinary-driving-20261013` and
 `E:/fz-ordinary-practice-runtime07` / `E:/fz-ordinary-practice-replay08`.
+
+October 14 STD-032/033/035/036 source/offline closure: private descriptor
+`369c926` publishes the exact four-slot C4 declaration and linked-consumer guard.
+Game fixtures pass 34 package tests and 42 synthetic installer checks; actual
+BF6455/five-file dependency staging passes. Wheelkit `2a063cc` is reviewed and
+integrated: 260 focused tests plus one historical skip, clean App build and
+actual-VM command gating/bind/save/reopen/first-clear/history/drift smoke pass.
+This does not qualify a graphical consumer or runtime/physical inputs. The
+follow-up HUD distinguishes admitted extras capability from extras-off warning;
+clean private graphical build/stage is pending. Game source remains local-only,
+with public publication deferred. Native force ownership/snapshot adoption is
+separately deferred; schema-2 and other pending/unchecked rows remain open.

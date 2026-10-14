@@ -65,6 +65,7 @@ int main(int argc,char **argv) {
   int previous_stderr=_dup(_fileno(stderr));CHECK(previous_stderr>=0);
   FILE *log=nullptr;CHECK(!freopen_s(&log,(root/"startup.log").string().c_str(),"wb",stderr));
   const bool started=FzeroShimStart(nullptr,"fixture")!=0;
+  CHECK(FzeroShimHasExtras()==(started && extras));
   std::fflush(stderr);CHECK(!_dup2(previous_stderr,_fileno(stderr)));_close(previous_stderr);
   auto startup=read(root/"startup.log");
   const std::string accepted="[fzero-shim] ordinary profile accepted:\n";

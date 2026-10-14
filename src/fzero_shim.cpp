@@ -164,6 +164,7 @@ bool load() {
 int FzeroShimRequested(void) { return requested; }
 int FzeroShimUsingInput(void) { return requested || ordinary; }
 int FzeroShimOrdinary(void) { return ordinary; }
+int FzeroShimHasExtras(void) { return ordinary && use_extras && handle && !failed; }
 int FzeroShimLatched(void) { return latched; }
 int FzeroShimCompleted(void) { return completed && !failed; }
 const char *FzeroShimSaveRoot(void) { return save_root.c_str(); }

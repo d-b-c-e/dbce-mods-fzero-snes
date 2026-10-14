@@ -1380,7 +1380,10 @@ static void session_status_draw(const FzeroPresenter *p) {
   snes_ovl_draw_text(pixels, w, h, 20, 7, top, accent, 1);
   snes_ovl_draw_text(pixels, w, h, 8, 22, bottom, 0xffffffffu, 1);
   if (limited_shared)
-    snes_ovl_draw_text(pixels, w, h, 8, 37, "Extra wheel buttons unavailable; use keyboard", 0xffffb348u, 1);
+    snes_ovl_draw_text(pixels, w, h, 8, 37,
+        FzeroShimHasExtras() ? "X/Y/L/R bindings available; host keys/gestures"
+                            : "Extra wheel buttons unavailable; use keyboard",
+        0xffffb348u, 1);
   FzeroRect game = overlay_rect(p, 1);
   int draw_w = game.w * 4 / 5;
   if (draw_w > w * 2) draw_w = w * 2;

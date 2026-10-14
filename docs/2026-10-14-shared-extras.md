@@ -343,3 +343,34 @@ catalog/profile key `f-zero` and native declaration `fzero-snes`. It uses the
 existing binder, standard Extras writer and reviewed transactional Apply for
 explicit Shared/SharedExtras=1 only. No owner install or game launch is part of
 this source slice. Independent review and focused offline validation are pending.
+
+## Game-controls review closure and private graphical follow-up
+
+Game descriptor source `369c926e3cee5f2cfcb2c16ba2b423c1baac2716` passed 34
+Python package tests, 42 synthetic installer checks and fresh actual five-file
+dependency-only staging. Corrected Wheelkit source
+`2a063cc9c30eaa67f8ec5c4e5d3e05e6dc3e6043` passed 260 focused tests with one
+existing skip, App build with zero warnings/errors and actual-VM offscreen smoke
+(66 pages), including production command availability, opt-in/declaration
+refusal, bind/save/reopen, first-clear history and dependency drift. Kiki closed
+both P2 findings and verified retained binary hashes/product stamps. Coordinator
+fast-forwarded Wheelkit main; independent closure is hub `06e48081` under
+`artifacts/fzero-game-controls-review-kiki-20261014`.
+
+Evidence and both prior/corrected binaries remain in ignored
+`build-dine-extras-offline/game-controls-789e257` and `game-controls-2a063cc`.
+The DLL in the actual-VM fixture was opaque bytes, never loaded. No graphical
+game consumer, owner install or runtime input qualification followed from it.
+Game source remains local-only: the public origin is untouched. Publication was
+explicitly deferred after verifying origin is public; no visibility/remotes changed.
+
+The next approved private source slice adjusts only the Shared HUD capability
+caption: an admitted extras handle says X/Y/L/R bindings are available; ordinary
+Shared without extras retains the unavailable warning. This names capability,
+not live device status or physical qualification. Forces remain unavailable.
+A clean stock graphical build/stage will then verify the actual executable's
+linked C4 declaration/SharedExtras marker and exact receipt inventory. No game
+launch, owner install, public push or native force adoption is included.
+
+The larger ownership design and retained snapshot dependency are separate in
+[the deferred bridge note](2026-10-14-deferred-shared-force-bridge.md).
