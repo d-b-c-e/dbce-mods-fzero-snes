@@ -35,6 +35,10 @@ class Refused(RuntimeError):
     pass
 
 
+class ProcessGone(Refused):
+    """The original request process cannot retain an SDL key anymore."""
+
+
 class TransientStatus(Exception):
     """An atomic status replacement was between names or briefly locked."""
 
@@ -244,6 +248,8 @@ class Keyboard:
     def _process_owned(self):
         handle = self.kernel.OpenProcess(0x1000, False, self.pid)
         if not handle:
+            if ctypes.get_last_error() == 87:  # ERROR_INVALID_PARAMETER: no such PID
+                raise ProcessGone("owned game process is gone")
             raise Refused("owned game process is gone")
         try:
             created = wintypes.FILETIME()
@@ -255,7 +261,12 @@ class Keyboard:
                 raise Refused("cannot verify owned process creation")
             actual = (created.dwHighDateTime << 32) | created.dwLowDateTime
             if actual != self.created:
-                raise Refused("process ID was reused")
+                raise ProcessGone("process ID was reused")
+            exit_code = wintypes.DWORD()
+            if not self.kernel.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                raise Refused("cannot verify owned process exit state")
+            if exit_code.value != 259:
+                raise ProcessGone("owned game process exited")
             image = ctypes.create_unicode_buffer(32768)
             size = wintypes.DWORD(len(image))
             if not self.kernel.QueryFullProcessImageNameW(handle, 0, image, ctypes.byref(size)):
@@ -266,9 +277,6 @@ class Keyboard:
                 raise Refused("owned game process path is unavailable") from exc
             if actual_path != self.exe:
                 raise Refused("owned game process path changed")
-            exit_code = wintypes.DWORD()
-            if not self.kernel.GetExitCodeProcess(handle, ctypes.byref(exit_code)) or exit_code.value != 259:
-                raise Refused("owned game process exited")
         finally:
             self.kernel.CloseHandle(handle)
 
@@ -334,7 +342,11 @@ class Keyboard:
     def release_fixed(result, request_id):
         """Runner cleanup: four key-ups to this request's live owned SDL HWND."""
         stream = StatusStream(result, request_id)
-        sender = Keyboard(stream.pid, stream.created, stream.launch.get("exe"), window_wait=0)
+        try:
+            sender = Keyboard(stream.pid, stream.created, stream.launch.get("exe"), window_wait=0)
+        except ProcessGone as exc:
+            print(json.dumps({"releaseOnly": "no-op", "reason": str(exc)}), flush=True)
+            return
         errors = []
         for name in ("Down", "X", "Z", "Right"):
             try:

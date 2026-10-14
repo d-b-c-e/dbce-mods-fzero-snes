@@ -387,5 +387,7 @@ review findings. The posted-key transport and private runner still need
 disposable runtime qualification.
 The driver's `--release-only` mode sends idempotent key-ups for exactly
 Down/X/Z/Right to the same request's verified live game HWND after the route
-process exits; it cannot press a key. The private runner must keep its lease
-and copy intact if the driver remains live or this cleanup fails.
+process exits; it cannot press a key. If that exact process exited or its PID
+was reused, release is a reported no-op because its SDL key state is gone.
+The private runner must keep its lease and copy intact if the driver remains
+live or cleanup fails against a still-live process.

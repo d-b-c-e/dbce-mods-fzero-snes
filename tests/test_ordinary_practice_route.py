@@ -1,5 +1,7 @@
 """ROM-free identity and causal-action checks for the ordinary route driver."""
 import importlib.util
+from contextlib import redirect_stdout
+from io import StringIO
 import json
 from pathlib import Path
 import tempfile
@@ -107,6 +109,18 @@ class OrdinaryRouteChecks(unittest.TestCase):
         owned.assert_called_once_with("C:/result", "a" * 32)
         initial.assert_called_once_with(123, 456, "C:/copy/game.exe", window_wait=0)
         self.assertEqual(sent, [("Down", True), ("X", True), ("Z", True), ("Right", True)])
+
+    def test_runner_cleanup_noop_when_original_game_exited(self):
+        stream = Mock(pid=123, created=456, launch={"exe": "C:/copy/game.exe"})
+        output = StringIO()
+        with patch.object(route, "StatusStream", return_value=stream), \
+                patch.object(route.Keyboard, "__init__",
+                             side_effect=route.ProcessGone("owned game process exited")), \
+                patch.object(route.Keyboard, "_send") as sent, redirect_stdout(output):
+            route.Keyboard.release_fixed("C:/result", "a" * 32)
+        self.assertEqual(json.loads(output.getvalue()),
+                         {"releaseOnly": "no-op", "reason": "owned game process exited"})
+        sent.assert_not_called()
 
     def test_exact_window_posted_edges_and_refusal(self):
         sender = route.Keyboard.__new__(route.Keyboard)
