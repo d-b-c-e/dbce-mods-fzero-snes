@@ -96,6 +96,12 @@ class OrdinaryRouteChecks(unittest.TestCase):
             with patch.object(route, "read_json", side_effect=[route.TransientStatus(), status(0)]):
                 self.assertEqual(stream.next(time.monotonic() + 1)["simulationFrame"], 0)
 
+    def test_runner_cleanup_is_fixed_keyups_only(self):
+        sent = []
+        with patch.object(route.Keyboard, "_send", lambda sender, name, up=False: sent.append((name, up))):
+            route.Keyboard.release_fixed()
+        self.assertEqual(sent, [("Down", True), ("X", True), ("Z", True), ("Right", True)])
+
     def test_practice_guards_reject_attract_and_wrong_menu(self):
         accepted = (
             (0, witness()),

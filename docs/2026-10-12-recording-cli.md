@@ -384,3 +384,7 @@ These status-poll intervals are not a substitute for game frame-time
 diagnostics. Mufa closed the driver's ROM, status-read, startup and key-hold
 review findings. The private runner still needs its fixed-key release cleanup
 review before any disposable run.
+The driver's `--release-only` mode sends idempotent key-ups for exactly
+Down/X/Z/Right after the route process exits; it cannot press a key or attach
+to a recording. The private runner must keep its lease and copy intact if the
+driver remains live or this cleanup fails.

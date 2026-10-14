@@ -331,6 +331,20 @@ class Keyboard:
         if errors:
             raise errors[0]
 
+    @staticmethod
+    def release_fixed():
+        """Runner-finally cleanup after driver exit: key-ups only, no focus or key-down."""
+        sender = Keyboard.__new__(Keyboard)
+        sender.user = ctypes.WinDLL("user32", use_last_error=True)
+        errors = []
+        for name in ("Down", "X", "Z", "Right"):
+            try:
+                sender._send(name, True)
+            except Refused as exc:
+                errors.append(exc)
+        if errors:
+            raise errors[0]
+
 
 def wait_for(stream, predicate, deadline, key=None, pressed=False, minimum_frames=1, step=None):
     count = 0
@@ -424,10 +438,19 @@ def drive(stream, keyboard, deadline):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--result", required=True)
-    parser.add_argument("--request-id", required=True)
+    parser.add_argument("--result")
+    parser.add_argument("--request-id")
     parser.add_argument("--seconds", type=int, default=75)
+    parser.add_argument("--release-only", action="store_true",
+                        help="after driver exit, send only fixed Down/X/Z/Right key-ups")
     args = parser.parse_args()
+    if args.release_only:
+        if args.result or args.request_id:
+            raise Refused("fixed-key release cannot join a route")
+        Keyboard.release_fixed()
+        return
+    if not args.result or not args.request_id:
+        raise Refused("route requires one result folder and request ID")
     if (len(args.request_id) != 32 or any(c not in "0123456789abcdef" for c in args.request_id) or
             not 30 <= args.seconds <= 100):
         raise Refused("invalid bounded route request")
