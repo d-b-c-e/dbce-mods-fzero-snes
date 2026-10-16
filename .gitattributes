@@ -5,6 +5,8 @@ licenses/fonts/*-OFL.txt text eol=lf
 # Keep the reviewed ABI header's provenance hash stable across checkouts.
 /vendor/dbce-shim/dbce_shim.h -text
 /vendor/dbce-shim/dbce_shim_extras.h -text
+# Preserve the unchanged toolkit frame-statistics header's raw provenance pin.
+/src/vendor/panel/dbce_frame_stats.hpp -text
 # Future archive exports only; tracked files and repository history stay intact.
 /assets/img/boxart.tga export-ignore
 /docs/screenshots export-ignore

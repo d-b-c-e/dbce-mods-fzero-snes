@@ -17,7 +17,7 @@ static const char *const features[] = {"widescreen", "presentation-fps", "bs-del
 static const char *const names[] = {"Widescreen", "Presentation FPS", "BS Deluxe", "HD Mode 7", "Diagnostics", "Racing wheel controls", "Force feedback", "Triple Screen (experimental)", "Reduce crash flashes"};
 static const char *const descriptions[] = {
   "Expand the race view and anchor the HUD at its outer edges.",
-  "Choose the presentation rate independently of widescreen and game speed.",
+  "Choose the presentation rate independently of widescreen and game speed. The optional measured counter shows average FPS, 1% low and worst frame over ten-second windows; results are also written to the game log.",
   "Full BS Deluxe v1.1: original and BS courses, eight vehicles, alternate cups and Practice ghosts. Uses separate saves.",
   "Render the track at higher resolution with smoother scanline geometry. Works independently of widescreen and presentation FPS.",
   "Record hardware, active video settings and frame timings in the diagnostics folder beside the game (beside the AppImage on Linux). Off by default. Enable, play through a slowdown, then attach the newest performance JSONL file to your report. Logs stay on your machine; no ROM or save data is included.",
@@ -215,7 +215,7 @@ static int feature_get(void *ctx, int index, RecompLauncherCModFeature *out) {
         "Try 2x and 60 FPS if performance drops.", descriptions[index], video->hd_scale);
     COPY(out->status, "Warning: high CPU and memory use above 4x");
   }
-  out->option_count = index == 5 ? (wheel_section[0] ? WHEEL_OPTIONS : 0) : index == 6 ? 4 : index == 7 ? TRIPLE_OPTIONS + 1 : index == 2 || index == 4 || index == 8 ? 0 : 1;
+  out->option_count = index == 5 ? (wheel_section[0] ? WHEEL_OPTIONS : 0) : index == 6 ? 4 : index == 7 ? TRIPLE_OPTIONS + 1 : index == 2 || index == 4 || index == 8 ? 0 : index == 1 ? 2 : 1;
   return 1;
 }
 static int option_get(void *ctx, const char *package, const char *feature, int index,
@@ -224,6 +224,15 @@ static int option_get(void *ctx, const char *package, const char *feature, int i
   int kind = identity(package, feature);
   if (kind == 6 && !wheel_section[0]) return 0;
   if (!kind || kind == 3 || kind == 5 || kind == 9 || !out) return 0;
+  if (kind == 2 && index == 1) {
+    memset(out, 0, sizeof(*out));
+    COPY(out->id, "ShowFPS"); COPY(out->label, "Show measured frame rate");
+    COPY(out->description, "Average FPS, 1% low and worst frame at the center window. Ten-second windows reset on pause or display changes. The counter works independently of the selected presentation rate.");
+    out->type = RECOMP_MOD_OPTION_BOOLEAN;
+    COPY(out->value, video->show_fps ? "true" : "false");
+    COPY(out->default_value, "false");
+    return 1;
+  }
   if (kind == 8 && index == TRIPLE_OPTIONS) {
     memset(out, 0, sizeof(*out));
     COPY(out->id, "TripleOutputMode"); COPY(out->label, "Display layout");
@@ -449,6 +458,10 @@ static int set_option(void *ctx, const char *package, const char *feature,
   } else if (identity(package, feature) == 4 && !strcmp(option, "scale")) {
     if (FzeroParseHdScale(value, &video->hd_scale)) { error_text[0] = 0; return 1; }
     COPY(error_text, "HD Mode 7 resolution must be a whole number from 2 to 10.");
+  } else if (identity(package, feature) == 2 && !strcmp(option, "ShowFPS")) {
+    if (strcmp(value, "true") && strcmp(value, "false")) return 0;
+    video->show_fps = !strcmp(value, "true");
+    return 1;
   } else if (identity(package, feature) == 2 && !strcmp(option, "fps")) {
     for (unsigned i = 0; i < 8; ++i) if (!strcmp(value, rates[i])) {
       video->fps = i ? (unsigned)atoi(value) : 0; return 1;
@@ -535,4 +548,18 @@ const RecompLauncherCModProvider *FzeroModsProviderWheel(
   FzeroIniReadString(control_path, "ForceFeedback", "Device", ffb_device,
                      sizeof(ffb_device));
   return provider;
+}
+
+void FzeroModsConfigureLauncherInput(
+    RecompLauncherCGameInfo *game, int shared_input,
+    FzeroVideoSettings *settings, const char *video_path,
+    const char *control_path, const char *wheel_guid,
+    void (*write_ini)(const char *, const char *, const char *, const char *),
+    int (*list_ffb_devices)(char names[][256], int max_devices),
+    int (*read_wheel_axis)(const char *guid, int axis, int *value)) {
+  if (!game) return;
+  game->disable_native_controllers = shared_input != 0;
+  game->mods = shared_input ? FzeroModsProvider(settings, video_path)
+      : FzeroModsProviderWheel(settings, video_path, control_path, wheel_guid,
+          write_ini, list_ffb_devices, read_wheel_axis);
 }

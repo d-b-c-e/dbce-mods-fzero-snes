@@ -24,6 +24,8 @@
 #include "fzero_triple_display.h"
 #include "fzero_state_mode.h"
 #include "fzero_diagnostics.h"
+#include "fzero_frame_stats.h"
+#include "fzero_setup.h"
 #include "fzero_build.h"
 
 #include "common_rtl.h"
@@ -109,6 +111,7 @@ static void publish_session_status(bool force) {
   g_session_status_retry = now + 250;
 }
 static bool g_shared_profile_preview;
+static bool g_setup_available;
 /* Explicit automation isolation lasts through Stop and ordinary game close.
  * Output mute alone never changes human save/config/host-button semantics. */
 static bool g_isolated_owner_state;
@@ -588,11 +591,13 @@ static void save_launcher_settings(const RecompLauncherCSettings *settings) {
   launcher_ini_kv_write(g_config_path, "Sound", "Msu1Enabled", number);
   launcher_ini_kv_write(g_config_path, "Sound", "Msu1Dir", settings->msu1_dir);
 
-  launcher_ini_kv_write(g_config_path, "Controller", "GuidP1", settings->player_gamepad_guid[0]);
-  snprintf(number, sizeof(number), "%d", settings->player_src[0]);
-  launcher_ini_kv_write(g_config_path, "Controller", "SourceP1", number);
-  snprintf(number, sizeof(number), "%d", settings->deadzone[0]);
-  launcher_ini_kv_write(g_config_path, "Controller", "DeadzoneP1", number);
+  if (!FzeroShimOrdinary()) {
+    launcher_ini_kv_write(g_config_path, "Controller", "GuidP1", settings->player_gamepad_guid[0]);
+    snprintf(number, sizeof(number), "%d", settings->player_src[0]);
+    launcher_ini_kv_write(g_config_path, "Controller", "SourceP1", number);
+    snprintf(number, sizeof(number), "%d", settings->deadzone[0]);
+    launcher_ini_kv_write(g_config_path, "Controller", "DeadzoneP1", number);
+  }
 
   snprintf(number, sizeof(number), "%d", settings->rewind_enabled ? 1 : 0);
   launcher_ini_kv_write(g_config_path, "Rewind", "Enabled", number);
@@ -612,6 +617,7 @@ static void launcher_steering_probe_close(void) {
 }
 
 static int launcher_steering_axis(const char *guid, int axis, int *value) {
+  if (FzeroShimUsingInput()) return 0;
   if (!guid || !guid[0] || !value || axis < 0) return 0;
 #if SNESRECOMP_SDL3
   bool attached = s_launcher_steering_stick && SDL_JoystickConnected(s_launcher_steering_stick);
@@ -713,10 +719,10 @@ static int resolve_rom(const char *executable, const char *explicit_rom,
   game.has_shader = 1;
   game.msu1_supported = 1;
   game.msu1_note = "Select a music folder with PCM tracks and the matching Conn/Cubear v11 patch: f-zero_msu1_stock.ips for stock F-Zero, f-zero_msu1.ips for BS Deluxe.";
-  game.mods = FzeroModsProviderWheel(&g_video, kVideoConfig, g_config_path,
-                                    settings->player_gamepad_guid[0],
-                                    launcher_ini_kv_write, FzeroFfbListDevices,
-                                    launcher_steering_axis);
+  FzeroModsConfigureLauncherInput(&game, FzeroShimOrdinary(), &g_video,
+      kVideoConfig, g_config_path, settings->player_gamepad_guid[0],
+      launcher_ini_kv_write, FzeroFfbListDevices, launcher_steering_axis);
+  game.has_configure_controls = FzeroShimOrdinary() && g_setup_available;
   game.rom_cache_path = "rom.cfg";
   /* Draws the Controls page's SaveStateMenu and Rewind rows, and the
    * Settings page's rewind enable / depth / interval controls. The hotkey
@@ -779,6 +785,19 @@ static int resolve_rom(const char *executable, const char *explicit_rom,
    * persist a typed resolution (and other mod choices) when quitting as well. */
   if (!FzeroVideoSave(&g_video, kVideoConfig))
     fprintf(stderr, "[fzero-launcher] unable to save video/mod settings\n");
+  if (action == RECOMP_LAUNCHER_RESULT_CONFIGURE_CONTROLS) {
+    char why[256];
+    if (!FzeroShimOrdinary() || !FzeroSetupLaunch(why, sizeof(why))) {
+      if (!FzeroShimOrdinary()) snprintf(why, sizeof(why), "Controls setup requires the Shared launcher.");
+      fprintf(stderr, "[fzero-setup] %s\n", why);
+      SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Controls setup unavailable", why, NULL);
+      return -1;
+    }
+    // run_window has torn down its HWND/platform. The helper's exact-process
+    // wait must complete before setup reads state; this path never opens Core.
+    fprintf(stderr, "[fzero-setup] setup started; closing launcher. Relaunch F-Zero after saving controls.\n");
+    return 0;
+  }
   if (action == 1) return 0;
   if (action == 0 && path[0]) return 1;
   if (initial_rom[0]) {
@@ -1307,6 +1326,7 @@ static FzeroTripleRig triple_rig_for_span(const FzeroVideoSettings *video,
 
 static SDL_Texture *g_overlay_texture;
 static int g_overlay_texture_w, g_overlay_texture_h;
+static SDL_Texture *g_frame_stats_texture;
 
 /* Where a panel sits inside the game's destination rect. The browser is an
  * opaque full-rect panel; the filmstrip annotates the frame it describes and
@@ -1393,6 +1413,56 @@ static void session_status_draw(const FzeroPresenter *p) {
   FzeroRect rect = {game.x + (game.w - draw_w) / 2, game.y + 8, draw_w, draw_h};
   if (p->gl) fzero_gl_draw_overlay(p->gl, pixels, w, h, rect, p->drawable_height);
   else overlay_draw_sdl_rect(p, pixels, w, h, rect);
+}
+
+static const char *frame_stats_display(const FzeroPresenter *p) {
+  return p->triple_active ? (p->triple_separate ? "experimental separate windows"
+      : "experimental three-panel span") : "single window";
+}
+static void frame_stats_draw(const FzeroPresenter *p) {
+  if (!g_video.show_fps) return;
+  enum { w = 640, h = 36 };
+  uint32_t pixels[w * h];
+  char line[106]; // bounded to the panel's 6-pixel text columns
+  FzeroFrameStatsLine(line, sizeof(line), frame_stats_display(p));
+  snes_ovl_fill_rect(pixels, w, h, 0, 0, w, h, 0xec10151au);
+  snes_ovl_stroke_rect(pixels, w, h, 0, 0, w, h, 0xff60caffu);
+  snes_ovl_draw_text(pixels, w, h, 8, 7,
+      "Presentation (10 s window)", 0xff60caffu, 1);
+  snes_ovl_draw_text(pixels, w, h, 8, 22, line, 0xffffffffu, 1);
+  FzeroRect game = overlay_rect(p, 1);
+  int draw_w = game.w * 9 / 10;
+  if (draw_w > w * 2) draw_w = w * 2;
+  if (draw_w < 1 || game.h < 1) return;
+  int draw_h = h * draw_w / w;
+  if (draw_h < 1) draw_h = 1;
+  if (draw_h > game.h) draw_h = game.h;
+  FzeroRect rect = {game.x + (game.w - draw_w) / 2,
+      game.y + game.h - draw_h, draw_w, draw_h};
+  if (p->gl) fzero_gl_draw_overlay(p->gl, pixels, w, h, rect, p->drawable_height);
+  else {
+    // A separate fixed-size texture avoids recreating the session/menu texture
+    // twice per frame when both overlays are visible.
+    if (!g_frame_stats_texture) {
+      g_frame_stats_texture = SDL_CreateTexture(p->renderer, SDL_PIXELFORMAT_ARGB8888,
+          SDL_TEXTUREACCESS_STREAMING, w, h);
+      if (!g_frame_stats_texture) return;
+      SDL_SetTextureBlendMode(g_frame_stats_texture, SDL_BLENDMODE_BLEND);
+    }
+    SDL_UpdateTexture(g_frame_stats_texture, NULL, pixels, w * 4);
+    SDL_Rect destination = {rect.x, rect.y, rect.w, rect.h};
+    snesrecomp_sdl_render_texture(p->renderer, g_frame_stats_texture, NULL, &destination);
+  }
+}
+static void frame_stats_presented(const FzeroPresenter *p) {
+  static double last_log;
+  double now = monotonic_seconds();
+  if (FzeroFrameStatsPresented(now) && (last_log == 0 || now - last_log >= 30)) {
+    char line[192];
+    FzeroFrameStatsLine(line, sizeof(line), frame_stats_display(p));
+    fprintf(stderr, "[fzero-frame-rate] presentation calls: %s; not scanout\n", line);
+    last_log = now;
+  }
 }
 
 /* Read the composited window back for FZERO_OVERLAY_DUMP / FZERO_REWIND_DUMP;
@@ -1513,6 +1583,14 @@ static bool present_separate_gl_sides(FzeroPresenter *p, bool ready) {
  * behind it is the moment the player stopped at. */
 static void present_frame(FzeroPresenter *p, const uint32_t *panel,
                           int pw, int ph, int is_menu) {
+  static int stats_width, stats_height, stats_mode = -1;
+  int stats_current_mode = p->triple_active ? (p->triple_separate ? 2 : 1) : 0;
+  if (stats_width != p->drawable_width || stats_height != p->drawable_height ||
+      stats_mode != stats_current_mode) {
+    FzeroFrameStatsReset();
+    stats_width = p->drawable_width; stats_height = p->drawable_height;
+    stats_mode = stats_current_mode;
+  }
   const uint32_t *hd_frame = FzeroHdFrame();
   unsigned scale = FzeroHdScale();
   const uint8_t *pixels = hd_frame ? (const uint8_t *)hd_frame : p->pixels;
@@ -1577,12 +1655,14 @@ static void present_frame(FzeroPresenter *p, const uint32_t *panel,
       overlay_dump(p, is_menu);
     }
     session_status_draw(p);
+    frame_stats_draw(p);
     uint64_t diagnostic_start = FzeroDiagnosticsBegin();
     output_probe(p->gl->window, "center", pixels, width, height,
         p->drawable_width, p->drawable_height, triple_ready,
         p->gl->shader != NULL);
     SDL_GL_SwapWindow(p->gl->window);
     FzeroDiagnosticsEnd(FZERO_DIAG_PRESENT, diagnostic_start);
+    frame_stats_presented(p);
     return;
   }
   SDL_Rect source = {0, 0, width, height};
@@ -1642,10 +1722,12 @@ static void present_frame(FzeroPresenter *p, const uint32_t *panel,
   overlay_draw_sdl(p, panel, pw, ph, is_menu);
   if (panel) overlay_dump(p, is_menu);
   session_status_draw(p);
+  frame_stats_draw(p);
   FzeroDiagnosticsEnd(FZERO_DIAG_DRAW, diagnostic_start);
   diagnostic_start = FzeroDiagnosticsBegin();
   SDL_RenderPresent(p->renderer);
   FzeroDiagnosticsEnd(FZERO_DIAG_PRESENT, diagnostic_start);
+  frame_stats_presented(p);
 }
 
 /*
@@ -2181,8 +2263,12 @@ int main(int argc, char **argv) {
   const char *early_replay = getenv("FZERO_REPLAY_PLAYTHROUGH");
   const char *early_record = getenv("FZERO_RECORD_PLAYTHROUGH");
   bool recorded_replay = early_replay && *early_replay;
+  g_setup_available = (!explicit_rom || force_launcher) && !recorded_replay &&
+      !FzeroReplayHasInput() && !g_isolated_owner_state && !(early_record && *early_record) &&
+      FzeroSetupAvailable();
   if (!FzeroShimPrepare(g_config_path, explicit_rom && !force_launcher,
-                        recorded_replay, FzeroReplayHasInput(), early_record && *early_record))
+                        recorded_replay, FzeroReplayHasInput(), early_record && *early_record,
+                        g_setup_available))
     return 2;
   if (g_isolated_owner_state) {
 #if defined(SNES_COSIM) || defined(SNESRECOMP_NET) || SNESRECOMP_ENABLE_MODS
@@ -2216,7 +2302,10 @@ int main(int argc, char **argv) {
   RecompLauncherCSettings launcher_settings;
   int resolve_result =
       resolve_rom(argv[0], explicit_rom, force_launcher, rom_path, sizeof(rom_path), &launcher_settings);
-  if (resolve_result <= 0) return resolve_result == 0 ? 0 : 2;
+  if (resolve_result <= 0) {
+    FzeroTelemetryShutdown();
+    return resolve_result == 0 ? 0 : 2;
+  }
   if (!g_video.enhanced) {
     g_video.aspect = launcher_aspect(launcher_settings.aspect_index);
     if (!g_isolated_owner_state && !FzeroShimRequested() && !recorded_replay && !FzeroVideoSave(&g_video, kVideoConfig))
@@ -2864,6 +2953,7 @@ int main(int argc, char **argv) {
         hz = next_hz;
         clock.presentation_hz = hz;
         clock.next_presentation = now;
+        FzeroFrameStatsReset();
       }
       next_display_check = now + 0.25;
     }
@@ -2871,6 +2961,7 @@ int main(int argc, char **argv) {
       FzeroDiagnosticsEvent("clock_reset", 0);
       missed_presentations += clock.missed_presentations;
       FzeroClockReset(&clock, now, hz);
+      FzeroFrameStatsReset();
       g_reset_presentation_clock = false;
     }
     /* Hotkeys act the moment they are pressed, not on the next simulation
@@ -3181,6 +3272,10 @@ int main(int argc, char **argv) {
   if (g_overlay_texture) {
     SDL_DestroyTexture(g_overlay_texture);
     g_overlay_texture = NULL;
+  }
+  if (g_frame_stats_texture) {
+    SDL_DestroyTexture(g_frame_stats_texture);
+    g_frame_stats_texture = NULL;
   }
   if (presenter.triple_texture) SDL_DestroyTexture(presenter.triple_texture);
   free(presenter.triple_pixels);

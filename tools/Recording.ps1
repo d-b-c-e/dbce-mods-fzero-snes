@@ -25,7 +25,15 @@ $ErrorActionPreference = 'Stop'
 # pair; replay validation and every WRAM comparison remain inside the game.
 function SessionHash([string]$Path) { (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() }
 function SessionJson([string]$Path) {
-    if (!(Test-Path -LiteralPath $Path -PathType Leaf) -or (Get-Item -LiteralPath $Path).Length -gt 65536) { throw "Missing or oversized session metadata: $Path" }
+    SessionJsonBounded $Path 65536
+}
+function SessionInstallReceipt([string]$Root) {
+    # Complete portable-helper ownership exceeds 64 KiB. Only install receipts
+    # use this explicit 2 MiB cap; ordinary status/session JSON keeps 64 KiB.
+    SessionJsonBounded (SessionBound $Root 'install-receipt.json') 2097152
+}
+function SessionJsonBounded([string]$Path, [ValidateRange(1,2097152)][int]$MaximumBytes) {
+    if (!(Test-Path -LiteralPath $Path -PathType Leaf) -or (Get-Item -LiteralPath $Path).Length -gt $MaximumBytes) { throw "Missing or oversized session metadata: $Path" }
     $text = Get-Content -LiteralPath $Path -Raw
     $document = [Text.Json.JsonDocument]::Parse($text)
     try { SessionUnique $document.RootElement } finally { $document.Dispose() }
@@ -60,7 +68,7 @@ function SessionBound([string]$Root, [string]$Relative) {
     $path
 }
 function SessionCapability([string]$Root) {
-    $r = SessionJson (SessionBound $Root 'install-receipt.json')
+    $r = SessionInstallReceipt $Root
     if ($r.schemaVersion -ne 1 -or $r.launcher -cne 'FZeroSNESRecomp-wheel-launcher.exe' -or
         $r.sourceCommit -cnotmatch '^[0-9a-f]{40}$' -or $r.session.schema -cne 'fzero.session-capability@1' -or
         $r.session.protocol -cne 'fzero.session-control@1' -or $r.session.record -ne $true -or

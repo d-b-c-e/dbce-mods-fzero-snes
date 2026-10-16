@@ -18,6 +18,45 @@ static int list_ffb(char names[][256], int max_devices) {
   strcpy(names[1], "Other FFB wheel");
   return 2;
 }
+static void unexpected_write(const char *path, const char *section, const char *key, const char *value) {
+  (void)path; (void)section; (void)key; (void)value;
+  CHECK(0); /* Shared must not persist native wheel or force options. */
+}
+static int unexpected_list(char names[][256], int max_devices) {
+  (void)names; (void)max_devices; CHECK(0); return 0;
+}
+static int unexpected_axis(const char *guid, int axis, int *value) {
+  (void)guid; (void)axis; (void)value; CHECK(0); return 0;
+}
+static void test_shared_launcher_selection(void) {
+  FzeroVideoSettings video; FzeroVideoDefaults(&video);
+  RecompLauncherCGameInfo game = {0};
+  CHECK(!game.disable_native_controllers);
+  FzeroModsConfigureLauncherInput(&game, 1, &video, "shared-launcher-video.ini",
+      "not-opened-controls.ini", "030000004c0500006802000000000000",
+      unexpected_write, unexpected_list, unexpected_axis);
+  CHECK(game.disable_native_controllers && game.mods);
+  CHECK(game.mods->feature_count(NULL) == 7 && !game.mods->select_controller);
+  CHECK(!FzeroModsWheelGuid()[0]);
+  for (int i = 0; i < game.mods->feature_count(NULL); ++i) {
+    RecompLauncherCModFeature f;
+    CHECK(game.mods->feature_get(NULL, i, &f));
+    CHECK(strcmp(f.id, "wheel") && strcmp(f.id, "force-feedback"));
+  }
+  CHECK(!game.mods->feature_set_option(NULL, "fzero-wheel", "wheel", "SteeringAxis", "0"));
+  CHECK(!game.mods->feature_enable(NULL, "fzero-ffb", "force-feedback", 1));
+  CHECK(game.mods->commit(NULL, NULL)); // video settings only; callbacks above must remain untouched
+  CHECK(remove("shared-launcher-video.ini") == 0);
+  // Native explicitly clears the opt-in and retains its existing device/preview provider.
+  FzeroModsConfigureLauncherInput(&game, 0, &video, "native-launcher-video.ini",
+      "native-launcher-controls.ini", "030000004c0500006802000000000000",
+      NULL, list_ffb, read_live_axis);
+  CHECK(!game.disable_native_controllers && game.mods->feature_count(NULL) == 9);
+  CHECK(game.mods->select_controller);
+  RecompLauncherCModFeature wheel;
+  CHECK(game.mods->feature_get(NULL, 5, &wheel) && !strcmp(wheel.id, "wheel"));
+  CHECK(strstr(wheel.status, "Steering preview:"));
+}
 static void note_ini(const char *path, const char *section,
                      const char *key, const char *value) {
   CHECK(!strcmp(path, "wheel-options.ini"));
@@ -202,7 +241,13 @@ int main(void) {
 #endif
   CHECK(!p->feature_option_get(NULL, deluxe.package_id, deluxe.id, 0, &option));
   CHECK(p->feature_get(NULL, 0, &w) && p->feature_get(NULL, 1, &f));
-  CHECK(strcmp(w.package_id, f.package_id) && w.option_count == 1 && f.option_count == 1);
+  CHECK(strcmp(w.package_id, f.package_id) && w.option_count == 1 && f.option_count == 2);
+  CHECK(p->feature_option_get(NULL, f.package_id, f.id, 1, &option));
+  CHECK(!strcmp(option.id, "ShowFPS") && option.type == RECOMP_MOD_OPTION_BOOLEAN &&
+        !strcmp(option.value, "false") && !strcmp(option.default_value, "false"));
+  CHECK(!p->feature_set_option(NULL, f.package_id, f.id, "ShowFPS", "yes"));
+  CHECK(!p->feature_set_option(NULL, w.package_id, w.id, "ShowFPS", "true"));
+  CHECK(p->feature_set_option(NULL, f.package_id, f.id, "ShowFPS", "true") && s.show_fps);
   CHECK(p->feature_enable(NULL, f.package_id, f.id, 1));
   CHECK(s.fps_enabled && !s.enhanced);
   CHECK(p->feature_set_option(NULL, f.package_id, f.id, "fps", "144"));
@@ -213,7 +258,7 @@ int main(void) {
   CHECK(p->feature_option_get(NULL, w.package_id, w.id, 0, &option) && !strcmp(option.id, "aspect"));
   CHECK(p->feature_option_get(NULL, f.package_id, f.id, 0, &option) && !strcmp(option.id, "fps"));
   CHECK(p->commit(NULL, NULL) && FzeroVideoLoad(&loaded, "test-mods.ini"));
-  CHECK(loaded.enhanced && !loaded.fps_enabled && loaded.fps == 144);
+  CHECK(loaded.enhanced && !loaded.fps_enabled && loaded.fps == 144 && loaded.show_fps);
 #ifdef FZERO_HAS_DELUXE
   CHECK(loaded.bs_deluxe);
 #else
@@ -320,6 +365,7 @@ int main(void) {
   remove("test-mods.ini");
   remove("wheel-options.ini");
   test_selection_rebind();
+  test_shared_launcher_selection();
   puts("Independent widescreen and presentation FPS plugins passed");
   return 0;
 }

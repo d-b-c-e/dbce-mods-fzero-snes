@@ -26,6 +26,7 @@ typedef struct FzeroVideoSettings {
   FzeroAspect aspect;
   unsigned fps; /* 0 = display refresh (Auto). */
   bool fps_enabled;
+  bool show_fps; /* Optional measured presentation summary; off by default. */
   bool bs_deluxe; /* Launch-time content selection. */
   bool hd_mode7; /* Independent, opt-in spatial resolution enhancement. */
   unsigned hd_scale; /* Integer 2..10; retained while disabled. */

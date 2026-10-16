@@ -26,10 +26,14 @@ param(
     [string]$Target = 'E:\Source\toolkits\launchbox\Launchbox-Racing\Games\Windows\F-Zero (SNES Recomp)',
     [ValidatePattern('^[a-z0-9][a-z0-9-]*$')][string]$Label,
     [string]$Rollback,
-    [switch]$PrivateSharedInput
+    [switch]$PrivateSharedInput,
+    [switch]$PrivateControlsSetup,
+    [string]$SetupPython = 'python'
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
+. (Join-Path $PSScriptRoot 'Private-ControlsSetup.ps1')
+if ($PrivateControlsSetup -and !$PrivateSharedInput) { throw '-PrivateControlsSetup requires -PrivateSharedInput. Nothing changed.' }
 if (!$BuildDir) { $BuildDir = Join-Path $repo 'build-merge' }
 $launcher = 'FZeroSNESRecomp-wheel-launcher.exe'
 $sharedOwned = @('dbce_shim.dll', 'shared-input/dbce_shim.h', 'shared-input/PIN.json', 'shared-input/PROVENANCE.md', 'shared-input/dbce_shim_extras.h')
@@ -113,15 +117,32 @@ function Private-SharedSources([string]$SourceRoot, [string]$BuildRoot) {
     if ($extras) { $metadata.extrasAbi=1; $metadata.extras=Shared-ExtrasDescriptor }
     @{ files=$files; metadata=$metadata }
 }
-function Restore-Files([string]$from, $state) {
+function Restore-Files([string]$from, $state,
+    [AllowEmptyCollection()][string[]]$AdmittedCurrentHelperPaths) {
     # Fixed owned paths only; validate every backup before the first mutation.
     # Earlier backups predate the companion. Restore only their inventory;
     # their old receipt cannot authorize a leftover companion for execution.
     $restoreFiles = @($state.files | ForEach-Object { $_.name })
+    if ($PSBoundParameters.ContainsKey('AdmittedCurrentHelperPaths')) {
+        # Internal failure recovery already admitted this complete transaction.
+        # The failed final receipt write may have left unreadable JSON on disk.
+        $currentHelperPaths = @($AdmittedCurrentHelperPaths)
+        if (@($currentHelperPaths | Where-Object { !(Test-PrivateControlsOwnedPath $_) }).Count) { throw 'Invalid admitted helper transaction inventory.' }
+    } else {
+        # Manual rollback still proves the current install fits this backup.
+        $currentReceiptPath = Join-Path $Target $receiptName
+        $currentReceipt = if (Test-Path -LiteralPath $currentReceiptPath -PathType Leaf) { Get-Content -LiteralPath $currentReceiptPath -Raw | ConvertFrom-Json } else { $null }
+        $currentHelperPaths = @($currentReceipt.files | Where-Object { $_.name -match '^(?i:controls-setup)[\\/]' } | ForEach-Object { $_.name })
+    }
+    if (@($currentHelperPaths | Where-Object { $_ -cnotin $restoreFiles }).Count) { throw 'This backup predates the current helper inventory. Roll back the helper install using its own backup first.' }
     if (@($restoreFiles | Select-Object -Unique).Count -ne $restoreFiles.Count -or
-        @($restoreFiles | Where-Object { $_ -cnotin $restorableFiles }).Count -or
+        @($restoreFiles | Where-Object { $_ -cnotin $restorableFiles -and !($state.privateControlsSetup -and (Test-PrivateControlsOwnedPath $_)) }).Count -or
         @($launcher,'WheelFfb.dll',$receiptName | Where-Object { $_ -cnotin $restoreFiles }).Count) { throw 'Invalid backup ownership inventory.' }
     foreach ($name in $restoreFiles) {
+        if (Test-PrivateControlsOwnedPath $name) {
+            Assert-PrivateControlsNoLink (Join-Path $Target $name)
+            Assert-PrivateControlsNoLink (Join-Path $from $name)
+        }
         $entry = @($state.files | Where-Object { $_.name -ceq $name })
         if ($entry.Count -ne 1) { throw "Invalid backup inventory for $name" }
         if ($entry[0].existed -and (HashOrNull (Join-Path $from $name)) -cne $entry[0].sha256) { throw "Backup hash differs: $name" }
@@ -159,6 +180,8 @@ if ($Rollback) {
         if ($state.schemaVersion -ne 1) { throw 'Unknown backup schema.' }
         Restore-Files $from $state
     } else {
+        $current = if (Test-Path -LiteralPath (Join-Path $Target $receiptName)) { Get-Content -LiteralPath (Join-Path $Target $receiptName) -Raw | ConvertFrom-Json } else { $null }
+        if ($current.privateControlsSetup -or @($current.files | Where-Object { $_.name -match '^(?i:controls-setup)[\\/]' }).Count) { throw 'Legacy backup has no complete helper inventory. Roll back the helper install using its own backup first. Nothing changed.' }
         # Historical backups did not retain their receipt. Withdraw the current
         # capability rather than attach it to the older runtime.
         if (Test-Path -LiteralPath (Join-Path $Target $receiptName)) {
@@ -178,6 +201,7 @@ if (-not $Label) { throw 'Name this install with -Label (lower-case words and hy
 $oldReceiptPath = Join-Path $Target $receiptName
 $oldReceipt = if (Test-Path -LiteralPath $oldReceiptPath -PathType Leaf) { Get-Content -LiteralPath $oldReceiptPath -Raw | ConvertFrom-Json } else { $null }
 Assert-SharedOwnershipTransition ([bool]$PrivateSharedInput) $oldReceipt
+Assert-PrivateControlsTransition ([bool]$PrivateControlsSetup) $oldReceipt
 $built = Join-Path $BuildDir 'FZeroSNESRecomp.exe'
 if (-not (Test-Path -LiteralPath $built)) { throw "No build at $built" }
 $cache = Join-Path $BuildDir 'CMakeCache.txt'
@@ -218,6 +242,20 @@ if (!(Test-Path -LiteralPath $header) -or
 }
 $sessionCapability = Recording-Capability ([bool]$PrivateSharedInput) $linkedText
 if ($PrivateSharedInput -and $shared.metadata.extrasAbi -eq 1) { Assert-SharedExtrasConsumer $linkedText }
+$setup = $null
+if ($PrivateControlsSetup) {
+    $setup = Private-ControlsSetupSources $repo $BuildDir $linkedText $SetupPython
+    Assert-PrivateControlsTransition $true $oldReceipt @($setup.files.Keys)
+    $priorHelperPaths = @($oldReceipt.files | ForEach-Object { $_.name })
+    foreach ($name in $setup.files.Keys) {
+        Assert-PrivateControlsNoLink (Join-Path $Target $name)
+        if ((Test-Path -LiteralPath (Join-Path $Target $name)) -and $name -cnotin $priorHelperPaths) { throw 'An unowned controls setup file already exists. Nothing changed.' }
+        if ((HashOrNull $setup.files[$name]) -cne $setup.expected[$name]) { throw 'Admitted controls setup source changed. Nothing installed.' }
+        $sources[$name] = $setup.files[$name]
+    }
+    $owned += @($setup.files.Keys)
+    $transactionFiles = @($owned) + $receiptName
+}
 $changes = @($owned | Where-Object { (HashOrNull $sources[$_]) -cne (HashOrNull (Join-Path $Target $_)) })
 if (-not $changes.Count -and (Test-Path -LiteralPath $oldReceiptPath)) {
     $expectedBackends = if ($PrivateSharedInput) { 'Native,Shared' } else { 'Native' }
@@ -238,7 +276,9 @@ if (-not $changes.Count -and (Test-Path -LiteralPath $oldReceiptPath)) {
         $oldReceipt.session.schema -ceq 'fzero.session-capability@1' -and $oldReceipt.session.protocol -ceq 'fzero.session-control@1' -and
         $oldReceipt.session.automatedRecord -eq $sessionCapability.automatedRecord -and
         (@($oldReceipt.session.automatedRecordBackends) -join ',') -ceq (@($sessionCapability.automatedRecordBackends) -join ',') -and
-        $inventoryMatches -and $sharedMatches -and (@($oldReceipt.session.recordBackends) -join ',') -ceq $expectedBackends) {
+        $inventoryMatches -and $sharedMatches -and
+        $(if ($PrivateControlsSetup) { $oldReceipt.privateControlsSetup.manifestSha256 -ceq $setup.metadata.manifestSha256 -and $oldReceipt.privateControlsSetup.exeSha256 -ceq $setup.metadata.exeSha256 } else { !$oldReceipt.privateControlsSetup }) -and
+        (@($oldReceipt.session.recordBackends) -join ',') -ceq $expectedBackends) {
         'The installed files and controls receipt already match this build; nothing changed.'; return
     }
 }
@@ -252,6 +292,7 @@ $state = [ordered]@{ schemaVersion = 1; files = @($transactionFiles | ForEach-Ob
     $hash = HashOrNull (Join-Path $Target $_)
     [ordered]@{ name = $_; existed = ($null -ne $hash); sha256 = $hash }
 }) }
+if ($PrivateControlsSetup) { $state.privateControlsSetup = $setup.metadata }
 foreach ($entry in $state.files) {
     if ($entry.existed) {
         [void][IO.Directory]::CreateDirectory((Split-Path -Parent (Join-Path $backup $entry.name)))
@@ -277,10 +318,16 @@ $receipt = [ordered]@{
     files = @($owned | ForEach-Object { [ordered]@{ name = $_; sha256 = (Get-FileHash -LiteralPath (Join-Path $Target $_)).Hash } })
 }
 if ($PrivateSharedInput) { $receipt.privateSharedInput = $shared.metadata }
+if ($PrivateControlsSetup) {
+    foreach ($name in $setup.files.Keys) {
+        if ((HashOrNull (Join-Path $Target $name)) -cne $setup.expected[$name]) { throw 'Installed controls setup differs from its admitted inventory; rolling back.' }
+    }
+    $receipt.privateControlsSetup = $setup.metadata
+}
 $receipt | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $Target $receiptName) -Encoding utf8
 } catch {
     $failure = $_
-    Restore-Files $backup $state
+    Restore-Files $backup $state -AdmittedCurrentHelperPaths @($owned | Where-Object { Test-PrivateControlsOwnedPath $_ })
     throw $failure
 }
 "installed $($changes -join ', ') from $commit; backup deployment-backups\$stamp; receipt install-receipt.json"

@@ -156,6 +156,9 @@ bool FzeroVideoLoad(FzeroVideoSettings *s, const char *path) {
       has_fps_toggle = true;
       if (!strcmp(value, "0") || !strcmp(value, "1")) s->fps_enabled = value[0] == '1';
       else valid = false;
+    } else if (!strcmp(key, "ShowFPS")) {
+      if (!strcmp(value, "0") || !strcmp(value, "1")) s->show_fps = value[0] == '1';
+      else valid = false;
     } else if (!strcmp(key, "HDMode7")) {
       if (!strcmp(value, "0") || !strcmp(value, "1")) s->hd_mode7 = value[0] == '1';
       else valid = false;
@@ -217,6 +220,7 @@ bool FzeroVideoSave(const FzeroVideoSettings *s, const char *path) {
                     s->triple_left_yaw_deg, s->triple_right_yaw_deg,
                     s->triple_bezel_gap_mm, s->triple_eye_height_mm,
                     s->reduce_crash_flash) > 0;
+  if (ok) ok = fprintf(f, "ShowFPS=%d\n", s->show_fps) > 0;
   if (fclose(f)) ok = false;
   if (ok) {
 #ifdef _WIN32

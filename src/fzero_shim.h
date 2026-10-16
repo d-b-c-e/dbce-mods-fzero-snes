@@ -9,7 +9,8 @@ extern "C" {
  * folder. Prepare runs before any launcher/force initialization and latches
  * force off even when diagnostic admission fails. Default Native does nothing. */
 int FzeroShimPrepare(const char *config, int explicit_rom_without_launcher,
-                     int recorded_replay, int scripted_replay, int explicit_recording);
+                     int recorded_replay, int scripted_replay, int explicit_recording,
+                     int qualified_keyboard_mouse_launcher);
 int FzeroShimRequested(void);
 /* Requested retains its diagnostic meaning. UsingInput includes the explicit
  * ordinary [Input] Backend=Shared option; it does not imply private saves,

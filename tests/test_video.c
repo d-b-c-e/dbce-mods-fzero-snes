@@ -15,7 +15,7 @@ static void viewport_tests(void) {
   FzeroVideoSettings settings;
   FzeroVideoDefaults(&settings); /* shipped defaults: every mod on, Fit, Auto rate */
   CHECK(settings.enhanced && settings.aspect == FZERO_ASPECT_FIT && settings.fps == 0 &&
-        settings.fps_enabled && settings.bs_deluxe);
+        settings.fps_enabled && settings.bs_deluxe && !settings.show_fps);
   CHECK(!settings.hd_mode7 && settings.hd_scale == 2 && !settings.diagnostics &&
         !settings.triple_screen &&
         settings.triple_output_mode == FZERO_TRIPLE_OUTPUT_SPAN);
@@ -115,10 +115,11 @@ static void config_tests(void) {
   a.triple_bezel_gap_mm = 12;
   a.triple_eye_height_mm = 45;
   a.reduce_crash_flash = true;
+  a.show_fps = true;
   CHECK(FzeroVideoSave(&a, "test-video.ini"));
   CHECK(FzeroVideoLoad(&b, "test-video.ini"));
   CHECK(b.enhanced && b.aspect == FZERO_ASPECT_FIT && b.fps == 165 &&
-        b.triple_screen && b.reduce_crash_flash &&
+        b.triple_screen && b.reduce_crash_flash && b.show_fps &&
         b.triple_output_mode == FZERO_TRIPLE_OUTPUT_SEPARATE);
   CHECK(FzeroTripleValidLayout(&b) && b.triple_panel_width_mm == 620 &&
         b.triple_eye_distance_mm == 780 && b.triple_left_yaw_deg == 55 &&
@@ -144,11 +145,11 @@ static void config_tests(void) {
   }
   FILE *f = fopen("test-video.ini", "w");
   CHECK(f);
-  fputs("EnhancedRenderer=perhaps\nAspect=99:1\nPresentationFPS=120bad\nHDMode7=bad\nHDMode7Scale=9999\n", f);
+  fputs("EnhancedRenderer=perhaps\nAspect=99:1\nPresentationFPS=120bad\nHDMode7=bad\nHDMode7Scale=9999\nShowFPS=bad\n", f);
   fclose(f);
   CHECK(!FzeroVideoLoad(&b, "test-video.ini"));
   CHECK(b.enhanced && b.aspect == FZERO_ASPECT_FIT && b.fps == 0); /* invalid fields fall back to shipped defaults */
-  CHECK(!b.hd_mode7 && b.hd_scale == 2);
+  CHECK(!b.hd_mode7 && b.hd_scale == 2 && !b.show_fps);
   const char *invalid_triple[] = {
       "TripleOutputMode=Other",
       "TriplePanelWidthMm=0", "TriplePanelWidthMm=3001",
@@ -170,6 +171,7 @@ static void config_tests(void) {
   fclose(f);
   CHECK(!FzeroVideoLoad(&b, "test-video.ini"));
   CHECK(!b.enhanced && !b.bs_deluxe);
+  CHECK(!b.show_fps); /* absent key preserves the existing no-counter appearance */
   CHECK(b.aspect == FZERO_ASPECT_FIT && b.fps == 0 && !b.fps_enabled);
   remove("test-video.ini");
   CHECK(FzeroVideoLoad(&b, "test-video.ini"));

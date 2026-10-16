@@ -22,7 +22,7 @@ extern "C" {
 
 namespace {
 bool requested, ordinary, failed, latched, completed, host_persistence, host_debug;
-bool use_extras;
+bool use_extras, deferred_launcher_profile;
 std::string config_path, profile, recording_path, save_root, session_nonce;
 std::filesystem::path session_file, batch_file;
 FzeroFfbState force_state{};
@@ -70,8 +70,16 @@ std::string trim(std::string s) {
 bool read_profile(const char *path) {
   std::ifstream in(path, std::ios::binary);
   if (!in) return refuse("config.ini missing");
-  std::string all((std::istreambuf_iterator<char>(in)), {});
-  if (all.size() > 1024 * 1024) return refuse("config.ini exceeds 1 MiB");
+  // Bound the stream read itself, not just the string after an unbounded read.
+  // One extra byte distinguishes an exact-limit file from an oversized prefix;
+  // Core still receives the unchanged section bytes and validates bindings.
+  constexpr size_t limit = 1024 * 1024;
+  std::string all(limit + 1, '\0');
+  in.read(all.data(), static_cast<std::streamsize>(all.size()));
+  if (in.bad() || (in.fail() && !in.eof())) return refuse("config.ini read failed");
+  const size_t count = static_cast<size_t>(in.gcount());
+  if (count > limit) return refuse("config.ini exceeds 1 MiB");
+  all.resize(count);
   const size_t start = all.compare(0, 3, "\xef\xbb\xbf") == 0 ? 3 : 0;
   size_t at = start;
   size_t begin = std::string::npos, end = all.size();
@@ -175,7 +183,8 @@ void FzeroShimHostFences(const char *selected_save_root, int debug_disabled) {
   host_debug = debug_disabled != 0;
 }
 const char *FzeroShimRecordingPath(void) { return recording_path.c_str(); }
-int FzeroShimPrepare(const char *config, int direct_rom, int replay, int script, int explicit_recording) {
+int FzeroShimPrepare(const char *config, int direct_rom, int replay, int script, int explicit_recording,
+                     int qualified_launcher) {
   const char *run = std::getenv("FZERO_SHIM_DIAGNOSTIC_RUN");
   if (!present(run)) {
     // A recorded/scripted replay never opens an input backend, even when the
@@ -193,9 +202,13 @@ int FzeroShimPrepare(const char *config, int direct_rom, int replay, int script,
     FzeroIniReadInt(config, "Input", "SharedExtras", &extras);
     if (extras != 0 && extras != 1) return refuse("SharedExtras must be 0 or 1");
     use_extras = extras == 1;
-    // Temporary source candidate: the legacy launcher can open SDL devices for
-    // steering preview. Do not admit that path until it uses the owned reader.
-    if (!direct_rom) return refuse("Shared input currently requires an explicit ROM without --launcher; legacy wheel extras are unavailable");
+    // Only the paired keyboard/mouse UI plus qualified bundled helper may
+    // reach a launcher. An old/missing setup bundle keeps the prior refusal.
+    if (!direct_rom && !qualified_launcher)
+      return refuse("Shared launcher requires the matching private controls setup bundle; use an explicit ROM or install that bundle");
+    if (!direct_rom && explicit_recording)
+      return refuse("Shared recording/preview requires an explicit ROM without the launcher");
+    deferred_launcher_profile = !direct_rom;
     if (!ordinary_force_disabled()) return 0;
     // Refuse an independent force owner for the lifetime of Shared input. This
     // is an ownership limitation, not a changed force model or saved setting.
@@ -205,7 +218,7 @@ int FzeroShimPrepare(const char *config, int direct_rom, int replay, int script,
 #ifndef _WIN32
     return refuse("the shared input provider requires Windows");
 #else
-    return read_profile(config);
+    return deferred_launcher_profile || read_profile(config);
 #endif
   }
   requested = true;
@@ -266,6 +279,18 @@ int FzeroShimStart(void *window, const char *legacy_guid) {
   const bool fences = host_persistence && host_debug && FzeroTelemetryDeliveryBlocked();
   if (requested && !fences) return refuse("host persistence/debug/telemetry fences not established");
   if (ordinary && !ordinary_force_disabled()) return 0; // launcher may have changed it
+  if (ordinary && deferred_launcher_profile) {
+    char backend[32] = "Native";
+    FzeroIniReadString(config_path.c_str(), "Input", "Backend", backend, sizeof(backend));
+    std::string selection = backend;
+    for (char &c : selection) if (c >= 'A' && c <= 'Z') c += 'a'-'A';
+    if (selection != "shared") return refuse("launcher input backend changed; restart to use the saved selection");
+    int extras = 0;
+    FzeroIniReadInt(config_path.c_str(), "Input", "SharedExtras", &extras);
+    if (extras != 0 && extras != 1) return refuse("SharedExtras must be 0 or 1");
+    use_extras = extras == 1;
+    if (!read_profile(config_path.c_str())) return 0;
+  }
 #ifdef _WIN32
   try {
     if (!load()) return 0;

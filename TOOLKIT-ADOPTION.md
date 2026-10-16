@@ -31,8 +31,8 @@ Audited 2026-10-04 (read-only standards audit); STD-001 and STD-010 revised 2026
 | STD-020 | Standard feature checklist per game | adopted | Row in the portfolio grid (dbce-project-mgmt PROJECTS.md) |
 | STD-021 | art of rally is the FFB reference | pending | Own condition-effect model (spring, damper, road), default 40; Strength 50 trace exported (docs/FFB-COMPARISON.md); physical comparison with art at 50 pending |
 | STD-022 | One triple-screen selector | adopted | Launcher: the Triple Screen mod on/off is Off, then Display layout "Surround" / "Separate monitors" (labels aligned 2026-10-07; saved values stay Span/Separate) |
-| STD-023 | Frame-rate readout in the settings panel and the log | unchecked | Ctrl+F7 sets the presentation frame rate; no measured readout yet |
-| STD-024 | Optional on-screen frame-rate counter | unchecked | As STD-023 |
+| STD-023 | Frame-rate readout in the settings panel and the log | partial | October 15 source candidate reuses the unchanged toolkit FrameWindow/FormatFrameLine for ten-second measured center-window presentation summaries, with average/1% low/worst frame and bounded log cadence. Existing launcher settings describe the measurement; live in-game settings panel remains absent. Authored fixtures and graphical build/render checks are not yet run. See docs/2026-10-15-presentation-counter.md. |
+| STD-024 | Optional on-screen frame-rate counter | partial | October 15 source adds ShowFPS (default off) in the existing launcher Presentation FPS options and centers the summary at the bottom of the center game view for GL/SDL. Source only; rendered/physical acceptance remains open. |
 | STD-025 | One force model for every tyre game | n/a | Hover machines with no tyre model; the condition-effect model stays game-specific |
 | STD-026 | Deliberate player tuning | partial | Launcher exposes steering/crash; saved legacy auxiliary level is retained. Reviewed candidate installed October 8; launcher rendering and owner feel pending. |
 | STD-027 | Independent steering and effect strengths | partial | October 8 candidate splits spring/fallback from damping/road; preserves legacy model 2 and adds model 3/headless header. Build, model/lifecycle/provider and adapter tests pass; rendering and feel pending. See docs/2026-10-08-steering-strength.md. |
@@ -151,3 +151,48 @@ follow-up HUD distinguishes admitted extras capability from extras-off warning;
 clean private graphical build/stage is pending. Game source remains local-only,
 with public publication deferred. Native force ownership/snapshot adoption is
 separately deferred; schema-2 and other pending/unchecked rows remain open.
+
+October 15 source follow-up for STD-035: Shared profile admission now bounds
+the binary config stream to 1 MiB plus one byte before scanning the unchanged
+Controls/Extras bytes. Four boundary/oversize cases extend the existing
+ABI-fake host; they are authored but unexecuted pending a named slot. The
+toolkit remains the binding parser and input owner. See
+`docs/2026-10-15-bounded-shared-profile-read.md`.
+
+October 15 source preparation for STD-013/030/035/036: the game selects a
+keyboard/mouse-only Shared launcher provider and the paired UI suppression
+flag, without invoking native wheel/force callbacks or saving legacy controls.
+Callback-spy cases are authored; the explicit-ROM admission restriction stays
+until the actual standalone F-Zero/C4 bundle and launcher action are connected.
+Paired UI source rebuild is required. See
+`docs/2026-10-15-shared-launcher-preparation.md`.
+
+October 16 connected source for STD-013/030/035/036: paired launcher217ce445
+and standalone helper source b8396ecc connect the existing external C4 editor
+through a qualified optional controls-setup bundle. Runtime checks only the
+bounded helper EXE/manifest identities. Configure result4 starts the exact
+helper with PID/creationFILETIME, then exits before Core; the helper retains
+its real process guard. Only a matching real bundle admits keyboard/mouse
+Shared launch; absent bundle keeps the old refusal. Game-window Start rechecks
+the current profile/backend/extras/force state before one existing owner.
+All new fixtures/build/package/runtime checks are unrun; owner installation
+and inline in-game editor parity stay open. See
+`docs/2026-10-15-shared-launcher-connected.md`.
+
+## Optional controls setup install ownership - source only (October15)
+
+STD-032: existing installer gains explicit PrivateControlsSetup with PrivateSharedInput,
+reuses setup_bundle.py admission and linked identities, records complete helper paths,
+and restores/removes those exact files through its existing backup transaction.
+Implicit withdrawal/unowned overwrite refuse. No owner settings or Deluxe gate change.
+Authored inert ownership/admission checks remain unrun; no install/rollback claim.
+STD-019 unchecked; STD-021/031 physical normalization and STD-037 schema2 remain pending.
+See docs/2026-10-15-controls-setup-install-ownership.md.
+
+STD-032 source review172399 successor: internal rollback uses its admitted
+transaction inventory if final receipt output is truncated; manual rollback
+keeps the existing ownership guard. Complete helper install receipts alone use
+the reused JSON validator with an explicit 2 MiB cap; status/session reads keep
+64 KiB and duplicate-field rejection. Focused inert-file cases are authored and
+unrun. No owner install/rollback or live-candidate qualification is claimed;
+the existing unchecked/pending standards above remain unchanged.

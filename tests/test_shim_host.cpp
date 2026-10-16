@@ -25,7 +25,7 @@ int main(int argc,char **argv) {
  _putenv_s("FZERO_FAKE_BAD_ABI",""); _putenv_s("FZERO_FAKE_BAD_RECORD",""); _putenv_s("FZERO_FAKE_BAD_STOP","");
  _putenv_s("FZERO_SHIM_SESSION_FILE",""); _putenv_s("FZERO_SHIM_BATCH_FILE",""); _putenv_s("FZERO_SHIM_SESSION_NONCE","");
  _putenv_s("FZERO_FAKE_EXPIRED",""); _putenv_s("FZERO_FAKE_NO_PROVENANCE","");
- CHECK(FzeroShimPrepare("does-not-exist.ini",0,0,0,0));
+ CHECK(FzeroShimPrepare("does-not-exist.ini",0,0,0,0,0));
  CHECK(!FzeroShimRequested() && !FzeroNoForceLatched());
  CHECK(FzeroShimStart(nullptr,nullptr) && FzeroShimStop());
  if(mode=="off") { std::printf("shim host off: %u checks\n",checks); return 0; }
@@ -50,10 +50,10 @@ int main(int argc,char **argv) {
    if(mode!="session") _putenv_s("FZERO_SHIM_BATCH_FILE",batch.string().c_str());
  }
  if(mode=="args" || mode=="replay" || mode=="session") {
-   CHECK(!FzeroShimPrepare(cfg.string().c_str(),mode!="args",mode=="replay",0,0));
+   CHECK(!FzeroShimPrepare(cfg.string().c_str(),mode!="args",mode=="replay",0,0,0));
    CHECK(FzeroShimRequested() && FzeroNoForceLatched()); CHECK(!std::filesystem::exists(run));
  } else {
-   CHECK(FzeroShimPrepare(cfg.string().c_str(),1,0,0,0));
+   CHECK(FzeroShimPrepare(cfg.string().c_str(),1,0,0,0,0));
    CHECK(FzeroShimRequested() && FzeroNoForceLatched());
    CHECK(FzeroTelemetryDeliveryBlocked());
    FzeroTelemetryInit(cfg.string().c_str()); CHECK(FzeroTelemetryDeliveryBlocked());
