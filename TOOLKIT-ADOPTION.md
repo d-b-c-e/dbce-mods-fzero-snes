@@ -273,3 +273,15 @@ helper32bfd0bd now passes matching private build, report smoke, seven bundle
 and five native/UI/no-bundle checks; 16 existing Core passes reused. This
 advances offline STD-004/030 integration only; rendered/owner/physical and
 STD-019/021/031/037 gates stay unchanged. See the existing Help report note.
+
+October16 request193338 reconciles the delivery handoff against those original
+results and the existing installer source. STD-032's optional Shared/helper
+ownership and rollback are implemented; the old statement that only launcher
+and WheelFfb are owned is historical. Previous c814 disposable install02 passed,
+but exact report-helper/resolver candidate assembly and install/rollback remain
+unqualified. STD-004/030's conditional Shared launcher and report action are
+source-integrated and offline-built, not rendered acceptance. Shared physical
+FFB, schema-2 and dedicated host save/rewind remain deferred implementation;
+no ABI/pin/default changes or new tests accompany this documentation correction.
+All 37 ledger IDs remain present; existing partial/pending states are retained.
+See docs/2026-10-12-delivery-readiness.md for the exact remaining checks.
