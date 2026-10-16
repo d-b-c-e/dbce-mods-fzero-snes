@@ -27,3 +27,20 @@ withdrawal guards, whole admission, linked identity mismatch and mutated payload
 No fixture, Python admission, installer, compiler or game was executed here.
 No owner installation, merge or publication. Actual install/rollback validation
 on a disposable folder and independent review remain pending a named slot.
+
+Source successor172399 addresses two review findings without changing the live
+private candidate. Internal copy/receipt-write failure recovery passes the
+already-admitted helper paths to Restore-Files; it cannot depend on parsing a
+receipt that the failed write truncated. Backup hashes, bounded restore paths
+and link checks still run before restoration. Manual -Rollback supplies no such
+inventory and retains the current-receipt/older-backup ownership guard.
+
+Only SessionInstallReceipt uses an explicit 2 MiB JSON bound for complete helper
+ownership. SessionJson retains 64 KiB for status/session metadata. Both use the
+same existing duplicate-field parser and bound/path validation. This admits the
+qualified helper's more-than-64-KiB receipt without broadening unrelated reads.
+Test-ControlsSetupRecovery.ps1 adds focused inert-file partial-receipt recovery,
+empty internal inventory, manual ownership refusal, valid large receipt,
+unchanged status bound, oversized install receipt and duplicate-field cases.
+Its default is inert; bodies remain authored/unrun. No installer, fixture body,
+build, game, owner or current live-candidate change occurred in preparation.

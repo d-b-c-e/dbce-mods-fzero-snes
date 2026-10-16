@@ -117,14 +117,23 @@ function Private-SharedSources([string]$SourceRoot, [string]$BuildRoot) {
     if ($extras) { $metadata.extrasAbi=1; $metadata.extras=Shared-ExtrasDescriptor }
     @{ files=$files; metadata=$metadata }
 }
-function Restore-Files([string]$from, $state) {
+function Restore-Files([string]$from, $state,
+    [AllowEmptyCollection()][string[]]$AdmittedCurrentHelperPaths) {
     # Fixed owned paths only; validate every backup before the first mutation.
     # Earlier backups predate the companion. Restore only their inventory;
     # their old receipt cannot authorize a leftover companion for execution.
     $restoreFiles = @($state.files | ForEach-Object { $_.name })
-    $currentReceiptPath = Join-Path $Target $receiptName
-    $currentReceipt = if (Test-Path -LiteralPath $currentReceiptPath -PathType Leaf) { Get-Content -LiteralPath $currentReceiptPath -Raw | ConvertFrom-Json } else { $null }
-    $currentHelperPaths = @($currentReceipt.files | Where-Object { $_.name -match '^(?i:controls-setup)[\\/]' } | ForEach-Object { $_.name })
+    if ($PSBoundParameters.ContainsKey('AdmittedCurrentHelperPaths')) {
+        # Internal failure recovery already admitted this complete transaction.
+        # The failed final receipt write may have left unreadable JSON on disk.
+        $currentHelperPaths = @($AdmittedCurrentHelperPaths)
+        if (@($currentHelperPaths | Where-Object { !(Test-PrivateControlsOwnedPath $_) }).Count) { throw 'Invalid admitted helper transaction inventory.' }
+    } else {
+        # Manual rollback still proves the current install fits this backup.
+        $currentReceiptPath = Join-Path $Target $receiptName
+        $currentReceipt = if (Test-Path -LiteralPath $currentReceiptPath -PathType Leaf) { Get-Content -LiteralPath $currentReceiptPath -Raw | ConvertFrom-Json } else { $null }
+        $currentHelperPaths = @($currentReceipt.files | Where-Object { $_.name -match '^(?i:controls-setup)[\\/]' } | ForEach-Object { $_.name })
+    }
     if (@($currentHelperPaths | Where-Object { $_ -cnotin $restoreFiles }).Count) { throw 'This backup predates the current helper inventory. Roll back the helper install using its own backup first.' }
     if (@($restoreFiles | Select-Object -Unique).Count -ne $restoreFiles.Count -or
         @($restoreFiles | Where-Object { $_ -cnotin $restorableFiles -and !($state.privateControlsSetup -and (Test-PrivateControlsOwnedPath $_)) }).Count -or
@@ -318,7 +327,7 @@ if ($PrivateControlsSetup) {
 $receipt | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $Target $receiptName) -Encoding utf8
 } catch {
     $failure = $_
-    Restore-Files $backup $state
+    Restore-Files $backup $state -AdmittedCurrentHelperPaths @($owned | Where-Object { Test-PrivateControlsOwnedPath $_ })
     throw $failure
 }
 "installed $($changes -join ', ') from $commit; backup deployment-backups\$stamp; receipt install-receipt.json"

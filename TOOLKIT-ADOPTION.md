@@ -188,3 +188,11 @@ Implicit withdrawal/unowned overwrite refuse. No owner settings or Deluxe gate c
 Authored inert ownership/admission checks remain unrun; no install/rollback claim.
 STD-019 unchecked; STD-021/031 physical normalization and STD-037 schema2 remain pending.
 See docs/2026-10-15-controls-setup-install-ownership.md.
+
+STD-032 source review172399 successor: internal rollback uses its admitted
+transaction inventory if final receipt output is truncated; manual rollback
+keeps the existing ownership guard. Complete helper install receipts alone use
+the reused JSON validator with an explicit 2 MiB cap; status/session reads keep
+64 KiB and duplicate-field rejection. Focused inert-file cases are authored and
+unrun. No owner install/rollback or live-candidate qualification is claimed;
+the existing unchecked/pending standards above remain unchanged.
