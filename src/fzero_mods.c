@@ -549,3 +549,17 @@ const RecompLauncherCModProvider *FzeroModsProviderWheel(
                      sizeof(ffb_device));
   return provider;
 }
+
+void FzeroModsConfigureLauncherInput(
+    RecompLauncherCGameInfo *game, int shared_input,
+    FzeroVideoSettings *settings, const char *video_path,
+    const char *control_path, const char *wheel_guid,
+    void (*write_ini)(const char *, const char *, const char *, const char *),
+    int (*list_ffb_devices)(char names[][256], int max_devices),
+    int (*read_wheel_axis)(const char *guid, int axis, int *value)) {
+  if (!game) return;
+  game->disable_native_controllers = shared_input != 0;
+  game->mods = shared_input ? FzeroModsProvider(settings, video_path)
+      : FzeroModsProviderWheel(settings, video_path, control_path, wheel_guid,
+          write_ini, list_ffb_devices, read_wheel_axis);
+}

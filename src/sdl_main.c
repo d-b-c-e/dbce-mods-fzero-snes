@@ -589,11 +589,13 @@ static void save_launcher_settings(const RecompLauncherCSettings *settings) {
   launcher_ini_kv_write(g_config_path, "Sound", "Msu1Enabled", number);
   launcher_ini_kv_write(g_config_path, "Sound", "Msu1Dir", settings->msu1_dir);
 
-  launcher_ini_kv_write(g_config_path, "Controller", "GuidP1", settings->player_gamepad_guid[0]);
-  snprintf(number, sizeof(number), "%d", settings->player_src[0]);
-  launcher_ini_kv_write(g_config_path, "Controller", "SourceP1", number);
-  snprintf(number, sizeof(number), "%d", settings->deadzone[0]);
-  launcher_ini_kv_write(g_config_path, "Controller", "DeadzoneP1", number);
+  if (!FzeroShimOrdinary()) {
+    launcher_ini_kv_write(g_config_path, "Controller", "GuidP1", settings->player_gamepad_guid[0]);
+    snprintf(number, sizeof(number), "%d", settings->player_src[0]);
+    launcher_ini_kv_write(g_config_path, "Controller", "SourceP1", number);
+    snprintf(number, sizeof(number), "%d", settings->deadzone[0]);
+    launcher_ini_kv_write(g_config_path, "Controller", "DeadzoneP1", number);
+  }
 
   snprintf(number, sizeof(number), "%d", settings->rewind_enabled ? 1 : 0);
   launcher_ini_kv_write(g_config_path, "Rewind", "Enabled", number);
@@ -613,6 +615,7 @@ static void launcher_steering_probe_close(void) {
 }
 
 static int launcher_steering_axis(const char *guid, int axis, int *value) {
+  if (FzeroShimUsingInput()) return 0;
   if (!guid || !guid[0] || !value || axis < 0) return 0;
 #if SNESRECOMP_SDL3
   bool attached = s_launcher_steering_stick && SDL_JoystickConnected(s_launcher_steering_stick);
@@ -714,10 +717,9 @@ static int resolve_rom(const char *executable, const char *explicit_rom,
   game.has_shader = 1;
   game.msu1_supported = 1;
   game.msu1_note = "Select a music folder with PCM tracks and the matching Conn/Cubear v11 patch: f-zero_msu1_stock.ips for stock F-Zero, f-zero_msu1.ips for BS Deluxe.";
-  game.mods = FzeroModsProviderWheel(&g_video, kVideoConfig, g_config_path,
-                                    settings->player_gamepad_guid[0],
-                                    launcher_ini_kv_write, FzeroFfbListDevices,
-                                    launcher_steering_axis);
+  FzeroModsConfigureLauncherInput(&game, FzeroShimOrdinary(), &g_video,
+      kVideoConfig, g_config_path, settings->player_gamepad_guid[0],
+      launcher_ini_kv_write, FzeroFfbListDevices, launcher_steering_axis);
   game.rom_cache_path = "rom.cfg";
   /* Draws the Controls page's SaveStateMenu and Rewind rows, and the
    * Settings page's rewind enable / depth / interval controls. The hotkey

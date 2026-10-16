@@ -18,6 +18,45 @@ static int list_ffb(char names[][256], int max_devices) {
   strcpy(names[1], "Other FFB wheel");
   return 2;
 }
+static void unexpected_write(const char *path, const char *section, const char *key, const char *value) {
+  (void)path; (void)section; (void)key; (void)value;
+  CHECK(0); /* Shared must not persist native wheel or force options. */
+}
+static int unexpected_list(char names[][256], int max_devices) {
+  (void)names; (void)max_devices; CHECK(0); return 0;
+}
+static int unexpected_axis(const char *guid, int axis, int *value) {
+  (void)guid; (void)axis; (void)value; CHECK(0); return 0;
+}
+static void test_shared_launcher_selection(void) {
+  FzeroVideoSettings video; FzeroVideoDefaults(&video);
+  RecompLauncherCGameInfo game = {0};
+  CHECK(!game.disable_native_controllers);
+  FzeroModsConfigureLauncherInput(&game, 1, &video, "shared-launcher-video.ini",
+      "not-opened-controls.ini", "030000004c0500006802000000000000",
+      unexpected_write, unexpected_list, unexpected_axis);
+  CHECK(game.disable_native_controllers && game.mods);
+  CHECK(game.mods->feature_count(NULL) == 7 && !game.mods->select_controller);
+  CHECK(!FzeroModsWheelGuid()[0]);
+  for (int i = 0; i < game.mods->feature_count(NULL); ++i) {
+    RecompLauncherCModFeature f;
+    CHECK(game.mods->feature_get(NULL, i, &f));
+    CHECK(strcmp(f.id, "wheel") && strcmp(f.id, "force-feedback"));
+  }
+  CHECK(!game.mods->feature_set_option(NULL, "fzero-wheel", "wheel", "SteeringAxis", "0"));
+  CHECK(!game.mods->feature_enable(NULL, "fzero-ffb", "force-feedback", 1));
+  CHECK(game.mods->commit(NULL, NULL)); // video settings only; callbacks above must remain untouched
+  CHECK(remove("shared-launcher-video.ini") == 0);
+  // Native explicitly clears the opt-in and retains its existing device/preview provider.
+  FzeroModsConfigureLauncherInput(&game, 0, &video, "native-launcher-video.ini",
+      "native-launcher-controls.ini", "030000004c0500006802000000000000",
+      NULL, list_ffb, read_live_axis);
+  CHECK(!game.disable_native_controllers && game.mods->feature_count(NULL) == 9);
+  CHECK(game.mods->select_controller);
+  RecompLauncherCModFeature wheel;
+  CHECK(game.mods->feature_get(NULL, 5, &wheel) && !strcmp(wheel.id, "wheel"));
+  CHECK(strstr(wheel.status, "Steering preview:"));
+}
 static void note_ini(const char *path, const char *section,
                      const char *key, const char *value) {
   CHECK(!strcmp(path, "wheel-options.ini"));
@@ -326,6 +365,7 @@ int main(void) {
   remove("test-mods.ini");
   remove("wheel-options.ini");
   test_selection_rebind();
+  test_shared_launcher_selection();
   puts("Independent widescreen and presentation FPS plugins passed");
   return 0;
 }

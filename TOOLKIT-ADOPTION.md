@@ -158,3 +158,11 @@ Controls/Extras bytes. Four boundary/oversize cases extend the existing
 ABI-fake host; they are authored but unexecuted pending a named slot. The
 toolkit remains the binding parser and input owner. See
 `docs/2026-10-15-bounded-shared-profile-read.md`.
+
+October 15 source preparation for STD-013/030/035/036: the game selects a
+keyboard/mouse-only Shared launcher provider and the paired UI suppression
+flag, without invoking native wheel/force callbacks or saving legacy controls.
+Callback-spy cases are authored; the explicit-ROM admission restriction stays
+until the actual standalone F-Zero/C4 bundle and launcher action are connected.
+Paired UI source rebuild is required. See
+`docs/2026-10-15-shared-launcher-preparation.md`.
