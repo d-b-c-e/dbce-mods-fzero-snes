@@ -285,3 +285,14 @@ FFB, schema-2 and dedicated host save/rewind remain deferred implementation;
 no ABI/pin/default changes or new tests accompany this documentation correction.
 All 37 ledger IDs remain present; existing partial/pending states are retained.
 See docs/2026-10-12-delivery-readiness.md for the exact remaining checks.
+
+October16 request193417 closes that exact-candidate local assembly gate using
+unchanged game19afaf25/UI6d9b715/helper32bfd0bd. Existing real installer with
+default Python verified537 owned files, rollback restored the disposable
+bootstrap baseline and final installation leaves a578-file private Deluxe
+candidate. Three missing app-local release CRT files were added as separately
+identified candidate assets; recursive native imports and unchanged owned bytes
+then passed. Original failed import check remains retained. STD-032 advances
+local packaging evidence only; no owner install, runtime/physical acceptance,
+ABI/pin change or public redistribution approval. Existing partial/pending
+states remain unchanged.

@@ -35,6 +35,39 @@ See [report/build results](2026-10-16-help-report-route.md),
 [trace interpretation](2026-10-16-launcher-mouse-trace.md).
 No owner-installed copy, default backend or force tune changed in this closeout.
 
+### Disposable private assembly complete (193417)
+
+The exact qualified image/helper are now assembled at
+`E:/fzero-research/private-candidate-nemo-20261016/candidate` (578 current files,
+excluding rollback backups). This is an embedded Deluxe **private** directory,
+not the stock/public ZIP. Original binary, UI and helper identities above are
+unchanged. No rebuild, owner installation or additional ROM/save/config copy.
+
+An exact clean detached 19afaf25 checkout ran the existing
+`Install-StreamDeck.ps1` with both private flags and the default Python resolver.
+All 537 owned file hashes and complete helper admission passed; existing rollback
+restored the entire bootstrap/unowned baseline. A final install leaves the
+candidate ready. Bootstrap assets/notices came only from allowlisted matching UI
+build/source files and source shaders, with fonts/images compared to the paired UI.
+
+The final import check exposed three missing CRT DLLs in this fresh folder.
+That original failure remains in `result.json`; successful install/rollback logs
+are retained. A narrow completion added unmodified `msvcp140.dll`,
+`vcruntime140.dll` and `vcruntime140_1.dll` from the installed VS x64 release
+redistributable directory, plus `licenses/vc-runtime.txt` identifying its origin
+and Microsoft documentation. These are additional candidate assets, outside the
+537-file updater inventory. Recursive native import closure and unchanged
+537-file/helper/launcher verification then passed, with no installer-test repeat.
+This closes local assembly, not public redistribution review or runtime loading.
+
+One concise result: `E:/fzero-research/private-candidate-nemo-20261016/assembly.json`,
+SHA-256 `015ED1B73BDBACD7ADD016098FC045F03DA048C94534E7EC0FB0D065B942C8A0`.
+`runtime-result.json` records PASS and actual lease release at
+20:14:58.2846158Z; the slot was handed back before documentation. Receipt SHA-256
+is `FF78EAFF1179C703A9BE9AC483AA22C2DF3A2069FAA67D5ECC14E3FB9ED380B5`.
+Activation/report rendering, physical controls and the deferred implementations
+below remain open; no game/helper UI or native device was opened.
+
 ## Delivery implemented
 
 October 13 evidence update: clean source `51999e3` privately staged stock with the
@@ -90,16 +123,16 @@ exercise physical wheel axes, force, an owner installation, or Wheelkit's UI.
 | Shared physical FFB | Shared+enabled FFB is explicitly refused | Reuse the single-owner toolkit/provider bridge being developed for OutRun, then source and muted qualification before attended force checks. No new competing force lease. |
 | Actual owner controls | The moving ordinary Practice capture used explicitly synthetic keyboard input, not the owner's physical wheel | Fresh attended Shared drive once complete wheel-button/force delivery is ready; keep the private Practice tape as synthetic-input evidence. |
 | Ctrl+F11 | Production key routing and stop behavior tested offline; graphical runs used frame bounds/normal close | One attended stop-key check, no OS-key injection in the unattended wrapper. |
-| Installed delivery | Existing installer implements explicit PrivateSharedInput/PrivateControlsSetup ownership and rollback, including the full helper inventory. Prior c814 disposable install02 verified 537 owned files and restored nine originals; it predates the report helper and resolver successor | Qualify an assembled exact candidate through the existing disposable install/rollback route before owner delivery. The current native image is stamped 19afaf25; current-source guards intentionally refuse relabeling it from a later checkout. Reuse an exact clean build source or build the final source once. Do not use the stock-only stager for embedded Deluxe. |
+| Installed delivery | Exact 19afaf25/report-helper candidate now passes default-resolver disposable install, 537-file verification, rollback restoration and final assembly; native import closure is complete | Owner path remains untouched. Preserve exact-source guards and private Deluxe identity; a later owner delivery must account for candidate assets/CRT in addition to the updater-owned inventory. Do not use the stock-only stager for embedded Deluxe. |
 | Public package | No new binary release; current DLL is private-only and Deluxe contains embedded cartridge data | Resolve shim source/notices and Deluxe distribution separately. Review the clean stock receipt and public first-launch preservation before promotion. |
 
 The current source/package work does not depend on rewriting accepted FFB or
 triple-screen settings. These are capability gaps, not new user approval steps.
 
-The remaining packaging gate is exact-candidate assembly/admission and disposable
-install/rollback, including the default Python resolver; its prior c814 result
-does not qualify these newer bytes. The broader authored installer suite also
-remains unrun. The launcher activation/report path needs a concrete observed
+Exact-candidate local assembly/admission and disposable install/rollback are now
+qualified as recorded above. The broader authored installer suite remains unrun;
+it was not repeated as a substitute for the real candidate transaction.
+The launcher activation/report path needs a concrete observed
 result, followed by attended physical controls/stop-key checks. Shared physical
 FFB is a separate deferred implementation, not a runtime-only gate: Shared+FFB
 still refuses, and the single-owner bridge is deliberately outside this lane.
