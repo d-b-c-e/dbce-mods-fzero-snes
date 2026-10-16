@@ -11,6 +11,7 @@ extern "C" {
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <cstring>
 #include <process.h>
 #include <io.h>
 static unsigned checks;
@@ -37,7 +38,7 @@ int main(int argc,char **argv) {
  const bool extras_first=mode=="extrasfirst" || mode=="extrasbom";
  std::string original=(mode=="extrasbom"?std::string("\xef\xbb\xbf"):"")+
   (extras_first?extra_section:"")+"[Input]\r\nBackend="+std::string(mode=="native"?"Native":mode=="unknown"?"Typo":"Shared")+
-  "\r\nSharedExtras="+(extras || mode=="native" || mode=="replay"?"1":"0")+"\r\n"+profile+(extras_first?"":extra_section)+
+  "\r\nSharedExtras="+(extras || mode=="native" || mode=="replay"?"1":"0")+"\r\n"+(mode=="launcherempty"?"":profile)+(extras_first?"":extra_section)+
   (mode=="extrasduplicate"?extras_profile:"")+"[ForceFeedback]\r\nEnabled="+(force?"1":"0")+"\r\nStrength=12\r\n[Telemetry]\r\nEnabled=1\r\n";
  const bool config_limit=mode=="configlimit" || mode=="extrasconfiglimit";
  const bool config_oversize=mode=="configoversize" || mode=="extrasconfigoversize";
@@ -49,11 +50,17 @@ int main(int argc,char **argv) {
  }
  {std::ofstream f(cfg,std::ios::binary);f<<original;}
  if(mode=="session") _putenv_s("FZERO_SHIM_SESSION_NONCE","noordinaryinjection");
- bool prepared=FzeroShimPrepare(cfg.string().c_str(),mode!="launcher",mode=="replay",0,1)!=0;
+ const bool launcher_mode=mode.rfind("launcher",0)==0;
+ bool prepared=FzeroShimPrepare(cfg.string().c_str(),!launcher_mode,mode=="replay",0,
+     !launcher_mode || mode=="launcherrecord",
+     launcher_mode && mode!="launcher")!=0;
  if(mode=="native" || mode=="replay") {
   CHECK(prepared && !FzeroShimUsingInput() && !FzeroNoForceLatched());
   CHECK(FzeroShimStart(nullptr,"fixture") && FzeroShimStop());
- } else if(mode=="force" || mode=="unknown" || mode=="session" || mode=="launcher" || mode=="extrasnosection" || mode=="extrasduplicate" || config_oversize) {
+ } else if(mode=="launcherempty") {
+  CHECK(prepared && FzeroShimOrdinary() && FzeroNoForceLatched());
+  CHECK(!std::filesystem::exists(root/"diagnostics") && FzeroShimStop()); // Configure/quit has no owner to stop
+ } else if(mode=="force" || mode=="unknown" || mode=="session" || mode=="launcher" || mode=="launcherrecord" || mode=="extrasnosection" || mode=="extrasduplicate" || config_oversize) {
   CHECK(!prepared && !std::filesystem::exists(root/"diagnostics"));
   CHECK(!FzeroTelemetryDeliveryBlocked());
   if(config_oversize) {
@@ -69,6 +76,18 @@ int main(int argc,char **argv) {
   CHECK(!std::filesystem::exists(root/"diagnostics")); // Prepare is read-only
   if(mode=="forcechanged") { // edit existing key, not a duplicate-section test
    auto changed=original;changed.replace(changed.find("Enabled=0"),9,"Enabled=1");
+   std::ofstream f(cfg,std::ios::binary);f<<changed;
+  }
+  std::string applied_profile=profile;
+  if(mode=="launchersaved") {
+   applied_profile.replace(applied_profile.find("Profile=fixture"),std::strlen("Profile=fixture"),"Profile=launcher-saved");
+   auto changed=original;changed.replace(changed.find(profile),profile.size(),applied_profile);
+   std::ofstream f(cfg,std::ios::binary);f<<changed;
+  }
+  if(mode=="launcherbackendchanged" || mode=="launcherbadextras") {
+   auto changed=original;
+   if(mode=="launcherbackendchanged") changed.replace(changed.find("Backend=Shared"),std::strlen("Backend=Shared"),"Backend=Native");
+   else changed.replace(changed.find("SharedExtras=0"),std::strlen("SharedExtras=0"),"SharedExtras=3");
    std::ofstream f(cfg,std::ios::binary);f<<changed;
   }
   if(mode=="profile") _putenv_s("FZERO_FAKE_BAD_PROFILE","1");
@@ -87,14 +106,14 @@ int main(int argc,char **argv) {
    CHECK(startup.find("revision=fixture-revision\n")!=std::string::npos);
    CHECK(startup.find("sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n")!=std::string::npos);
   } else CHECK(startup.find(accepted)==std::string::npos);
-  if(mode=="forcechanged" || mode=="extrasabi") {
+  if(mode=="forcechanged" || mode=="extrasabi" || mode=="launcherbackendchanged" || mode=="launcherbadextras") {
    CHECK(!started && !std::filesystem::exists(root/"diagnostics"));
    CHECK(!FzeroShimStop());
    {std::ofstream f(cfg,std::ios::binary);f<<original;}
   } else {
    auto entries=std::filesystem::directory_iterator(root/"diagnostics");
    auto run=entries->path();++entries;CHECK(entries==std::filesystem::directory_iterator());
-   CHECK(read(run/"profile.spy")==profile+extra_section && read(run/"flags.spy")=="0");
+   CHECK(read(run/"profile.spy")==applied_profile+extra_section && read(run/"flags.spy")=="0");
    if(extras) CHECK(read(run/"declaration.spy")==kFzeroShimExtrasDeclaration);
    else CHECK(!std::filesystem::exists(run/"declaration.spy"));
    if(mode=="profile" || mode=="profileinfo" || mode=="extrasinfo") CHECK(!started && !FzeroShimStop());
@@ -141,6 +160,7 @@ int main(int argc,char **argv) {
    CHECK(read(run/"stop.spy")=="stopped");
   }
  }
+ if(mode=="launchersaved") {std::ofstream f(cfg,std::ios::binary);f<<original;}
  CHECK(read(cfg)==original);
  CHECK(std::filesystem::canonical(root).parent_path()==std::filesystem::canonical(temp));
  std::filesystem::remove_all(root);

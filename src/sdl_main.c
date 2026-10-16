@@ -25,6 +25,7 @@
 #include "fzero_state_mode.h"
 #include "fzero_diagnostics.h"
 #include "fzero_frame_stats.h"
+#include "fzero_setup.h"
 #include "fzero_build.h"
 
 #include "common_rtl.h"
@@ -110,6 +111,7 @@ static void publish_session_status(bool force) {
   g_session_status_retry = now + 250;
 }
 static bool g_shared_profile_preview;
+static bool g_setup_available;
 /* Explicit automation isolation lasts through Stop and ordinary game close.
  * Output mute alone never changes human save/config/host-button semantics. */
 static bool g_isolated_owner_state;
@@ -720,6 +722,7 @@ static int resolve_rom(const char *executable, const char *explicit_rom,
   FzeroModsConfigureLauncherInput(&game, FzeroShimOrdinary(), &g_video,
       kVideoConfig, g_config_path, settings->player_gamepad_guid[0],
       launcher_ini_kv_write, FzeroFfbListDevices, launcher_steering_axis);
+  game.has_configure_controls = FzeroShimOrdinary() && g_setup_available;
   game.rom_cache_path = "rom.cfg";
   /* Draws the Controls page's SaveStateMenu and Rewind rows, and the
    * Settings page's rewind enable / depth / interval controls. The hotkey
@@ -782,6 +785,19 @@ static int resolve_rom(const char *executable, const char *explicit_rom,
    * persist a typed resolution (and other mod choices) when quitting as well. */
   if (!FzeroVideoSave(&g_video, kVideoConfig))
     fprintf(stderr, "[fzero-launcher] unable to save video/mod settings\n");
+  if (action == RECOMP_LAUNCHER_RESULT_CONFIGURE_CONTROLS) {
+    char why[256];
+    if (!FzeroShimOrdinary() || !FzeroSetupLaunch(why, sizeof(why))) {
+      if (!FzeroShimOrdinary()) snprintf(why, sizeof(why), "Controls setup requires the Shared launcher.");
+      fprintf(stderr, "[fzero-setup] %s\n", why);
+      SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Controls setup unavailable", why, NULL);
+      return -1;
+    }
+    // run_window has torn down its HWND/platform. The helper's exact-process
+    // wait must complete before setup reads state; this path never opens Core.
+    fprintf(stderr, "[fzero-setup] setup started; closing launcher. Relaunch F-Zero after saving controls.\n");
+    return 0;
+  }
   if (action == 1) return 0;
   if (action == 0 && path[0]) return 1;
   if (initial_rom[0]) {
@@ -2247,8 +2263,12 @@ int main(int argc, char **argv) {
   const char *early_replay = getenv("FZERO_REPLAY_PLAYTHROUGH");
   const char *early_record = getenv("FZERO_RECORD_PLAYTHROUGH");
   bool recorded_replay = early_replay && *early_replay;
+  g_setup_available = (!explicit_rom || force_launcher) && !recorded_replay &&
+      !FzeroReplayHasInput() && !g_isolated_owner_state && !(early_record && *early_record) &&
+      FzeroSetupAvailable();
   if (!FzeroShimPrepare(g_config_path, explicit_rom && !force_launcher,
-                        recorded_replay, FzeroReplayHasInput(), early_record && *early_record))
+                        recorded_replay, FzeroReplayHasInput(), early_record && *early_record,
+                        g_setup_available))
     return 2;
   if (g_isolated_owner_state) {
 #if defined(SNES_COSIM) || defined(SNESRECOMP_NET) || SNESRECOMP_ENABLE_MODS
@@ -2282,7 +2302,10 @@ int main(int argc, char **argv) {
   RecompLauncherCSettings launcher_settings;
   int resolve_result =
       resolve_rom(argv[0], explicit_rom, force_launcher, rom_path, sizeof(rom_path), &launcher_settings);
-  if (resolve_result <= 0) return resolve_result == 0 ? 0 : 2;
+  if (resolve_result <= 0) {
+    FzeroTelemetryShutdown();
+    return resolve_result == 0 ? 0 : 2;
+  }
   if (!g_video.enhanced) {
     g_video.aspect = launcher_aspect(launcher_settings.aspect_index);
     if (!g_isolated_owner_state && !FzeroShimRequested() && !recorded_replay && !FzeroVideoSave(&g_video, kVideoConfig))

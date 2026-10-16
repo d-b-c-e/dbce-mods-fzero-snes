@@ -14,6 +14,7 @@ import struct
 import subprocess
 
 from package_unified import ROOT, UI_ASSETS, SYSTEM_DLLS, OFL_FILES, OFL_SEPARATOR, digest, pe_imports
+from setup_bundle import payload as setup_payload
 
 
 def git(root, *args):
@@ -128,7 +129,9 @@ def validate_shared_consumer(image, description, extras=False):
         raise ValueError("Private shared extras consumer lacks the linked declaration or opt-in flag")
 
 
-def stage(build, output, private_shared_input=False):
+def stage(build, output, private_shared_input=False, private_controls_setup=False):
+    if private_controls_setup and not private_shared_input:
+        raise ValueError("Private controls setup requires the owned private Shared consumer")
     cache = {}
     for line in (build / "CMakeCache.txt").read_text().splitlines():
         match = re.match(r"([^:#]+):[^=]+=(.*)", line)
@@ -199,12 +202,18 @@ def stage(build, output, private_shared_input=False):
             files["licenses/" + source.stem + ".txt"] = notice.read_bytes()
             files[source.name] = source.read_bytes()
             pending.append(source.name)
+    setup = None
+    if private_controls_setup:
+        extra, setup = setup_payload(build / "controls-setup", files["FZeroSNESRecomp.exe"])
+        files.update(extra) # Existing portable bundle already owns its runtime/notices.
     receipt = {"schema": "dbce.fzero-build", "version": 1, "productVersion": version,
                "sourceRevision": revision, "sourceTree": tree, "dirty": False,
                "bsDeluxe": False, "dependencies": links,
                "files": {n: digest(d) for n, d in sorted(files.items())}}
     if shared is not None:
         receipt["privateSharedInput"] = shared
+    if setup is not None:
+        receipt["privateControlsSetup"] = setup
     output.mkdir(parents=True, exist_ok=False)
     for name, data in files.items():
         path = output / "payload" / name
@@ -220,8 +229,10 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--private-shared-input", action="store_true",
                         help="Stage pinned private-only input DLL; public packager refuses this receipt")
+    parser.add_argument("--private-controls-setup", action="store_true",
+                        help="Stage the exact qualified portable setup bundle with the private Shared consumer")
     args = parser.parse_args()
     try:
-        print(stage(args.build.resolve(), args.output.resolve(), args.private_shared_input))
+        print(stage(args.build.resolve(), args.output.resolve(), args.private_shared_input, args.private_controls_setup))
     except (ValueError, OSError, KeyError, struct.error, subprocess.CalledProcessError) as error:
         raise SystemExit(str(error))

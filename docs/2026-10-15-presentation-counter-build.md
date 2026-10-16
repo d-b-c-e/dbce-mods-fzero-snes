@@ -2,7 +2,9 @@
 
 This is a recipe for the next named serialized slot, following coordinator
 source review `169195`. No CMake configure, compiler, fixture or executable
-was invoked to prepare it. Game changes remain `149d914` and `1cd8b02`.
+was invoked to prepare it. The original counter changes are `149d914` and
+`1cd8b02`. The connected source successor additionally requires paired launcher
+`217ce445` and the optional real helper bundle described below.
 
 ## Existing dependencies
 
@@ -18,7 +20,7 @@ read-only on October 16:
 | CMake / CTest | `C:/Program Files/CMake/bin/{cmake,ctest}.exe` |
 | Ninja | `C:/Users/antho/AppData/Local/Microsoft/WinGet/Links/ninja.exe` |
 | Framework | Canonical `snesrecomp`, clean exact `59d2966fa71d0346f92c43753e09b1ba7a1956f5` |
-| Launcher | Canonical `recomp-ui`, clean exact `5abcff892f8765bc85f91077552386a3faf41552` |
+| Launcher | `E:/Source/games/.worktrees/beni-fzero-shared-launcher-ui-20261015`, clean exact `217ce4457402555387b1a1d40ed5db75b7c68997` (paired game gitlink) |
 | Private generated stock code | Canonical `src/gen`: 20 C files, 22 total files, 9,682,437 bytes |
 | SDL package | Canonical `build-dine-extras-graphical-796cfeb/_deps/sdl3-build` |
 | Reviewed private shim | `E:/Source/_archive/2026-10-14/fzero-shim-ea568c2-bf6455e6/dbce_shim.dll` |
@@ -70,18 +72,21 @@ set "FZ_INPUT=E:\Source\games\dbce-mods-fzero-snes"
 set "FZ_OFF=%FZ_SRC%\build-counter-offline-01"
 set "FZ_GUI=%FZ_SRC%\build-counter-graphical-01"
 set "FZ_SDL=%FZ_INPUT%\build-dine-extras-graphical-796cfeb\_deps\sdl3-build"
+set "FZ_UI=E:\Source\games\.worktrees\beni-fzero-shared-launcher-ui-20261015"
 set "FZ_SHIM=E:\Source\_archive\2026-10-14\fzero-shim-ea568c2-bf6455e6\dbce_shim.dll"
 
 cmake -S "%FZ_SRC%" -B "%FZ_OFF%" -G Ninja -DCMAKE_BUILD_TYPE=Release -DFZERO_BUILD_GAME=OFF -DBUILD_TESTING=ON
-cmake --build "%FZ_OFF%" --target fzero_frame_stats_tests fzero_video_tests fzero_shim_ordinary_tests --parallel 2
-ctest --test-dir "%FZ_OFF%" -R "^(fzero_frame_stats|fzero_video|fzero_shim_ordinary_(configlimit|configoversize|extrasconfiglimit|extrasconfigoversize|normal|extras|extrasbom))$" --output-on-failure
+cmake --build "%FZ_OFF%" --target fzero_frame_stats_tests fzero_setup_tests fzero_video_tests fzero_shim_ordinary_tests --parallel 2
+ctest --test-dir "%FZ_OFF%" -R "^(fzero_frame_stats|fzero_setup|fzero_video|fzero_shim_ordinary_(configlimit|configoversize|extrasconfiglimit|extrasconfigoversize|normal|extras|extrasbom|launcher|launchersaved|launcherempty|launcherbackendchanged|launcherbadextras|launcherrecord))$" --output-on-failure
+python "%FZ_SRC%\tests\test_setup_bundle.py"
 
-cmake -S "%FZ_SRC%" -B "%FZ_GUI%" -G Ninja -DCMAKE_BUILD_TYPE=Release -DFZERO_BUILD_GAME=ON -DBUILD_TESTING=ON "-DSNESRECOMP_ROOT=%FZ_INPUT%/snesrecomp" "-DRECOMP_UI_ROOT=%FZ_INPUT%/recomp-ui" "-DFZERO_GEN_DIR=%FZ_INPUT%/src/gen" -DFZERO_DELUXE_GEN_DIR= -DFZERO_DELUXE_DATA_FILE= "-DFZERO_SHIM_DLL=%FZ_SHIM%" -DSNESRECOMP_SDL_BACKEND=SDL3 "-DSDL3_DIR=%FZ_SDL%" -DSNESRECOMP_SDL3_FETCH=OFF
+cmake -S "%FZ_SRC%" -B "%FZ_GUI%" -G Ninja -DCMAKE_BUILD_TYPE=Release -DFZERO_BUILD_GAME=ON -DBUILD_TESTING=ON "-DSNESRECOMP_ROOT=%FZ_INPUT%/snesrecomp" "-DRECOMP_UI_ROOT=%FZ_UI%" "-DFZERO_GEN_DIR=%FZ_INPUT%/src/gen" -DFZERO_DELUXE_GEN_DIR= -DFZERO_DELUXE_DATA_FILE= "-DFZERO_SHIM_DLL=%FZ_SHIM%" -DSNESRECOMP_SDL_BACKEND=SDL3 "-DSDL3_DIR=%FZ_SDL%" -DSNESRECOMP_SDL3_FETCH=OFF
 cmake --build "%FZ_GUI%" --target FZeroSNESRecomp fzero_mods_tests --parallel 2
 ctest --test-dir "%FZ_GUI%" -R "^fzero_mods$" --output-on-failure
 ```
 
-Expected focused set: **nine ROM-free cases plus one provider case**. Each
+Expected game-only focused set: **16 ROM-free cases, five Python cases and
+one provider case**. Each
 command must exit zero with the intended tests actually selected; retain the
 specific compiler warning status. The desktop target stages its normal
 dependencies/assets only inside the fresh graphical build directory. It is
@@ -92,3 +97,12 @@ Graphical compilation checks both conditional presentation branches against
 the configured SDL3 compatibility layer. It does not prove counter pixels,
 center placement, scanout or physical acceptance. Those remain a later named
 bounded observation using an isolated copy and the accepted muted harness.
+
+For the [assembled controls-setup qualification](2026-10-15-shared-launcher-connected.md),
+first build/test/publish Kiki's real helper in the same named batch, then add
+`-DFZERO_SETUP_BUNDLE=<actual verified portable stage>` to the graphical
+configure. Existing private staging also requires compiling its headless
+payload (never running it), then uses `--private-shared-input
+--private-controls-setup`. This is the one concrete extra target required by
+the existing stager; it is not part of a broad suite repeat. The two source
+guides list Beni's four UI fixtures and Kiki's focused Core/GUI checks.

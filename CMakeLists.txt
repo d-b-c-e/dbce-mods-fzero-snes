@@ -5,6 +5,22 @@ set(CMAKE_C_STANDARD 11)
 
 include(CTest)
 option(FZERO_BUILD_GAME "Build game hosts (requires privately generated ROM sources)" ON)
+set(FZERO_SETUP_BUNDLE "" CACHE PATH "Qualified private standalone controls bundle; optional, no default setup action")
+set(FZERO_SETUP_IDENTITY "${CMAKE_BINARY_DIR}/generated/fzero_setup_identity.h")
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
+if(FZERO_SETUP_BUNDLE)
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+        "${CMAKE_SOURCE_DIR}/tools/setup_bundle.py" "${FZERO_SETUP_BUNDLE}/bundle-manifest.json")
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/setup_bundle.py"
+        --bundle "${FZERO_SETUP_BUNDLE}" --header "${FZERO_SETUP_IDENTITY}"
+        RESULT_VARIABLE FZERO_SETUP_ADMISSION)
+    if(NOT FZERO_SETUP_ADMISSION EQUAL 0)
+        message(FATAL_ERROR "Private controls setup bundle admission failed")
+    endif()
+else()
+    file(WRITE "${FZERO_SETUP_IDENTITY}" "#pragma once\n#define FZERO_SETUP_QUALIFIED 0\n#define FZERO_SETUP_SOURCE_COMMIT \"\"\n#define FZERO_SETUP_MANIFEST_SHA256 \"\"\n#define FZERO_SETUP_EXE_SHA256 \"\"\n#define FZERO_SETUP_MANIFEST_BYTES 0\n#define FZERO_SETUP_EXE_BYTES 0\n")
+endif()
 add_library(fzero_video STATIC src/fzero_video.c src/fzero_mode7.c
     src/fzero_replay.c src/fzero_hdma.c src/fzero_triple_display.c)
 target_include_directories(fzero_video PUBLIC "${CMAKE_SOURCE_DIR}/src")
@@ -37,6 +53,11 @@ if(BUILD_TESTING)
     add_test(NAME fzero_shim_map COMMAND fzero_shim_map_tests)
     if(WIN32)
         enable_language(CXX)
+        add_executable(fzero_setup_tests tests/test_setup.cpp)
+        target_compile_features(fzero_setup_tests PRIVATE cxx_std_17)
+        target_include_directories(fzero_setup_tests PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/tests")
+        target_link_libraries(fzero_setup_tests PRIVATE bcrypt shell32)
+        add_test(NAME fzero_setup COMMAND fzero_setup_tests)
         # Keep the fake DLL away from the game's real vendored runtime.
         add_library(fzero_shim_fake SHARED tests/fake_shim.cpp)
         set_target_properties(fzero_shim_fake PROPERTIES OUTPUT_NAME dbce_shim
@@ -67,7 +88,8 @@ if(BUILD_TESTING)
         add_dependencies(fzero_shim_ordinary_tests fzero_shim_fake)
         foreach(mode normal native replay force forcechanged unknown session profile profileinfo missing unexpected launcher
             extras extrasmissing extrasseq extrascount extrasabi extrasinfo extrasnosection extrasduplicate extrasfirst extrasbom
-            configlimit configoversize extrasconfiglimit extrasconfigoversize)
+            configlimit configoversize extrasconfiglimit extrasconfigoversize
+            launchersaved launcherempty launcherbackendchanged launcherbadextras launcherrecord)
             add_test(NAME fzero_shim_ordinary_${mode} COMMAND fzero_shim_ordinary_tests ${mode})
         endforeach()
     endif()
@@ -270,6 +292,7 @@ add_executable(FZeroSNESRecomp
     src/fzero_session_control.c
     src/fzero_diagnostics.c
     src/fzero_frame_stats.cpp
+    src/fzero_setup.cpp
     src/fzero_mods.c
     src/fzero_hotkeys.c
     src/fzero_gamepad.c
@@ -347,7 +370,13 @@ if(BUILD_TESTING AND SNESRECOMP_SDL_BACKEND STREQUAL "SDL3")
 endif()
 target_link_libraries(FZeroSNESRecomp PRIVATE OpenGL::GL)
 if(WIN32)
-    target_link_libraries(FZeroSNESRecomp PRIVATE ws2_32)
+    target_link_libraries(FZeroSNESRecomp PRIVATE ws2_32 bcrypt)
+    if(FZERO_SETUP_BUNDLE)
+        add_custom_command(TARGET FZeroSNESRecomp POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${FZERO_SETUP_BUNDLE}"
+                "$<TARGET_FILE_DIR:FZeroSNESRecomp>/controls-setup"
+            COMMENT "Staging qualified private controls setup bundle" VERBATIM)
+    endif()
     # A native-only toolkit update must refresh the runtime beside an otherwise
     # unchanged executable; POST_BUILD alone would leave the old DLL staged.
     set_property(TARGET FZeroSNESRecomp APPEND PROPERTY LINK_DEPENDS

@@ -166,3 +166,15 @@ Callback-spy cases are authored; the explicit-ROM admission restriction stays
 until the actual standalone F-Zero/C4 bundle and launcher action are connected.
 Paired UI source rebuild is required. See
 `docs/2026-10-15-shared-launcher-preparation.md`.
+
+October 16 connected source for STD-013/030/035/036: paired launcher217ce445
+and standalone helper source b8396ecc connect the existing external C4 editor
+through a qualified optional controls-setup bundle. Runtime checks only the
+bounded helper EXE/manifest identities. Configure result4 starts the exact
+helper with PID/creationFILETIME, then exits before Core; the helper retains
+its real process guard. Only a matching real bundle admits keyboard/mouse
+Shared launch; absent bundle keeps the old refusal. Game-window Start rechecks
+the current profile/backend/extras/force state before one existing owner.
+All new fixtures/build/package/runtime checks are unrun; owner installation
+and inline in-game editor parity stay open. See
+`docs/2026-10-15-shared-launcher-connected.md`.

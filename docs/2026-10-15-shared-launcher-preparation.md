@@ -5,6 +5,12 @@ changes `149d914` / `1cd8b02`. **The ordinary Shared explicit-ROM restriction
 remains in `FzeroShimPrepare`.** This prepares the game side of a connected
 route; it does not admit or advertise an unfinished launcher/helper path.
 
+Historical preparation checkpoint `02a6261`: the subsequent
+[connected implementation](2026-10-15-shared-launcher-connected.md) supersedes
+the unconditional restriction only when a real matching bundle has been
+qualified and is available. No-bundle default retains the refusal. The paired
+UI is now pinned to `217ce445`; the helper still has no built artifact here.
+
 ## Implemented game-side selection
 
 `FzeroModsConfigureLauncherInput` selects the existing basic presentation
