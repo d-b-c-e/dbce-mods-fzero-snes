@@ -32,3 +32,29 @@ The combined source has no matching binary/helper publication or live result;
 those are later packaging/qualification work, not a claimed runtime cure.
 Shared force ownership, dedicated host save/rewind and schema-2 calibration
 remain separate deferred scope. Do not repeat the activation test unchanged.
+
+## Private affected build complete (request190853)
+
+Built game **19afaf25** with paired UI **6d9b715** and report helper
+**32bfd0bd**. The helper adds only the missing System.IO import after the
+first GUI publish exposed CS0103; the 16 passing Core tests were reused.
+Private helper publish, production report-window smoke and seven existing
+bundle tests passed. Five affected CTest checks passed: fzero_setup,
+fzero_mods, Configure result, launcher model cache and actual no-bundle setup.
+The real 528-file helper manifest is admitted with report-qualified1.
+
+Launcher SHA256: 2C78019E59B1D11802C3AFC4454B6A0ACF62E8657F8E220369783365745CDB8C
+(7,136,768 bytes). Helper ZIP SHA256:
+B8D38B1244F030EDEB8E098D5B875942DDDD5FA90595ECE1EDC1904CE2241F60.
+Original logs, the first publish failure and precompile command-quoting failure
+are retained in hub artifacts/fzero-report-trace-build-dine-20261016;
+native-01/result.json records the passing native build and cleanup.json closes
+the exact lease after all 71 owned originals were absent. One exact tracked idle
+VCTIP was stopped after its normal close returned false and clients had exited.
+The slot was handed directly to Livo at 16:32:25Z before this documentation.
+
+Existing HIBYTE redefinition and xUnit2031 warnings remain. This is private build
+and offline behavior evidence only: no game, provider, owner install, browser
+submission, rendered Help acceptance or public release. The A140BCF6 qualified
+candidate and failed runtime05-07 evidence remain unchanged. These docs do not
+relabel the built source revision or authorize another activation attempt.
