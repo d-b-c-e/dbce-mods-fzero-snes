@@ -35,19 +35,32 @@ int main(int argc,char **argv) {
  const std::string extras_profile="[Extras]\r\nSchema=1\r\nGame=fzero-snes\r\nDeclaration=c4ffc4c85f1b7f72437e5871bdec57f9d5b997a62a9fdd3fd2208fefa0d98fb1\r\nfzero-snes.x=button 9 dev={11111111-2222-3333-4444-555555555555}\r\n";
  const std::string extra_section=extras && mode!="extrasnosection" ? extras_profile : "";
  const bool extras_first=mode=="extrasfirst" || mode=="extrasbom";
- const std::string original=(mode=="extrasbom"?std::string("\xef\xbb\xbf"):"")+
+ std::string original=(mode=="extrasbom"?std::string("\xef\xbb\xbf"):"")+
   (extras_first?extra_section:"")+"[Input]\r\nBackend="+std::string(mode=="native"?"Native":mode=="unknown"?"Typo":"Shared")+
   "\r\nSharedExtras="+(extras || mode=="native" || mode=="replay"?"1":"0")+"\r\n"+profile+(extras_first?"":extra_section)+
   (mode=="extrasduplicate"?extras_profile:"")+"[ForceFeedback]\r\nEnabled="+(force?"1":"0")+"\r\nStrength=12\r\n[Telemetry]\r\nEnabled=1\r\n";
+ const bool config_limit=mode=="configlimit" || mode=="extrasconfiglimit";
+ const bool config_oversize=mode=="configoversize" || mode=="extrasconfigoversize";
+ if(config_limit || config_oversize) {
+  original+="[Padding]\r\n;"; // outside the exact sections passed to Core
+  const size_t bytes=1024*1024+(config_oversize?1:0);
+  CHECK(original.size()<bytes);
+  original.append(bytes-original.size(),'p'); // no terminal newline, including the exact-limit case
+ }
  {std::ofstream f(cfg,std::ios::binary);f<<original;}
  if(mode=="session") _putenv_s("FZERO_SHIM_SESSION_NONCE","noordinaryinjection");
  bool prepared=FzeroShimPrepare(cfg.string().c_str(),mode!="launcher",mode=="replay",0,1)!=0;
  if(mode=="native" || mode=="replay") {
   CHECK(prepared && !FzeroShimUsingInput() && !FzeroNoForceLatched());
   CHECK(FzeroShimStart(nullptr,"fixture") && FzeroShimStop());
- } else if(mode=="force" || mode=="unknown" || mode=="session" || mode=="launcher" || mode=="extrasnosection" || mode=="extrasduplicate") {
+ } else if(mode=="force" || mode=="unknown" || mode=="session" || mode=="launcher" || mode=="extrasnosection" || mode=="extrasduplicate" || config_oversize) {
   CHECK(!prepared && !std::filesystem::exists(root/"diagnostics"));
   CHECK(!FzeroTelemetryDeliveryBlocked());
+  if(config_oversize) {
+   CHECK(FzeroShimUsingInput() && FzeroNoForceLatched());
+   CHECK(!FzeroShimStart(nullptr,"fixture") && !FzeroShimStop());
+   CHECK(!std::filesystem::exists(root/"diagnostics")); // refusal before opening the provider
+  }
  } else {
   CHECK(prepared && FzeroShimUsingInput() && FzeroShimOrdinary() && !FzeroShimRequested());
   CHECK(!FzeroShimLatched() && FzeroNoForceLatched() && !FzeroTelemetryDeliveryBlocked());

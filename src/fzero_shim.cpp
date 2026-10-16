@@ -70,8 +70,16 @@ std::string trim(std::string s) {
 bool read_profile(const char *path) {
   std::ifstream in(path, std::ios::binary);
   if (!in) return refuse("config.ini missing");
-  std::string all((std::istreambuf_iterator<char>(in)), {});
-  if (all.size() > 1024 * 1024) return refuse("config.ini exceeds 1 MiB");
+  // Bound the stream read itself, not just the string after an unbounded read.
+  // One extra byte distinguishes an exact-limit file from an oversized prefix;
+  // Core still receives the unchanged section bytes and validates bindings.
+  constexpr size_t limit = 1024 * 1024;
+  std::string all(limit + 1, '\0');
+  in.read(all.data(), static_cast<std::streamsize>(all.size()));
+  if (in.bad() || (in.fail() && !in.eof())) return refuse("config.ini read failed");
+  const size_t count = static_cast<size_t>(in.gcount());
+  if (count > limit) return refuse("config.ini exceeds 1 MiB");
+  all.resize(count);
   const size_t start = all.compare(0, 3, "\xef\xbb\xbf") == 0 ? 3 : 0;
   size_t at = start;
   size_t begin = std::string::npos, end = all.size();

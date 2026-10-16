@@ -151,3 +151,10 @@ follow-up HUD distinguishes admitted extras capability from extras-off warning;
 clean private graphical build/stage is pending. Game source remains local-only,
 with public publication deferred. Native force ownership/snapshot adoption is
 separately deferred; schema-2 and other pending/unchecked rows remain open.
+
+October 15 source follow-up for STD-035: Shared profile admission now bounds
+the binary config stream to 1 MiB plus one byte before scanning the unchanged
+Controls/Extras bytes. Four boundary/oversize cases extend the existing
+ABI-fake host; they are authored but unexecuted pending a named slot. The
+toolkit remains the binding parser and input owner. See
+`docs/2026-10-15-bounded-shared-profile-read.md`.
