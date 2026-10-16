@@ -202,7 +202,13 @@ int main(void) {
 #endif
   CHECK(!p->feature_option_get(NULL, deluxe.package_id, deluxe.id, 0, &option));
   CHECK(p->feature_get(NULL, 0, &w) && p->feature_get(NULL, 1, &f));
-  CHECK(strcmp(w.package_id, f.package_id) && w.option_count == 1 && f.option_count == 1);
+  CHECK(strcmp(w.package_id, f.package_id) && w.option_count == 1 && f.option_count == 2);
+  CHECK(p->feature_option_get(NULL, f.package_id, f.id, 1, &option));
+  CHECK(!strcmp(option.id, "ShowFPS") && option.type == RECOMP_MOD_OPTION_BOOLEAN &&
+        !strcmp(option.value, "false") && !strcmp(option.default_value, "false"));
+  CHECK(!p->feature_set_option(NULL, f.package_id, f.id, "ShowFPS", "yes"));
+  CHECK(!p->feature_set_option(NULL, w.package_id, w.id, "ShowFPS", "true"));
+  CHECK(p->feature_set_option(NULL, f.package_id, f.id, "ShowFPS", "true") && s.show_fps);
   CHECK(p->feature_enable(NULL, f.package_id, f.id, 1));
   CHECK(s.fps_enabled && !s.enhanced);
   CHECK(p->feature_set_option(NULL, f.package_id, f.id, "fps", "144"));
@@ -213,7 +219,7 @@ int main(void) {
   CHECK(p->feature_option_get(NULL, w.package_id, w.id, 0, &option) && !strcmp(option.id, "aspect"));
   CHECK(p->feature_option_get(NULL, f.package_id, f.id, 0, &option) && !strcmp(option.id, "fps"));
   CHECK(p->commit(NULL, NULL) && FzeroVideoLoad(&loaded, "test-mods.ini"));
-  CHECK(loaded.enhanced && !loaded.fps_enabled && loaded.fps == 144);
+  CHECK(loaded.enhanced && !loaded.fps_enabled && loaded.fps == 144 && loaded.show_fps);
 #ifdef FZERO_HAS_DELUXE
   CHECK(loaded.bs_deluxe);
 #else

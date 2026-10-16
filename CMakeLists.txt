@@ -13,6 +13,11 @@ if(NOT MSVC)
     target_link_libraries(fzero_video PUBLIC m)
 endif()
 if(BUILD_TESTING)
+    enable_language(CXX)
+    add_executable(fzero_frame_stats_tests tests/test_frame_stats.cpp src/fzero_frame_stats.cpp)
+    target_include_directories(fzero_frame_stats_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+    target_compile_features(fzero_frame_stats_tests PRIVATE cxx_std_17)
+    add_test(NAME fzero_frame_stats COMMAND fzero_frame_stats_tests)
     add_executable(fzero_session_ui_tests tests/test_session_ui.c src/fzero_session_ui.c src/fzero_playthrough.c)
     target_include_directories(fzero_session_ui_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
     add_test(NAME fzero_session_ui COMMAND fzero_session_ui_tests)
@@ -264,6 +269,7 @@ add_executable(FZeroSNESRecomp
     src/fzero_session_ui.c
     src/fzero_session_control.c
     src/fzero_diagnostics.c
+    src/fzero_frame_stats.cpp
     src/fzero_mods.c
     src/fzero_hotkeys.c
     src/fzero_gamepad.c
