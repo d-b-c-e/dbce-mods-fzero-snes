@@ -178,3 +178,13 @@ the current profile/backend/extras/force state before one existing owner.
 All new fixtures/build/package/runtime checks are unrun; owner installation
 and inline in-game editor parity stay open. See
 `docs/2026-10-15-shared-launcher-connected.md`.
+
+## Optional controls setup install ownership - source only (October15)
+
+STD-032: existing installer gains explicit PrivateControlsSetup with PrivateSharedInput,
+reuses setup_bundle.py admission and linked identities, records complete helper paths,
+and restores/removes those exact files through its existing backup transaction.
+Implicit withdrawal/unowned overwrite refuse. No owner settings or Deluxe gate change.
+Authored inert ownership/admission checks remain unrun; no install/rollback claim.
+STD-019 unchecked; STD-021/031 physical normalization and STD-037 schema2 remain pending.
+See docs/2026-10-15-controls-setup-install-ownership.md.
