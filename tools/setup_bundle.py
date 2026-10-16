@@ -47,7 +47,7 @@ def admit(root):
     report_qualified = (isinstance(report, dict) and report.get("contract") == REPORT_CONTRACT
                         and report.get("games") == ["f-zero"] and report.get("browserDraftOnly") is True)
     # An absent capability is an old supported setup bundle; malformed declarations refuse.
-    if report is not None and not report_qualified:
+    if "report" in manifest and not report_qualified:
         raise ValueError("Unsupported F-Zero reviewed report capability")
     entries = manifest.get("files")
     if not isinstance(entries, list) or not 1 <= len(entries) <= 4096:

@@ -51,6 +51,11 @@ class SetupBundleTests(unittest.TestCase):
             bad = copy.deepcopy(self.manifest); bad["report"][key] = value; self.write(bad)
             with self.assertRaises(ValueError): setup_bundle.admit(self.root)
 
+    def test_explicit_null_report_is_invalid_not_legacy_absence(self):
+        self.manifest["report"] = None
+        self.write(self.manifest)
+        with self.assertRaises(ValueError): setup_bundle.admit(self.root)
+
     def test_contract_and_game_are_required(self):
         for key, value in (("supportedGames", ["art-of-rally"]), ("waitForProcessContract", "old"),
                            ("waitForProcessTimeoutMs", 0)):

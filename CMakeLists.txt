@@ -19,7 +19,7 @@ if(FZERO_SETUP_BUNDLE)
         message(FATAL_ERROR "Private controls setup bundle admission failed")
     endif()
 else()
-    file(WRITE "${FZERO_SETUP_IDENTITY}" "#pragma once\n#define FZERO_SETUP_QUALIFIED 0\n#define FZERO_SETUP_SOURCE_COMMIT \"\"\n#define FZERO_SETUP_MANIFEST_SHA256 \"\"\n#define FZERO_SETUP_EXE_SHA256 \"\"\n#define FZERO_SETUP_MANIFEST_BYTES 0\n#define FZERO_SETUP_EXE_BYTES 0\n")
+    file(WRITE "${FZERO_SETUP_IDENTITY}" "#pragma once\n#define FZERO_SETUP_QUALIFIED 0\n#define FZERO_SETUP_REPORT_QUALIFIED 0\n#define FZERO_SETUP_SOURCE_COMMIT \"\"\n#define FZERO_SETUP_MANIFEST_SHA256 \"\"\n#define FZERO_SETUP_EXE_SHA256 \"\"\n#define FZERO_SETUP_MANIFEST_BYTES 0\n#define FZERO_SETUP_EXE_BYTES 0\n")
 endif()
 add_library(fzero_video STATIC src/fzero_video.c src/fzero_mode7.c
     src/fzero_replay.c src/fzero_hdma.c src/fzero_triple_display.c)
@@ -58,6 +58,14 @@ if(BUILD_TESTING)
         target_include_directories(fzero_setup_tests PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/tests")
         target_link_libraries(fzero_setup_tests PRIVATE bcrypt shell32)
         add_test(NAME fzero_setup COMMAND fzero_setup_tests)
+        if(NOT FZERO_SETUP_BUNDLE)
+            # Compile the real no-bundle generated header, not the inert qualified fixture.
+            add_executable(fzero_setup_no_bundle_tests tests/test_setup_no_bundle.cpp src/fzero_setup.cpp)
+            target_compile_features(fzero_setup_no_bundle_tests PRIVATE cxx_std_17)
+            target_include_directories(fzero_setup_no_bundle_tests PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_BINARY_DIR}/generated")
+            target_link_libraries(fzero_setup_no_bundle_tests PRIVATE bcrypt)
+            add_test(NAME fzero_setup_no_bundle COMMAND fzero_setup_no_bundle_tests)
+        endif()
         # Keep the fake DLL away from the game's real vendored runtime.
         add_library(fzero_shim_fake SHARED tests/fake_shim.cpp)
         set_target_properties(fzero_shim_fake PROPERTIES OUTPUT_NAME dbce_shim
