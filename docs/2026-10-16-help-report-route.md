@@ -17,3 +17,18 @@ Explicit report:null now refuses with a package fixture; missing report remains
 legacy controls-only. Original SDL UTF-8 bytes restored outside the exact intended
 report additions (byte-for-byte subtraction checked). All new fixtures remain
 unrun; no heavy build or current frozen packet change.
+
+## Source integration (request190751)
+
+An isolated successor combines this report source with the exact existing
+mouse diagnostic from game ea7a674 / UI c36722cd. The combined UI is 6d9b715;
+shared helper 4eac3037 is unchanged. Both UI changes and the host additions were
+composed without changing report dispatch, controller suppression, Configure
+behavior, force ownership, bundle admission or trace opt-in semantics.
+
+This closes source composition only. The previously qualified A140BCF6 build
+and original failed runtime05-07 evidence remain at their original paths.
+The combined source has no matching binary/helper publication or live result;
+those are later packaging/qualification work, not a claimed runtime cure.
+Shared force ownership, dedicated host save/rewind and schema-2 calibration
+remain separate deferred scope. Do not repeat the activation test unchanged.

@@ -245,3 +245,25 @@ shared helper report window/VM/builder. Explicit review/browser-draft-only;
 small repository links retained. Old helper/Linux unavailable. Focused fixtures
 authored, build/tests/publish/render unrun; adoption remains partial. See
 docs/2026-10-16-help-report-route.md. Frozen483/UI53/808ae1f5 untouched.
+## Opt-in launcher mouse diagnostic - source only (October16)
+
+STD-004/030/035, request185827: existing SDL-to-ImGui Configure path gains an
+opt-in LNG_MOUSE_TRACE=1 stderr observation (edges/scales/focus, logical bounds,
+ImGui pressed/action and mapped host result). It changes no input or default
+behavior and creates no persisted setting/log framework. Source only; matching
+host/UI build and runtime remain unrun. Failed05 actual/closure are preserved;
+coordinate/event-delivery cause remains unestablished. STD-019 unchecked and
+STD-021/031/037 pending remain unchanged; all37 ledger rows are present.
+See docs/2026-10-16-launcher-mouse-trace.md.
+
+## Combined Help report and mouse-trace source (October 16, request190751)
+
+The isolated successor composes the existing report route with the unchanged
+opt-in mouse trace. Its UI retains the report callback and Configure trace;
+the host retains both exact report dispatch and action-result observation.
+No settings, input/force semantics or native pins change. Shared helper source
+4eac3037 remains unchanged and requires a later matching report-capable bundle.
+This combination is source only: build, focused executable tests, publication
+and rendered acceptance remain unrun. Qualified A140BCF6 candidate and failed
+runtime05-07 evidence remain unchanged. STD-019 unchecked and STD-021/031/037
+pending stay open; all 37 ledger entries are present.

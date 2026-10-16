@@ -788,6 +788,11 @@ static int resolve_rom(const char *executable, const char *explicit_rom,
       recomp_launcher_run_window("F-Zero \xE2\x80\x94 Launcher", settings,
                                  &game, assets_dir, initial_rom, path,
                                  path_size);
+  const char *mouse_trace = getenv("LNG_MOUSE_TRACE");
+  if (mouse_trace && strcmp(mouse_trace, "1") == 0)
+    fprintf(stderr, "[fzero-launcher-input] t_ms=%llu launcher_result=%d configure_result=%d\n",
+            (unsigned long long)SDL_GetTicks(), action,
+            action == RECOMP_LAUNCHER_RESULT_CONFIGURE_CONTROLS);
   launcher_steering_probe_close();
   const char *wheel_guid = FzeroModsWheelGuid();
   if (!settings->player_gamepad_guid[0][0] && wheel_guid[0])
