@@ -44,3 +44,12 @@ empty internal inventory, manual ownership refusal, valid large receipt,
 unchanged status bound, oversized install receipt and duplicate-field cases.
 Its default is inert; bodies remain authored/unrun. No installer, fixture body,
 build, game, owner or current live-candidate change occurred in preparation.
+
+October 16 qualification supersedes the focused recovery fixture's UNRUN
+status above: its single execution passed all 14 inert-file checks, with
+separate process/lease closure. The installer/helper/recording/test source is
+unchanged in the isolated private integration. The broader
+Test-InstallControlsSetup suite and real install/rollback gates remain open.
+See [the integration handoff](2026-10-16-private-installer-integration.md) for
+exact ancestry and evidence hashes. No package, owner install or new live
+attempt followed from the file-fixture result.

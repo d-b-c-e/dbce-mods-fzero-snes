@@ -196,3 +196,14 @@ the reused JSON validator with an explicit 2 MiB cap; status/session reads keep
 64 KiB and duplicate-field rejection. Focused inert-file cases are authored and
 unrun. No owner install/rollback or live-candidate qualification is claimed;
 the existing unchecked/pending standards above remain unchanged.
+
+STD-032 private integration follow-up (October 16): source reviews172675/172942
+found no blocker in a799891. One Test-ControlsSetupRecovery execution passed
+14 focused inert-file checks; separate closure verified three original births
+Absent, scope zero, exact pins and free lease. Evidence is hub dfef2463,
+actual D39B25DB / independent E19F24DB. The integration retains exact tested
+installer, Recording, definitions helper and fixture bytes. This qualifies the
+focused recovery/receipt cases only; Test-InstallControlsSetup remains unrun,
+and real installer/rollback, owner installation and physical gates remain open.
+No standard is newly declared fully adopted. See
+docs/2026-10-16-private-installer-integration.md.
