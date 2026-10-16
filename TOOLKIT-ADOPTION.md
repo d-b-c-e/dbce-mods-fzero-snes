@@ -215,3 +215,19 @@ read-only checks of the production assignment passed (default plus explicit
 Python3.12/3.14); no interpreter, installer or build ran for this check. The
 retained three-application installer failure remains separate. Admission and
 receipt behavior are unchanged; existing pending/unchecked standards stay open.
+
+## Help repository links in existing Support - source only (October16)
+
+STD-004/032, owner179543: the isolated source successor adds small text links
+to the mod and Wheelkit repositories under Help in the existing
+Support/Diagnostics feature. Diagnostics behavior, settings and force defaults
+are unchanged. This uses the actual recomp-ui Mods renderer's existing
+TextLinkOpenURL widget/opener, following the reviewed e8fca59 native Help
+presentation contract without importing dbce_panel or a second UI framework.
+Paired UI53e9350b81aca02fc9b4c2fbb3d795ea621bea6f adds optional bounded Help
+metadata to the source feature descriptor; host/UI must be rebuilt together.
+No build, fixture, link click, rendered observation, game or owner install ran.
+The existing Wheelkit App ReportProblem flow is not directly reachable from
+this launcher or bundled setup entry point; that route remains a separate gap.
+No issue/report framework or browser draft substitute was added. Existing
+unchecked/pending adoption states and frozen5f/D37/UI217/helperb887 stay intact.

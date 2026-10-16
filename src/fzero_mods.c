@@ -199,6 +199,15 @@ static int feature_get(void *ctx, int index, RecompLauncherCModFeature *out) {
   COPY(out->name, names[index]); COPY(out->group, index == 5 || index == 6 ? "Controls" : index == 4 ? "Support" : index == 2 ? "Content" : "Presentation");
   COPY(out->author, index == 2 ? "GuyPerfect, PowerPanda, Porthor, Catador" : "FZeroSNESRecomp contributors");
   COPY(out->description, descriptions[index]);
+  if (index == 4) {
+    /* Help belongs to the existing Support/Diagnostics feature, not a new
+     * settings feature or a second native panel. Diagnostics stays independent. */
+    COPY(out->help_links[0].name, "Mod on GitHub");
+    COPY(out->help_links[0].url, "https://github.com/d-b-c-e/dbce-mods-fzero-snes");
+    COPY(out->help_links[1].name, "Wheelkit on GitHub");
+    COPY(out->help_links[1].url, "https://github.com/d-b-c-e/dbce-wheelkit");
+    out->help_link_count = 2;
+  }
   out->enabled = index == 8 ? video->reduce_crash_flash : index == 7 ? video->triple_screen : index == 6 ? ffb_enabled : index == 5 ? wheel_enabled : index == 4 ? video->diagnostics : index == 3 ? video->hd_mode7 : index == 2 ? video->bs_deluxe : index ? video->fps_enabled : video->enhanced;
 #ifndef FZERO_HAS_DELUXE
   if (index == 2) out->enabled = 0;
