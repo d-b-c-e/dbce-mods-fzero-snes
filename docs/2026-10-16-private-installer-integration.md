@@ -45,3 +45,32 @@ remain necessary. Preserve the private Shared/Deluxe distribution restrictions
 in PUBLIC-PACKAGING.md. No public push, owner install, game attempt, force tune,
 store change or heavy rebuild accompanied this integration. Original live
 01-03 results and the frozen 575-file payload remain unchanged.
+
+## Script-only resolver integration (request174295)
+
+Branch `beni/fzero-private-script-integration-20261016` is an isolated successor
+to c814a64. It fast-forwards reviewed Dine commit
+`eb1a09f621804075baf9f4edddf4e510a6dcf513`; the final follow-up changes this
+handoff only. The production delta is one pipeline selecting the first
+Application returned by Get-Command. Explicit SetupPython paths and the
+existing bundle admission remain unchanged. Helper SHA256 is
+`F91F648E005983921E3FCF1E824A8E165DDBA3000321957A941D0F1A1CB88427`.
+Dine's three read-only default/explicit312/explicit314 resolution checks
+passed; root source review173907 found no blocker. Their raw evidence remains
+in hub d58a8b4e under artifacts/fzero-setup-python-resolution-dine-20261016.
+
+The original c814a64 checkout, its Deluxe build C9AD9D22 and every raw receipt
+remain frozen at their original paths. Hub d23ec6f3 records the actual
+explicit-Python312 installer02 PASS077207D1 / independent5D6301CA: 537 owned
+files verified and rollback restored all nine original files. Initial failure,
+exit-only exception and closure remain separate. That passing execution used
+the original c814 scripts, not this resolver successor. Actual default-argument
+installation of the fixed helper remains UNRUN.
+
+This is source/script packaging integration only. There is no native rebuild,
+fourteen-case repeat, installer invocation or owner installation here. The
+native binary retains its authentic c814 source stamp; do not relabel it as
+this script commit or infer combined qualification. Existing installer
+current-source/linked-stamp guards are unchanged. Any later assembled delivery
+must preserve these separate provenance records and satisfy its applicable
+admission gates. Public distribution and helper/game runtime are not advanced.
