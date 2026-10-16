@@ -112,6 +112,7 @@ static void publish_session_status(bool force) {
 }
 static bool g_shared_profile_preview;
 static bool g_setup_available;
+static bool g_report_available;
 /* Explicit automation isolation lasts through Stop and ordinary game close.
  * Output mute alone never changes human save/config/host-button semantics. */
 static bool g_isolated_owner_state;
@@ -208,7 +209,7 @@ static bool fzero_gl_link(uint program) {
  *
  * Two of these exist on purpose. GlslShader_Render binds its own array buffer
  * and enables its own attribute arrays inside whatever VAO is current, then
- * disables them again — so the VAO handed to a shader preset comes back with
+ * disables them again â€” so the VAO handed to a shader preset comes back with
  * its attributes off, and the next plain glDrawArrays through it draws
  * nothing. That is exactly what happened to the first version of the overlay
  * on the GL path: the panel was uploaded, the draw was issued, and the screen
@@ -490,7 +491,7 @@ static int verify_rom(const uint8_t *rom, size_t size) {
  * launch, which reads as the feature not working.
  *
  * [Rewind] Enabled / Depth / Interval, written back through the framework's
- * own surgical ini writer so the rest of the file — [KeyMap] above all — is
+ * own surgical ini writer so the rest of the file â€” [KeyMap] above all â€” is
  * untouched.
  */
 /* Strip the whitespace an ini value carries either side of it. The string
@@ -616,6 +617,16 @@ static void launcher_steering_probe_close(void) {
   s_launcher_steering_guid[0] = 0;
 }
 
+static int launcher_report_available(void) {
+  const char *replay = getenv("FZERO_REPLAY_PLAYTHROUGH");
+  const char *record = getenv("FZERO_RECORD_PLAYTHROUGH");
+  return g_report_available && !g_isolated_owner_state && !FzeroReplayHasInput() &&
+      !(replay && *replay) && !(record && *record);
+}
+static int launcher_report_open(char *why, size_t capacity) {
+  if (!launcher_report_available()) return 0;
+  return FzeroReportLaunch(kBuildVersion, FZERO_SOURCE_REVISION, kVideoConfig, why, capacity);
+}
 static int launcher_steering_axis(const char *guid, int axis, int *value) {
   if (FzeroShimUsingInput()) return 0;
   if (!guid || !guid[0] || !value || axis < 0) return 0;
@@ -723,6 +734,10 @@ static int resolve_rom(const char *executable, const char *explicit_rom,
       kVideoConfig, g_config_path, settings->player_gamepad_guid[0],
       launcher_ini_kv_write, FzeroFfbListDevices, launcher_steering_axis);
   game.has_configure_controls = FzeroShimOrdinary() && g_setup_available;
+  /* Advertise once; explicit report launch revalidates exact helper identities.
+   * Never hash the helper bundle on every UI frame. */
+  g_report_available = FzeroReportAvailable();
+  FzeroModsSetReport(launcher_report_available, launcher_report_open);
   game.rom_cache_path = "rom.cfg";
   /* Draws the Controls page's SaveStateMenu and Rewind rows, and the
    * Settings page's rewind enable / depth / interval controls. The hotkey
@@ -1044,7 +1059,7 @@ static int perform_state_action(SDL_Window *window, int save, int slot,
     /* Checked before the engine is called at all. RtlLoadSnapshot applies the
      * guest blob before the game's trailer is read, so a snapshot taken on
      * the other cartridge would already be in RAM by the time anything could
-     * object — and the two modes' ROMs do not agree about what that RAM
+     * object â€” and the two modes' ROMs do not agree about what that RAM
      * means. Stock and Deluxe slots live in different directories under
      * different prefixes, so this only fires on a file moved there by hand,
      * but that is precisely the case that used to crash. */
@@ -1072,7 +1087,7 @@ static int perform_state_action(SDL_Window *window, int save, int slot,
  *
  * Drive one slot operation from a scripted run. The quick-slot keys and the
  * browser are the two ways a player reaches a save state, and neither can be
- * exercised without a person at the keyboard — but the cartridge guard on a
+ * exercised without a person at the keyboard â€” but the cartridge guard on a
  * load only matters against a file some OTHER session wrote, which no
  * single-process self-test can produce. These two hooks let a harness write a
  * state in one run and try to load it in the next, which is exactly the shape
@@ -1108,7 +1123,7 @@ static void update_state_feedback(SDL_Window *window, Uint64 *feedback_until) {
   }
 }
 
-/* ── System hotkeys ───────────────────────────────────────────────────────
+/* â”€â”€ System hotkeys â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  *
  * The save-state browser and rewind are bound through the launcher's Controls
  * page, which writes config.ini's [KeyMap] the same way the framework desktop
@@ -1118,7 +1133,7 @@ static void update_state_feedback(SDL_Window *window, Uint64 *feedback_until) {
  * These win over the F-key quick slots. F1..F12 (and Shift+F1..F12 to save)
  * are the older, undiscoverable way of doing this and are on their way out;
  * where a hotkey claims a key, the hotkey gets it, and the slot behind it is
- * still reachable — with a thumbnail and a name — from the browser itself.
+ * still reachable â€” with a thumbnail and a name â€” from the browser itself.
  * Rebinding the hotkey elsewhere hands the plain key straight back. */
 typedef struct FzeroHotkey {
   int bound;
@@ -1158,12 +1173,12 @@ static int hotkey_matches(const FzeroHotkey *hk, SDL_Keycode key, Uint16 mod) {
   return have == hk->mods;
 }
 
-/* ── In-game overlays ─────────────────────────────────────────────────────
+/* â”€â”€ In-game overlays â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  *
  * Both panels are framework modules: which slot is selected, what the panel
  * looks like and the save/load itself live in snesrecomp/runner/src
  * (snes_savestate_menu.c, snes_rewind.c). This host supplies the two things a
- * framework module cannot — SDL events, and pixels on the screen.
+ * framework module cannot â€” SDL events, and pixels on the screen.
  *
  * F-Zero has two presenters, an SDL_Renderer and a GL path with a shader
  * preset, and the overlay has to reach the screen on both. It is drawn as its
@@ -1466,7 +1481,7 @@ static void frame_stats_presented(const FzeroPresenter *p) {
 }
 
 /* Read the composited window back for FZERO_OVERLAY_DUMP / FZERO_REWIND_DUMP;
- * defined below, called from present_frame before the buffers are swapped —
+ * defined below, called from present_frame before the buffers are swapped â€”
  * after a present, what a read-back returns is undefined. */
 static void overlay_dump(const FzeroPresenter *p, int is_menu);
 
@@ -1736,7 +1751,7 @@ static void present_frame(FzeroPresenter *p, const uint32_t *panel,
  *
  * The panels can only be driven by a person, so this is the only way to check
  * that one actually reaches the screen rather than inferring it from the
- * module reporting itself open — and it reads back the real output of
+ * module reporting itself open â€” and it reads back the real output of
  * whichever presenter is in use, so it covers the SDL_Renderer path and the
  * GL path separately rather than assuming they agree.
  */
@@ -1830,7 +1845,7 @@ static uint32_t overlay_nav_inputs(SDL_GameController *pad) {
 }
 
 /* Pad gestures, for a player who never touches the keyboard. Select + R opens
- * the browser — the framework module edge-detects that one itself, on exactly
+ * the browser â€” the framework module edge-detects that one itself, on exactly
  * these bits. Select + L opens rewind, alongside it on the other shoulder.
  * Both take two buttons on purpose: one ordinary button in the middle of a
  * race is not a gesture, it is a boost. */
@@ -1845,7 +1860,7 @@ static int rewind_gesture_pressed(uint32_t input) {
 }
 
 /* The overlays' event pump. Quit ends the run; a key press goes to the panel
- * and never to the game's own hotkeys — F3 loading a state behind a browser
+ * and never to the game's own hotkeys â€” F3 loading a state behind a browser
  * that is asking which state to load is the bug this prevents. */
 static void overlay_pump_events(int *running, SDL_GameController **pad,
                                 void (*key_down)(int key, int repeat)) {
@@ -1865,10 +1880,10 @@ static void overlay_pump_events(int *running, SDL_GameController **pad,
   }
 }
 
-/* ── Overlay self-test ────────────────────────────────────────────────────
+/* â”€â”€ Overlay self-test â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  *
  * FZERO_OVERLAY_SELFTEST=<frame>: attach a virtual gamepad and drive both
- * panels with it, so the whole path from SDL event to pixels is exercised —
+ * panels with it, so the whole path from SDL event to pixels is exercised â€”
  * device open, the gestures, the modal pumps, and the resume afterwards.
  * Injecting an input word instead would enter below the event layer and prove
  * nothing about a controller, which is where the interesting failures are.
@@ -1905,7 +1920,7 @@ static void selftest_release_all(void) {
 }
 
 /* A synthetic key press, so the keyboard binding is tested through the same
- * event pump a real one goes through — hotkey_matches included. */
+ * event pump a real one goes through â€” hotkey_matches included. */
 static void selftest_push_key(SDL_Keycode key) {
   SDL_Event e;
   memset(&e, 0, sizeof(e));
@@ -2013,7 +2028,7 @@ static void selftest_pump_tick(unsigned pump) {
   if (!g_selftest_pad || !g_selftest_phase) return;
   /* SDL's south button is the SNES B in this host's controller_input(), which
    * is the one that CLOSES both panels. The east button is the SNES A, which
-   * loads in the browser and commits in rewind — the wrong one to test a
+   * loads in the browser and commits in rewind â€” the wrong one to test a
    * close with. */
   const int nav = g_selftest_phase == 1 ? SDL_CONTROLLER_BUTTON_DPAD_DOWN
                                         : SDL_CONTROLLER_BUTTON_DPAD_LEFT;
@@ -2079,7 +2094,7 @@ static void rewind_key_down(int key, int repeat) {
 }
 
 /* Rewind's own pump: snes_rewind exposes step/commit/close rather than the
- * browser's handle_key/poll_nav. Controls match the framework host — Left and
+ * browser's handle_key/poll_nav. Controls match the framework host â€” Left and
  * Right scrub (hold to keep scrubbing), Enter or Space commits, Escape
  * cancels, and the pad mirrors them. */
 static void rewind_loop(FzeroPresenter *p, int *running,
@@ -2133,7 +2148,7 @@ static void rewind_loop(FzeroPresenter *p, int *running,
 /* The rewind ring reads its size and cadence from the environment
  * (SNESRECOMP_REWIND, _DEPTH, _INTERVAL) because that is the contract every
  * SNES port shares with it. The launcher's Settings page is this host's way
- * of writing those, so translate one into the other — and leave an
+ * of writing those, so translate one into the other â€” and leave an
  * explicitly exported value alone, so a capture run or a bisect script still
  * overrides the UI. */
 static void set_env_default(const char *name, const char *value) {
@@ -2591,7 +2606,7 @@ int main(int argc, char **argv) {
       (triple_requested && FzeroTripleSpanSupported(drawable_width,
                                                      drawable_height));
   if (triple_requested && !triple_separate && !triple_active)
-    fprintf(stderr, "[fzero-triple] expected three equal 1.2:1–2.5:1 panels in one fullscreen span; got %dx%d, using stock view\n",
+    fprintf(stderr, "[fzero-triple] expected three equal 1.2:1â€“2.5:1 panels in one fullscreen span; got %dx%d, using stock view\n",
             drawable_width, drawable_height);
   FzeroViewport viewport = FzeroCalculateViewport(&g_video,
       triple_active && !triple_separate ? drawable_width / 3 : drawable_width,
@@ -2766,7 +2781,7 @@ int main(int argc, char **argv) {
    * until it is acted on: the event pump runs every host iteration but a
    * simulation frame is only due sixty times a second, so a per-iteration
    * flag consumed inside the simulation batch is dropped on every iteration
-   * that only presents — which at 165 Hz is two out of three, and is what
+   * that only presents â€” which at 165 Hz is two out of three, and is what
    * made F7 look intermittent on the high-refresh presentation path. */
   int open_savestate_menu = 0;
   int open_rewind = 0;

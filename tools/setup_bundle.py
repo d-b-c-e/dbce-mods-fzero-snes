@@ -10,6 +10,7 @@ from pathlib import Path, PurePosixPath
 import re
 
 CONTRACT = "fzero-exact-process-exit-1"
+REPORT_CONTRACT = "fzero-reviewed-browser-report-1"
 
 
 def digest(data):
@@ -42,6 +43,12 @@ def admit(root):
             or manifest.get("waitForProcessContract") != CONTRACT
             or manifest.get("waitForProcessTimeoutMs") != 60000):
         raise ValueError("Setup bundle does not declare the F-Zero exact-exit contract")
+    report = manifest.get("report")
+    report_qualified = (isinstance(report, dict) and report.get("contract") == REPORT_CONTRACT
+                        and report.get("games") == ["f-zero"] and report.get("browserDraftOnly") is True)
+    # An absent capability is an old supported setup bundle; malformed declarations refuse.
+    if report is not None and not report_qualified:
+        raise ValueError("Unsupported F-Zero reviewed report capability")
     entries = manifest.get("files")
     if not isinstance(entries, list) or not 1 <= len(entries) <= 4096:
         raise ValueError("Setup bundle has no bounded file inventory")
@@ -78,7 +85,7 @@ def admit(root):
     exe = files.get("dbcemodsetup.exe")
     if not exe or exe[0] != "DbceModSetup.exe" or not 1 <= exe[2]["bytes"] <= 8 * 1024 * 1024:
         raise ValueError("Setup GUI apphost missing or exceeds runtime identity bound")
-    return {"sourceCommit": manifest["sourceCommit"], "manifestSha256": digest(raw),
+    return {"reportQualified": report_qualified, "sourceCommit": manifest["sourceCommit"], "manifestSha256": digest(raw),
             "manifestBytes": len(raw), "exeSha256": exe[2]["sha256"],
             "exeBytes": exe[2]["bytes"], "files": [item[0] for item in files.values()],
             "fileHashes": {item[0]: item[2]["sha256"] for item in files.values()}}
@@ -107,6 +114,7 @@ def header(info=None):
     info = info or {}
     return ("// Generated build-time setup identity; no payload or runtime inventory.\n#pragma once\n"
             f"#define FZERO_SETUP_QUALIFIED {1 if info else 0}\n"
+            f"#define FZERO_SETUP_REPORT_QUALIFIED {1 if info.get('reportQualified') else 0}\n"
             f'#define FZERO_SETUP_SOURCE_COMMIT "{info.get("sourceCommit", "")}"\n'
             f'#define FZERO_SETUP_MANIFEST_SHA256 "{info.get("manifestSha256", "")}"\n'
             f'#define FZERO_SETUP_EXE_SHA256 "{info.get("exeSha256", "")}"\n'

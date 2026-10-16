@@ -28,6 +28,28 @@ static int unexpected_list(char names[][256], int max_devices) {
 static int unexpected_axis(const char *guid, int axis, int *value) {
   (void)guid; (void)axis; (void)value; CHECK(0); return 0;
 }
+static int report_ready, report_calls;
+static int fake_report_available(void) { return report_ready; }
+static int fake_report_open(char *why, size_t capacity) {
+  ++report_calls; snprintf(why, capacity, "fixture report refusal"); return 0;
+}
+static void test_report_dispatch(void) {
+  FzeroVideoSettings video; FzeroVideoDefaults(&video);
+  const RecompLauncherCModProvider *p = FzeroModsProvider(&video, "not-written.ini");
+  CHECK(p->feature_report_available && p->feature_report_open);
+  CHECK(!p->feature_report_available(NULL,"fzero-diagnostics","diagnostics"));
+  FzeroModsSetReport(fake_report_available, fake_report_open); report_ready = 1;
+  CHECK(p->feature_report_available(NULL,"fzero-diagnostics","diagnostics"));
+  CHECK(!p->feature_report_available(NULL,"fzero-wheel","wheel"));
+  CHECK(!p->feature_report_open(NULL,"fzero-wheel","wheel") && report_calls == 0);
+  int before = video.diagnostics;
+  CHECK(!p->feature_report_open(NULL,"fzero-diagnostics","diagnostics") && report_calls == 1);
+  CHECK(strstr(p->last_error(NULL),"fixture report refusal") && video.diagnostics == before);
+  report_ready = 0;
+  CHECK(!p->feature_report_open(NULL,"fzero-diagnostics","diagnostics") && report_calls == 1);
+  FzeroModsProvider(&video, "not-written.ini");
+  CHECK(!p->feature_report_available(NULL,"fzero-diagnostics","diagnostics"));
+}
 static void test_shared_launcher_selection(void) {
   FzeroVideoSettings video; FzeroVideoDefaults(&video);
   RecompLauncherCGameInfo game = {0};
@@ -169,6 +191,7 @@ static void test_selection_rebind(void) {
   remove("selection.ini"); remove("selection-video.ini");
 }
 int main(void) {
+  test_report_dispatch();
   FzeroVideoSettings s, loaded; FzeroVideoStock(&s); /* start from nothing enabled to test each toggle */
   const RecompLauncherCModProvider *p = FzeroModsProvider(&s, "test-mods.ini");
   RecompLauncherCModFeature w, f;

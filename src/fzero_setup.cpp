@@ -4,6 +4,7 @@
 #endif
 #include FZERO_SETUP_IDENTITY_HEADER
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -86,12 +87,11 @@ std::wstring command(const std::filesystem::path &root, DWORD pid, unsigned long
   return result;
 }
 using Create = decltype(&CreateProcessW);
-bool launch(const std::filesystem::path &root, DWORD pid, unsigned long long stamp, Create create) {
-  if (!pid || !stamp || !create) return false;
+bool spawn_verified(const std::filesystem::path &root, std::wstring line, Create create) {
+  if (!create) return false;
   File manifest, exe;
   if (!eligible(root, manifest, exe)) return false;
   auto image = root / L"controls-setup/DbceModSetup.exe";
-  auto line = command(root, pid, stamp);
   if (line.size() >= 32767) return false;
   STARTUPINFOW startup{}; startup.cb = sizeof(startup);
   startup.dwFlags = STARTF_USESHOWWINDOW; startup.wShowWindow = SW_SHOWNORMAL;
@@ -102,6 +102,34 @@ bool launch(const std::filesystem::path &root, DWORD pid, unsigned long long sta
       root.c_str(), &startup, &child)) return false;
   CloseHandle(child.hThread); CloseHandle(child.hProcess);
   return true;
+}
+bool launch(const std::filesystem::path &root, DWORD pid, unsigned long long stamp, Create create) {
+  return pid && stamp && spawn_verified(root, command(root, pid, stamp), create);
+}
+bool utf8(const char *text, std::wstring &out, bool metadata) {
+  if (!text || !*text) return false;
+  const size_t bytes = std::strlen(text);
+  if (bytes > (metadata ? 120U : 32700U)) return false;
+  if (metadata) for (size_t i = 0; i < bytes; ++i)
+    if (static_cast<unsigned char>(text[i]) < 32 || text[i] == 127) return false;
+  int count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text, -1, nullptr, 0);
+  if (count <= 1) return false;
+  out.resize(static_cast<size_t>(count));
+  if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text, -1, out.data(), count)) return false;
+  out.pop_back(); return true;
+}
+bool report_launch(const std::filesystem::path &root, const char *version,
+    const char *revision, const char *video_config, Create create) {
+  if (!FZERO_SETUP_REPORT_QUALIFIED) return false;
+  std::wstring v, r, video;
+  if (!utf8(version, v, true) || !utf8(revision, r, true) || !utf8(video_config, video, false)) return false;
+  const auto video_path = std::filesystem::absolute(std::filesystem::path(video));
+  const std::wstring args[] = {(root / L"controls-setup/DbceModSetup.exe").wstring(),
+      L"--report", L"--game", L"f-zero", L"--game-dir", root.wstring(), L"--version", v,
+      L"--source-revision", r, L"--video-config", video_path.wstring()};
+  std::wstring line;
+  for (const auto &arg : args) { if (!line.empty()) line += L' '; line += quote(arg); }
+  return spawn_verified(root, line, create);
 }
 }
 #endif
@@ -124,6 +152,29 @@ int FzeroSetupLaunch(char *why, size_t capacity) {
     return 1;
   } catch (...) { return 0; }
 #else
+  return 0;
+#endif
+}
+
+int FzeroReportAvailable(void) {
+#ifdef _WIN32
+  if (!FZERO_SETUP_REPORT_QUALIFIED) return 0;
+  return FzeroSetupAvailable();
+#else
+  return 0;
+#endif
+}
+int FzeroReportLaunch(const char *version, const char *revision, const char *video_config,
+    char *why, size_t capacity) {
+  if (why && capacity) std::snprintf(why, capacity, "Report setup is unavailable or changed. Install a matching report-capable helper.");
+#ifdef _WIN32
+  try {
+    if (!report_launch(game_root(), version, revision, video_config, &CreateProcessW)) return 0;
+    if (why && capacity) *why = 0;
+    return 1;
+  } catch (...) { return 0; }
+#else
+  (void)version; (void)revision; (void)video_config;
   return 0;
 #endif
 }

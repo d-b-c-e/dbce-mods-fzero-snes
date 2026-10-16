@@ -238,3 +238,10 @@ launcher callback. STD-004/030 remains partial; frozen483/UI53 advertises no
 report action. See docs/2026-10-16-help-report-route-design.md for the smallest
 reusable command/capability/host handoff and actual version/log/config gaps.
 No new report framework, uploader, helper bundle, tests or runtime result.
+
+October16 request182337 isolated source follow-up for STD-004/030: the existing
+Support feature gains a capability-gated report host callback to the existing
+shared helper report window/VM/builder. Explicit review/browser-draft-only;
+small repository links retained. Old helper/Linux unavailable. Focused fixtures
+authored, build/tests/publish/render unrun; adoption remains partial. See
+docs/2026-10-16-help-report-route.md. Frozen483/UI53/808ae1f5 untouched.

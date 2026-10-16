@@ -39,6 +39,18 @@ class SetupBundleTests(unittest.TestCase):
         self.assertNotIn("Wheelkit.dll", header)
         self.assertIn("FZERO_SETUP_QUALIFIED 0", setup_bundle.header())
 
+    def test_report_is_opt_in_and_old_bundles_keep_controls_only(self):
+        self.assertFalse(setup_bundle.admit(self.root)["reportQualified"])
+        self.assertIn("FZERO_SETUP_REPORT_QUALIFIED 0", setup_bundle.header(setup_bundle.admit(self.root)))
+        self.manifest["report"] = {"contract": setup_bundle.REPORT_CONTRACT, "games": ["f-zero"], "browserDraftOnly": True}
+        self.write(self.manifest)
+        info = setup_bundle.admit(self.root)
+        self.assertTrue(info["reportQualified"])
+        self.assertIn("FZERO_SETUP_REPORT_QUALIFIED 1", setup_bundle.header(info))
+        for key, value in (("contract", "unknown"), ("games", ["other"]), ("browserDraftOnly", False)):
+            bad = copy.deepcopy(self.manifest); bad["report"][key] = value; self.write(bad)
+            with self.assertRaises(ValueError): setup_bundle.admit(self.root)
+
     def test_contract_and_game_are_required(self):
         for key, value in (("supportedGames", ["art-of-rally"]), ("waitForProcessContract", "old"),
                            ("waitForProcessTimeoutMs", 0)):

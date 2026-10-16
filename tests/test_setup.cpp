@@ -9,6 +9,7 @@
 static std::filesystem::path root;
 static int calls;
 static bool fail_create;
+static bool reporting;
 static BOOL WINAPI fake_create(LPCWSTR image, LPWSTR line, LPSECURITY_ATTRIBUTES process,
     LPSECURITY_ATTRIBUTES thread, BOOL inherit, DWORD flags, LPVOID environment,
     LPCWSTR cwd, LPSTARTUPINFOW startup, LPPROCESS_INFORMATION child) {
@@ -17,11 +18,19 @@ static BOOL WINAPI fake_create(LPCWSTR image, LPWSTR line, LPSECURITY_ATTRIBUTES
   CHECK(!process && !thread && !inherit && flags == 0 && !environment);
   CHECK(std::filesystem::path(cwd) == root && startup->wShowWindow == SW_SHOWNORMAL);
   int count = 0; auto args = CommandLineToArgvW(line, &count);
-  CHECK(args && count == 9);
-  CHECK(std::wstring(args[1]) == L"--game" && std::wstring(args[2]) == L"f-zero");
-  CHECK(std::wstring(args[3]) == L"--game-dir" && std::filesystem::path(args[4]) == root);
-  CHECK(std::wstring(args[5]) == L"--wait-for-process" && std::wstring(args[6]) == L"12345");
-  CHECK(std::wstring(args[7]) == L"--process-start-filetime" && std::wstring(args[8]) == L"133760000000000001");
+  CHECK(args && count == (reporting ? 12 : 9));
+  const int offset = reporting ? 1 : 0;
+  if (reporting) CHECK(std::wstring(args[1]) == L"--report");
+  CHECK(std::wstring(args[1 + offset]) == L"--game" && std::wstring(args[2 + offset]) == L"f-zero");
+  CHECK(std::wstring(args[3 + offset]) == L"--game-dir" && std::filesystem::path(args[4 + offset]) == root);
+  if (reporting) {
+    CHECK(std::wstring(args[6]) == L"--version" && std::wstring(args[7]) == L"1.8.3");
+    CHECK(std::wstring(args[8]) == L"--source-revision" && std::wstring(args[9]) == L"actual-revision");
+    CHECK(std::wstring(args[10]) == L"--video-config" && std::filesystem::path(args[11]) == root / L"video & override.ini");
+  } else {
+    CHECK(std::wstring(args[5]) == L"--wait-for-process" && std::wstring(args[6]) == L"12345");
+    CHECK(std::wstring(args[7]) == L"--process-start-filetime" && std::wstring(args[8]) == L"133760000000000001");
+  }
   LocalFree(args);
   // Identity handles deny mutation through the exact process-creation call.
   HANDLE write = CreateFileW(image, GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
@@ -48,8 +57,15 @@ int main() {
   CHECK(!launch(root,12345,133760000000000001ULL,fake_create) && calls == 2);
   CHECK(!launch(root,0,133760000000000001ULL,fake_create) && calls == 2);
   CHECK(!launch(root,12345,0,fake_create) && calls == 2);
+  fail_create = false; reporting = true;
+  const auto video = (root / L"video & override.ini").u8string();
+  CHECK(report_launch(root,"1.8.3","actual-revision",video.c_str(),fake_create) && calls == 3);
+  CHECK(!report_launch(root,"1.8.3\nspoof","actual-revision",video.c_str(),fake_create) && calls == 3);
+  CHECK(!report_launch(root,"1.8.3","",video.c_str(),fake_create) && calls == 3);
   put(exe, "changed-helper");
-  CHECK(!launch(root,12345,133760000000000001ULL,fake_create) && calls == 2);
+  CHECK(!report_launch(root,"1.8.3","actual-revision",video.c_str(),fake_create) && calls == 3);
+  reporting = false;
+  CHECK(!launch(root,12345,133760000000000001ULL,fake_create) && calls == 3);
   put(exe,"fixture-helper"); put(manifest,"changed-manifest");
   {File a,b; CHECK(!eligible(root,a,b));}
   put(manifest,"fixture-manifest!");

@@ -9,6 +9,18 @@
 static FzeroVideoSettings *video;
 static const char *config_path;
 static char error_text[128];
+static int (*report_available)(void);
+static int (*report_open)(char *, size_t);
+static int feature_report_available(void *ctx, const char *package, const char *feature) {
+  (void)ctx;
+  return package && feature && !strcmp(package, "fzero-diagnostics") &&
+      !strcmp(feature, "diagnostics") && report_available && report_open && report_available();
+}
+static int feature_report_open(void *ctx, const char *package, const char *feature) {
+  if (!feature_report_available(ctx, package, feature)) return 0;
+  error_text[0] = 0;
+  return report_open(error_text, sizeof(error_text));
+}
 static const char *const aspects[] = {"16:9", "21:9", "32:9", "Fit"};
 static const char *const rates[] = {"Auto", "60", "90", "120", "144", "165", "240", "360"};
 #define COPY(field, value) snprintf(field, sizeof(field), "%s", value)
@@ -510,6 +522,9 @@ const RecompLauncherCModProvider *FzeroModsProvider(FzeroVideoSettings *settings
   wheel_section[0] = 0; wheel_enabled = 0; wheel_dirty = 0;
   ffb_device_count = 0;
   memset(&provider, 0, sizeof(provider));
+  report_available = NULL; report_open = NULL;
+  provider.feature_report_available = feature_report_available;
+  provider.feature_report_open = feature_report_open;
   provider.package_count = count; provider.package_get = package_get;
   provider.feature_count = count; provider.feature_get = feature_get;
   provider.feature_option_get = option_get; provider.feature_choice_get = choice_get;
@@ -571,4 +586,8 @@ void FzeroModsConfigureLauncherInput(
   game->mods = shared_input ? FzeroModsProvider(settings, video_path)
       : FzeroModsProviderWheel(settings, video_path, control_path, wheel_guid,
           write_ini, list_ffb_devices, read_wheel_axis);
+}
+
+void FzeroModsSetReport(int (*available)(void), int (*open)(char *why, size_t capacity)) {
+  report_available = available; report_open = open;
 }
