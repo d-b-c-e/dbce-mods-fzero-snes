@@ -231,3 +231,10 @@ The existing Wheelkit App ReportProblem flow is not directly reachable from
 this launcher or bundled setup entry point; that route remains a separate gap.
 No issue/report framework or browser draft substitute was added. Existing
 unchecked/pending adoption states and frozen5f/D37/UI217/helperb887 stay intact.
+
+October16 request181987: source-only Help report audit found the shared report
+window/builder source-linked into helperb887, but no report-only entry or native
+launcher callback. STD-004/030 remains partial; frozen483/UI53 advertises no
+report action. See docs/2026-10-16-help-report-route-design.md for the smallest
+reusable command/capability/host handoff and actual version/log/config gaps.
+No new report framework, uploader, helper bundle, tests or runtime result.
