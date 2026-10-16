@@ -207,3 +207,11 @@ focused recovery/receipt cases only; Test-InstallControlsSetup remains unrun,
 and real installer/rollback, owner installation and physical gates remain open.
 No standard is newly declared fully adopted. See
 docs/2026-10-16-private-installer-integration.md.
+
+STD-032 interpreter-resolution follow-up (October 16, request173822): the
+helper admission route selects the first Application returned by Get-Command,
+preserving normal PATH precedence and explicit SetupPython paths. Three
+read-only checks of the production assignment passed (default plus explicit
+Python3.12/3.14); no interpreter, installer or build ran for this check. The
+retained three-application installer failure remains separate. Admission and
+receipt behavior are unchanged; existing pending/unchecked standards stay open.

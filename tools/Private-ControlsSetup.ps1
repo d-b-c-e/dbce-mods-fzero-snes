@@ -23,7 +23,7 @@ function Assert-PrivateControlsTransition([bool]$Requested, $Previous, [string[]
 }
 function Private-ControlsSetupSources([string]$SourceRoot, [string]$BuildRoot, [string]$LinkedText, [string]$PythonExecutable) {
     $bundle = Join-Path $BuildRoot 'controls-setup'
-    $python = Get-Command $PythonExecutable -CommandType Application -ErrorAction Stop
+    $python = Get-Command $PythonExecutable -CommandType Application -ErrorAction Stop | Select-Object -First 1
     $temporary = Join-Path ([IO.Path]::GetTempPath()) ('fzero-setup-' + [guid]::NewGuid().ToString('N') + '.h')
     if (Test-Path -LiteralPath $temporary) { throw 'Fresh admission output required.' }
     try {
