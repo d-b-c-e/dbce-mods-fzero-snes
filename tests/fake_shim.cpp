@@ -4,6 +4,7 @@
 #include <cstddef>
 #include "../vendor/dbce-shim/dbce_shim.h"
 #include "../vendor/dbce-shim/dbce_shim_extras.h"
+#include "../vendor/dbce-shim/dbce_shim_bridge.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -15,7 +16,7 @@ static const char *names[] = {
  "confirm","back","start","select","navUp","navDown","navLeft","navRight","camera","lookBack",
  "reset","horn","modMenu","muteFfb","gear1","gear2","gear3","gear4","gear5","gear6","gear7","gear8"
 };
-struct Fake { uint64_t seq=0; bool latched=false, capture=false, extras=false; std::filesystem::path folder; };
+struct Fake { uint64_t seq=0; bool latched=false, capture=false, extras=false, bridge=false, published=false; std::filesystem::path folder; };
 static bool flag(const char *name) { auto s=std::getenv(name); return s && *s; }
 int32_t dbce_shim_abi_version(void) { return flag("FZERO_FAKE_BAD_ABI") ? 1 : 2; }
 int32_t dbce_shim_frame_size(void) { return sizeof(dbce_shim_frame); }
@@ -116,4 +117,33 @@ int32_t dbce_shim_stop(void *handle,char *text,int32_t n,int32_t *needed) {
  std::ofstream(f->folder/"stop.spy")<<"stopped";
  delete f;
  return flag("FZERO_FAKE_BAD_STOP") ? 1 : 0;
+}
+
+int32_t dbce_shim_bridge_abi_version(){return 1;}
+int32_t dbce_shim_bridge_device_size(){return sizeof(dbce_shim_bridge_device_v1);}
+int32_t dbce_shim_bridge_sample_size(){return sizeof(dbce_shim_bridge_sample_v1);}
+int32_t dbce_shim_bridge_open(const dbce_shim_open_args *a,void **out,char *why,int32_t len) {
+ if(!a || a->flags)return DBCE_SHIM_REFUSED;
+ int r=dbce_shim_open2(a,out,why,len);if(!r)static_cast<Fake*>(*out)->bridge=true;return r;
+}
+int32_t dbce_shim_bridge_devices_with_paths(void *handle,const dbce_shim_bridge_device_v1 *d,int32_t count,const wchar_t*const*paths) {
+ auto f=static_cast<Fake*>(handle);if(!f || !f->bridge || count!=1 || !d || d[0].generation!=7 || !paths || !paths[0] || paths[0][0]!='x')return DBCE_SHIM_REFUSED;
+ f->published=true;return 0;
+}
+int32_t dbce_shim_bridge_devices(void *,const dbce_shim_bridge_device_v1 *,int32_t){return DBCE_SHIM_REFUSED;}
+static bool bridge_sample(void *handle,const dbce_shim_bridge_sample_v1 *s,int32_t count) {
+ auto f=static_cast<Fake*>(handle);if(!f || !f->bridge || !f->published || count!=1 || !s || !s[0].valid || s[0].sequence!=f->seq+1)return false;
+ std::ofstream(f->folder/"bridge-sample.spy",std::ios::app)<<s[0].sequence<<"\n";return true;
+}
+int32_t dbce_shim_bridge_tick(void *handle,const dbce_shim_bridge_sample_v1 *s,int32_t count,dbce_shim_frame *out) {
+ auto f=static_cast<Fake*>(handle);if(!bridge_sample(handle,s,count) || f->extras)return DBCE_SHIM_REFUSED;return fill_tick(handle,out);
+}
+extern "C" DBCE_SHIM_API int32_t dbce_shim_bridge_open_extras(const dbce_shim_open_args *a,const char *declaration,int32_t declaration_len,void **out,char *why,int32_t len) {
+ if(!a || a->flags)return DBCE_SHIM_REFUSED;
+ int r=dbce_shim_open_extras(a->folder,a->nonce,a->profile,a->profile_len,a->unsupported,a->hwnd,declaration,declaration_len,out,why,len);
+ if(!r)static_cast<Fake*>(*out)->bridge=true;return r;
+}
+extern "C" DBCE_SHIM_API int32_t dbce_shim_bridge_tick_extras(void *handle,const dbce_shim_bridge_sample_v1 *s,int32_t count,uint32_t contexts,dbce_shim_frame *out,dbce_shim_extras_frame *extras) {
+ if(!bridge_sample(handle,s,count))return DBCE_SHIM_REFUSED;
+ return dbce_shim_tick_extras(handle,contexts,out,extras);
 }

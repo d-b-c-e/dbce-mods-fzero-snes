@@ -2678,6 +2678,7 @@ int main(int argc, char **argv) {
   if (!FzeroShimStart(native_window, launcher_settings.player_gamepad_guid[0])) {
     abort_playthrough("shim startup failed");
     FzeroShimStop();
+    FzeroFfbShutdown();
     free(rom);
     return 3;
   }

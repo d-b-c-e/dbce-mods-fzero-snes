@@ -1,0 +1,21 @@
+# Shared input and existing FFB owner
+
+Request199074 adds an explicit `[Input] SharedForceBridge=1` experimental route alongside `Backend=Shared` and `[ForceFeedback] Enabled=1`. Native remains the default. Ordinary Shared without this option retains its process no-force latch. Recording, scripted/replayed diagnostics and the existing captured no-force route stay separate; this option does not add a UI capability or claim physical qualification.
+
+The game continues to use the existing force producer, native module, call gate and strength controls. The force math and default40 are unchanged. Before exclusive initialization, the optional snapshot exports and native600 version must be present and the schema1 steering instance must equal the selected force device. No direct-input fallback opens if this admission fails.
+
+`fzero_shared_owner` uses the vendored canonical Controls binding parser, including product identity, for common and extras source inventory. It preflights eight-slot capacity and unique exact instance matches before opening a source slot, then checks the actual metadata identity, product, sparse objects/ranges, and generation-qualified interface path. The steering reader must report that it borrowed the force handle. Auxiliary slots use that same native module. Paths and metadata are copied under the force call gate before Core receives them.
+
+Each simulation/overlay tick takes one snapshot per owned source slot and passes the copied batch to one Core bridge tick. The extras extension returns common and declared X/Y/L/R from that same tick. A physical read fault, stale sequence, changed generation or invalid timing clears the whole sample batch and permanently refuses further reads until explicit restart. A valid physical sample enables force only after Core reports Live, noninjected steering; Core rearming/missing/stale input remains silent. The existing game mapper and Core normalization remain responsible for their original duties.
+
+Core stops before read slots close, effects release, native cleanup and module unload. An unresolved Core stop marks the handle terminal, stops force and retains its source slots/module until process exit. The existing call gate drains in-flight force/source work and rejects late calls. No independent reader, force model, acquisition retry or callback escapes this owner.
+
+## Qualification and remaining work
+
+The separate native600 source candidate `59486032871b9a8fc349399ed96bc2cb5451bbf4` passed the six x64/x86 snapshot-fake/DLL-build/device-free lifecycle steps. It preserves the legacy41 exports/loader/version600 and adds three optional exports. Lola's ordinary-only bridge/extras source is `d92656657a4322a37db9cfb82073350ed8d01dcc`; this checkout uses its exact bridge header. Neither fact updates this game's accepted runtime pins.
+
+The first game build passed; its52 affected CTests had10 failures. Three new fake force-owner cases correctly refused profiles missing the canonical required `prod`; seven existing diagnostics exposed an empty pre-open stop incorrectly spending the new terminal guard. Both issues are corrected in source. The pure source-owner test's original Release-disabled assertions are not credited; they are now always active. Metadata/path copying and native600 version admission were also tightened before the queued follow-up. Original `E:/fzero-research/owner-checks-nemo-20261016/run-01/result.json` remains FAILED. Exact safe cleanup/lease release was recorded before the next owner entered.
+
+The corrected four-target/52-test game-only continuation is queued; no pass is claimed yet. Its runner uses a fresh result folder and the previous cached ROM-free build, retaining original results. Actual bridge DLL qualification, optional paired native/shim provenance and private candidate adoption remain outstanding. The prepared game19afaf25/UI6d9b715/helper32bfd0bd candidate, owner installation, source distribution and public releases are unchanged. No real game, DirectInput device or physical force ran during these fake checks.
+
+All37 toolkit ledger IDs are still present. STD019 rendering is unchecked, STD021/031 physical normalization and STD037 schema2 remain pending. This source ownership work does not close those gates.

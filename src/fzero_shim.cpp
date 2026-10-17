@@ -1,12 +1,15 @@
 #include "fzero_shim.h"
 #include "fzero_shim_map.h"
 #include "fzero_ffb.h"
+#include "fzero_shared_owner.h"
+#include "../vendor/dbce-shim/dbce_shim_bridge.h"
 #include "fzero_telemetry.h"
 extern "C" {
 #include "fzero_hotkeys.h"
 #include "fzero_output_latch.h"
 }
 #include <chrono>
+#include <cmath>
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -22,7 +25,7 @@ extern "C" {
 
 namespace {
 bool requested, ordinary, failed, latched, completed, host_persistence, host_debug;
-bool use_extras, deferred_launcher_profile;
+bool use_extras, deferred_launcher_profile, use_force_bridge, stop_attempted;
 std::string config_path, profile, recording_path, save_root, session_nonce;
 std::filesystem::path session_file, batch_file;
 FzeroFfbState force_state{};
@@ -56,9 +59,16 @@ using OpenExtras = int32_t (*)(const wchar_t *, const char *, const char *, int3
     const char *, void *, const char *, int32_t, void **, char *, int32_t);
 using TickExtras = int32_t (*)(void *, uint32_t, dbce_shim_frame *, dbce_shim_extras_frame *);
 OpenExtras open_extras; TickExtras tick_extras; Text extras_info;
+using BridgeOpenExtras=int32_t (*)(const dbce_shim_open_args*,const char*,int32_t,void**,char*,int32_t);
+using BridgeDevices=int32_t (*)(void*,const dbce_shim_bridge_device_v1*,int32_t,const wchar_t* const*);
+using BridgeTick=int32_t (*)(void*,const dbce_shim_bridge_sample_v1*,int32_t,dbce_shim_frame*);
+using BridgeTickExtras=int32_t (*)(void*,const dbce_shim_bridge_sample_v1*,int32_t,uint32_t,dbce_shim_frame*,dbce_shim_extras_frame*);
+Open bridge_open;BridgeOpenExtras bridge_open_extras;BridgeDevices bridge_devices;
+BridgeTick bridge_tick;BridgeTickExtras bridge_tick_extras;
 
 bool refuse(const char *why) {
   failed = true;
+  if(use_force_bridge)FzeroFfbSilence();
   std::fprintf(stderr, "[fzero-shim] %s refused/failed: %s\n", ordinary ? "ordinary input" : "diagnostic", why);
   return false;
 }
@@ -123,6 +133,7 @@ bool read_profile(const char *path) {
 bool ordinary_force_disabled() {
   int enabled = 0;
   FzeroIniReadInt(config_path.c_str(), "ForceFeedback", "Enabled", &enabled);
+  if(use_force_bridge)return enabled || refuse("SharedForceBridge requires explicitly enabled force feedback");
   return !enabled || refuse("Shared input with ForceFeedback Enabled is not yet supported: the force/read ownership bridge is pending; use Native for force feedback");
 }
 #ifdef _WIN32
@@ -164,6 +175,20 @@ bool load() {
         extras_abi() != DBCE_SHIM_EXTRAS_ABI || extras_size() != sizeof(dbce_shim_extras_frame))
       return refuse("SharedExtras requires a reviewed extras-capable shim; current private pin may predate this extension");
   }
+  if(use_force_bridge) {
+    auto version=entry<Int>(module,"dbce_shim_bridge_abi_version");
+    auto device_size=entry<Int>(module,"dbce_shim_bridge_device_size");
+    auto sample_size=entry<Int>(module,"dbce_shim_bridge_sample_size");
+    bridge_open=entry<Open>(module,"dbce_shim_bridge_open");
+    bridge_devices=entry<BridgeDevices>(module,"dbce_shim_bridge_devices_with_paths");
+    bridge_tick=entry<BridgeTick>(module,"dbce_shim_bridge_tick");
+    bridge_open_extras=entry<BridgeOpenExtras>(module,"dbce_shim_bridge_open_extras");
+    bridge_tick_extras=entry<BridgeTickExtras>(module,"dbce_shim_bridge_tick_extras");
+    if(!version || !device_size || !sample_size || !bridge_open || !bridge_devices || !bridge_tick ||
+       version()!=1 || device_size()!=144 || sample_size()!=232 ||
+       (use_extras && (!bridge_open_extras || !bridge_tick_extras)))
+      return refuse("reviewed copied-input bridge exports/layout missing");
+  }
   return !name(DBCE_SHIM_ACTIONS) || refuse("shim has unknown extra actions");
 }
 #endif
@@ -198,6 +223,10 @@ int FzeroShimPrepare(const char *config, int direct_rom, int replay, int script,
     if (selection != "shared") return refuse("Input Backend must be Native or Shared");
     ordinary = true;
     config_path = config;
+    int bridge=0;FzeroIniReadInt(config,"Input","SharedForceBridge",&bridge);
+    if(bridge!=0 && bridge!=1)return refuse("SharedForceBridge must be 0 or 1");
+    use_force_bridge=bridge==1;
+    if(use_force_bridge && explicit_recording)return refuse("SharedForceBridge is ordinary play only; recording stays separate");
     int extras = 0;
     FzeroIniReadInt(config, "Input", "SharedExtras", &extras);
     if (extras != 0 && extras != 1) return refuse("SharedExtras must be 0 or 1");
@@ -212,7 +241,7 @@ int FzeroShimPrepare(const char *config, int direct_rom, int replay, int script,
     if (!ordinary_force_disabled()) return 0;
     // Refuse an independent force owner for the lifetime of Shared input. This
     // is an ownership limitation, not a changed force model or saved setting.
-    if (!FzeroLatchNoForce()) return refuse("force owner already initialized");
+    if (!use_force_bridge && !FzeroLatchNoForce()) return refuse("force owner already initialized");
     for (const char *key : {"FZERO_SHIM_SESSION_NONCE", "FZERO_SHIM_SESSION_FILE", "FZERO_SHIM_BATCH_FILE"})
       if (present(std::getenv(key))) return refuse("injection files require an explicit diagnostic, not ordinary Shared input");
 #ifndef _WIN32
@@ -275,7 +304,12 @@ int FzeroShimPrepare(const char *config, int direct_rom, int replay, int script,
 }
 int FzeroShimStart(void *window, const char *legacy_guid) {
   if (!FzeroShimUsingInput()) return 1;
-  if (failed || !FzeroNoForceLatched()) return refuse("shared input not admitted or force ownership guard missing");
+  if (failed || (!use_force_bridge && !FzeroNoForceLatched()) || (use_force_bridge && FzeroNoForceLatched()))
+    return refuse("shared input not admitted or force ownership guard missing");
+  if(ordinary) {
+    int bridge=0;FzeroIniReadInt(config_path.c_str(),"Input","SharedForceBridge",&bridge);
+    if(bridge!=(use_force_bridge?1:0))return refuse("SharedForceBridge changed after startup; restart required");
+  }
   const bool fences = host_persistence && host_debug && FzeroTelemetryDeliveryBlocked();
   if (requested && !fences) return refuse("host persistence/debug/telemetry fences not established");
   if (ordinary && !ordinary_force_disabled()) return 0; // launcher may have changed it
@@ -294,6 +328,8 @@ int FzeroShimStart(void *window, const char *legacy_guid) {
 #ifdef _WIN32
   try {
     if (!load()) return 0;
+    if(use_force_bridge && !FzeroFfbSharedStart(config_path.c_str(),window,profile.data(),profile.size()))
+      return refuse("existing force owner could not qualify copied source");
     std::string nonce = "fzero" + std::to_string(GetCurrentProcessId()) +
         std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
     if (ordinary) {
@@ -318,11 +354,25 @@ int FzeroShimStart(void *window, const char *legacy_guid) {
       a.adapter_version = "fzero-shim-diagnostic-3"; a.hz = kHz; a.seconds = kSeconds;
     }
     char why[512]{};
-    int opened = use_extras
+    int opened = use_force_bridge
+      ? (use_extras ? bridge_open_extras(&a,kFzeroShimExtrasDeclaration,(int32_t)std::strlen(kFzeroShimExtrasDeclaration),&handle,why,sizeof(why))
+                    : bridge_open(&a,&handle,why,sizeof(why)))
+      : use_extras
       ? open_extras(a.folder, a.nonce, a.profile, a.profile_len, a.unsupported, a.hwnd,
           kFzeroShimExtrasDeclaration, (int32_t)std::strlen(kFzeroShimExtrasDeclaration), &handle, why, sizeof(why))
       : open2(&a, &handle, why, sizeof(why));
+    if(use_force_bridge && handle)FzeroFfbSharedCoreState(1);
     if (opened != DBCE_SHIM_OK || !handle) return refuse(why);
+    if(use_force_bridge) {
+      WheelReadDeviceInfoV1 native[8]{};wchar_t path_data[8][260]{};const wchar_t *paths[8]{};
+      dbce_shim_bridge_device_v1 copied[8]{};
+      static_assert(sizeof(native[0])==sizeof(copied[0]),"owned metadata layout");
+      int count=FzeroFfbSharedDevices(native,path_data,8);
+      if(count<1)return refuse("owned source metadata unavailable");
+      for(int i=0;i<count;++i)paths[i]=path_data[i];
+      std::memcpy(copied,native,sizeof(copied));
+      if(bridge_devices(handle,copied,count,paths)!=DBCE_SHIM_OK)return refuse("Core refused owned metadata/paths");
+    }
     if (ordinary) {
       char info[4096]{}; int32_t needed = 0;
       if (profile_info(handle,info,sizeof(info),&needed) != DBCE_SHIM_OK || needed <= 0 ||
@@ -369,7 +419,7 @@ int FzeroShimStart(void *window, const char *legacy_guid) {
     if (use_extras) std::fprintf(stderr, "[fzero-shim] declared X/Y/L/R extras enabled; same owned tick; no legacy binding fallback\n");
     std::fprintf(stderr, "[fzero-shim] ABI 2 %s opened; steering range=%d response=%d; Core calibration; keyboard=%s; %s\n",
       ordinary ? "ordinary input" : "capture", range, response, latched ? "suppressed" : "retained",
-      ordinary ? "SDL devices disabled; X/Y/L/R require declared SharedExtras; legacy wheel save/rewind and unbound buttons unavailable; keyboard retained; physical FFB unavailable until ownership bridge" : "native SDL controller lane disabled");
+      ordinary ? "SDL devices disabled; X/Y/L/R require declared SharedExtras; legacy wheel save/rewind and unbound buttons unavailable; keyboard retained; physical FFB requires explicit SharedForceBridge and qualified owned snapshots" : "native SDL controller lane disabled");
     return 1;
   } catch (const std::exception &e) { return refuse(e.what()); }
 #else
@@ -380,6 +430,22 @@ int FzeroShimStart(void *window, const char *legacy_guid) {
 static int input_tick(uint32_t *extras_word) {
   *extras_word = 0;
   frame = {}; frame.struct_size = sizeof(frame);
+  if(use_force_bridge) {
+    WheelReadSnapshotV1 native[8]{};dbce_shim_bridge_sample_v1 copied[8]{};
+    static_assert(sizeof(native[0])==sizeof(copied[0]),"owned sample layout");
+    int count=FzeroFfbSharedRead(native,8);if(count<1)return 0;
+    std::memcpy(copied,native,sizeof(copied));
+    if(!use_extras) {
+      bool ok=bridge_tick(handle,copied,count,&frame)==DBCE_SHIM_OK;
+      FzeroFfbSharedAccept(ok && frame.action[0].status==12 && !frame.action[0].injected && std::isfinite(frame.action[0].value));
+      return ok;
+    }
+    dbce_shim_extras_frame extras{};extras.struct_size=sizeof(extras);
+    bool ok=bridge_tick_extras(handle,copied,count,0,&frame,&extras)==DBCE_SHIM_OK &&
+      FzeroShimExtrasWord(&frame,&extras,extras_word);
+    FzeroFfbSharedAccept(ok && frame.action[0].status==12 && !frame.action[0].injected && std::isfinite(frame.action[0].value));
+    return ok;
+  }
   if (!use_extras) return tick(handle, &frame) == DBCE_SHIM_OK;
   dbce_shim_extras_frame extras{}; extras.struct_size = sizeof(extras);
   return tick_extras(handle, 0, &frame, &extras) == DBCE_SHIM_OK &&
@@ -445,17 +511,22 @@ int FzeroShimConsumed(uint64_t simulation_frame, uint32_t input, const uint8_t *
   return record(handle, frame.seq, values, 17+FZERO_SHIM_MENU_VALUES) == DBCE_SHIM_OK || refuse("consumed-input record failed");
 }
 void FzeroShimNeutral(void) {
+  if(use_force_bridge)FzeroFfbSilence();
   FzeroShimMapNeutral(&map);
   if (ordinary) pending = false; // an opened overlay may cancel an unconsumed tick
 }
 int FzeroShimStop(void) {
+  if(stop_attempted){if(use_force_bridge)FzeroFfbShutdown();return !failed;}
   if (latched && !completed) refuse("latched session closed without an explicit completed end batch");
   if (handle) {
+    stop_attempted=true; // terminal stop never retries an unresolved native handle
     char report[4096]{}; int32_t needed = 0;
     int r = stop(handle, report, sizeof(report), &needed);
-    handle = nullptr;
+    if(use_force_bridge && r==DBCE_SHIM_OK)FzeroFfbSharedCoreState(0);
+    if(r==DBCE_SHIM_OK)handle=nullptr; // unresolved stop retains source ownership
     std::fprintf(stderr, "[fzero-shim] stop=%d %s\n", r, report);
     if (r != DBCE_SHIM_OK) refuse("shared provider/capture stop unresolved");
   }
+  if(use_force_bridge)FzeroFfbShutdown();
   return !failed;
 }

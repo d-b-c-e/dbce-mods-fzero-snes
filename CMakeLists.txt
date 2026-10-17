@@ -66,6 +66,22 @@ if(BUILD_TESTING)
             target_link_libraries(fzero_setup_no_bundle_tests PRIVATE bcrypt)
             add_test(NAME fzero_setup_no_bundle COMMAND fzero_setup_no_bundle_tests)
         endif()
+        add_executable(fzero_shared_owner_tests tests/test_shared_owner.cpp src/fzero_shared_owner.cpp)
+        target_compile_features(fzero_shared_owner_tests PRIVATE cxx_std_17)
+        target_include_directories(fzero_shared_owner_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+        add_test(NAME fzero_shared_owner COMMAND fzero_shared_owner_tests)
+        add_executable(fzero_shared_ffb_tests tests/test_ffb_lifecycle.cpp src/fzero_shared_owner.cpp
+            src/fzero_hotkeys.c src/fzero_output_latch.c src/fzero_inject.cpp src/fzero_controls.cpp
+            src/fzero_shim.cpp src/fzero_shim_map.c src/fzero_analog.c src/fzero_telemetry.cpp)
+        target_link_libraries(fzero_shared_ffb_tests PRIVATE ws2_32)
+        target_compile_definitions(fzero_shared_ffb_tests PRIVATE FZERO_SHARED_CORE_TEST)
+        set_target_properties(fzero_shared_ffb_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/shim-fixture")
+        add_dependencies(fzero_shared_ffb_tests fzero_shim_fake)
+        target_compile_features(fzero_shared_ffb_tests PRIVATE cxx_std_17)
+        foreach(mode shared-owner shared-missing shared-core shared-core-extras injection-latch force-first)
+            add_test(NAME fzero_shared_ffb_${mode} COMMAND fzero_shared_ffb_tests --${mode})
+        endforeach()
+        add_test(NAME fzero_shared_ffb_legacy COMMAND fzero_shared_ffb_tests)
         # Keep the fake DLL away from the game's real vendored runtime.
         add_library(fzero_shim_fake SHARED tests/fake_shim.cpp)
         set_target_properties(fzero_shim_fake PROPERTIES OUTPUT_NAME dbce_shim
@@ -73,7 +89,7 @@ if(BUILD_TESTING)
         target_compile_features(fzero_shim_fake PRIVATE cxx_std_17)
         add_executable(fzero_shim_host_tests tests/test_shim_host.cpp src/fzero_shim.cpp
             src/fzero_shim_map.c src/fzero_analog.c src/fzero_hotkeys.c src/fzero_output_latch.c
-            src/fzero_ffb.cpp src/fzero_telemetry.cpp)
+            src/fzero_ffb.cpp src/fzero_shared_owner.cpp src/fzero_telemetry.cpp)
         target_compile_definitions(fzero_shim_host_tests PRIVATE FZERO_FFB_MODEL_ONLY)
         target_link_libraries(fzero_shim_host_tests PRIVATE ws2_32)
         target_compile_features(fzero_shim_host_tests PRIVATE cxx_std_17)
@@ -86,7 +102,7 @@ if(BUILD_TESTING)
         endforeach()
         add_executable(fzero_shim_ordinary_tests tests/test_shim_ordinary.cpp src/fzero_shim.cpp
             src/fzero_shim_map.c src/fzero_analog.c src/fzero_hotkeys.c src/fzero_output_latch.c
-            src/fzero_ffb.cpp src/fzero_telemetry.cpp src/fzero_playthrough.c)
+            src/fzero_ffb.cpp src/fzero_shared_owner.cpp src/fzero_telemetry.cpp src/fzero_playthrough.c)
         target_compile_definitions(fzero_shim_ordinary_tests PRIVATE FZERO_FFB_MODEL_ONLY)
         target_link_libraries(fzero_shim_ordinary_tests PRIVATE ws2_32)
         target_compile_features(fzero_shim_ordinary_tests PRIVATE cxx_std_17)
@@ -279,7 +295,7 @@ add_executable(FZeroSNESRecompHeadless
     src/headless_host.c
     src/headless_main.c
     src/fzero_playthrough.c
-    src/fzero_ffb.cpp
+    src/fzero_ffb.cpp src/fzero_shared_owner.cpp
     src/fzero_output_latch.c
     src/fzero_hotkeys.c
     src/fzero_runtime.c)
@@ -312,7 +328,7 @@ add_executable(FZeroSNESRecomp
     src/fzero_shim_map.c
     src/fzero_output_latch.c
     src/fzero_telemetry.cpp
-    src/fzero_ffb.cpp
+    src/fzero_ffb.cpp src/fzero_shared_owner.cpp
     src/fzero_playthrough.c
     src/fzero_runtime.c)
 target_compile_definitions(FZeroSNESRecomp PRIVATE FZERO_RENDER_TIMINGS=1)
@@ -435,7 +451,7 @@ if(BUILD_TESTING)
     target_compile_definitions(fzero_force_trace PRIVATE FZERO_FFB_MODEL_ONLY)
     if(WIN32)
         # Fake Win32 loader/exports: no real DLL or device is accessed.
-        add_executable(fzero_ffb_lifecycle_tests tests/test_ffb_lifecycle.cpp
+        add_executable(fzero_ffb_lifecycle_tests tests/test_ffb_lifecycle.cpp src/fzero_shared_owner.cpp
             src/fzero_hotkeys.c src/fzero_output_latch.c src/fzero_inject.cpp src/fzero_controls.cpp)
         target_compile_features(fzero_ffb_lifecycle_tests PRIVATE cxx_std_17)   # fzero_inject.cpp, fzero_controls.cpp
         add_test(NAME fzero_ffb_lifecycle COMMAND fzero_ffb_lifecycle_tests)

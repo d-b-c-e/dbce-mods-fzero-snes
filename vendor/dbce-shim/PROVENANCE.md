@@ -61,3 +61,11 @@ policy: the public packager still refuses a private receipt or DLL, and does
 not admit embedded Deluxe/cartridge data. Public packaging/notices review and
 consumer/runtime/physical qualification remain separate. See
 `docs/2026-10-14-shared-extras.md` for build, review and next-action evidence.
+
+
+Optional bridge header source for the isolated SharedForceBridge implementation:
+`d92656657a4322a37db9cfb82073350ed8d01dcc`,
+`native/shim/shim_dll/dbce_shim_bridge.h`. Base ABI2 and extrasABI1 are unchanged.
+This header is source-only preparation; PIN.json and the accepted DLL hash remain
+unchanged until the paired runtime is qualified. Missing optional exports refuse
+before the source owner initializes.

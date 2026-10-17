@@ -296,3 +296,15 @@ then passed. Original failed import check remains retained. STD-032 advances
 local packaging evidence only; no owner install, runtime/physical acceptance,
 ABI/pin change or public redistribution approval. Existing partial/pending
 states remain unchanged.
+
+
+October16 request199074 adds the explicit default-off SharedForceBridge source
+route using the existing force producer/call gate and optional owned snapshots.
+Common+extras share one copied sample batch/Core tick; exact instance/product,
+borrowed wheel metadata, source failure and stop-before-source-close guards are
+implemented. Native600 six-step fake/device-free qualification passed. The first
+game52-test run failed10; source fixes are prepared and a narrow continuation is
+queued. The Release-disabled pure-owner assertions from that run are not credited.
+Accepted runtime pins and private ready candidate remain unchanged pending the
+paired shared DLL qualification; physical FFB is still unqualified. See
+`docs/2026-10-16-shared-force-owner.md`. Existing pending/unchecked rows remain.

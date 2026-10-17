@@ -1,4 +1,5 @@
 #include "fzero_ffb.h"
+#include "fzero_shared_owner.h"
 
 extern "C" {
 #include "fzero_hotkeys.h"
@@ -48,6 +49,11 @@ bool s_trace_enabled = false;
  * loader-lock callback owns it. Shutdown drains the current call before close. */
 std::recursive_mutex s_call_gate;
 bool s_closed = false;
+bool s_shared_requested=false, s_shared_ready=false, s_shared_core_live=false, s_shared_initializing=false;
+std::string s_shared_profile;
+unsigned char s_force_guid[16]{};
+FzeroSharedOwner s_shared_owner;
+FzeroSharedOwnerApi s_shared_api{};
 #endif
 
 uint16_t read16(const uint8_t *p) {
@@ -153,6 +159,9 @@ void FzeroFfbInit(const char *config_path, void *native_window) {
 #endif
   FzeroFfbShutdown();
 #if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
+  if(s_shared_core_live) return; // unresolved copied Core retains its source owner
+#endif
+#if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
   s_closed = false; /* Explicit main-thread initialization starts a new session. */
 #endif
   int enabled = 0;
@@ -191,6 +200,16 @@ void FzeroFfbInit(const char *config_path, void *native_window) {
     WheelFfb_Unload(&s_ffb);
     return;
   }
+  if(s_shared_requested) {
+    s_shared_api={s_ffb.EnumerateAllDevices,s_ffb.GetAnyDeviceGuid,s_ffb.OpenReadDevice,
+      reinterpret_cast<decltype(s_shared_api.info)>(GetProcAddress(s_ffb.module,"GetReadDeviceInfoV1")),
+      reinterpret_cast<decltype(s_shared_api.read)>(GetProcAddress(s_ffb.module,"ReadDeviceSnapshotV1")),
+      reinterpret_cast<decltype(s_shared_api.path)>(GetProcAddress(s_ffb.module,"GetReadDevicePathV1")),s_ffb.CloseReadDevices};
+    if(!s_shared_api.info || !s_shared_api.read || !s_shared_api.path || s_ffb.GetWheelFfbVersion()!=600) {
+      std::fprintf(stderr,"[fzero-ffb] optional owned snapshot exports missing; SharedForceBridge refused before initialization\n");
+      WheelFfb_Unload(&s_ffb);return;
+    }
+  }
   s_ffb.SetStrictDeviceSelection(1);
   const int count = s_ffb.EnumerateDevices();
   int match = -1;
@@ -209,6 +228,11 @@ void FzeroFfbInit(const char *config_path, void *native_window) {
     WheelFfb_Unload(&s_ffb);
     return;
   }
+  if(s_shared_requested && !FzeroSharedSteeringMatches(s_shared_profile.data(),s_shared_profile.size(),guid)) {
+    std::fprintf(stderr,"[fzero-ffb] Shared steering instance does not match the selected force wheel\n");
+    WheelFfb_Unload(&s_ffb);return;
+  }
+  std::memcpy(s_force_guid,guid,16);
   s_ffb.SetPreferredDeviceGuid(guid);
   if (!s_ffb.InitDirectInput((int)(intptr_t)native_window)) {
     std::fprintf(stderr, "[fzero-ffb] could not open '%s'; disabled\n", requested);
@@ -268,6 +292,7 @@ void FzeroFfbFrame(const uint8_t *ram, size_t ram_size, uint32_t input) {
 #if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
   std::lock_guard<std::recursive_mutex> call(s_call_gate);
   if (!s_active) return;
+  if(s_shared_requested && !s_shared_ready) {s_ffb.ZeroForces();return;}
   FzeroFfbOutput output{};
   FzeroFfbComputeSteering(&s_state, ram, ram_size, input, s_strength, s_steering_strength, &output);
   /* The SNES input is pulse-density modulated, so applying those digital
@@ -316,6 +341,7 @@ void FzeroFfbFrame(const uint8_t *ram, size_t ram_size, uint32_t input) {
 void FzeroFfbSilence(void) {
 #if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
   std::lock_guard<std::recursive_mutex> call(s_call_gate);
+  s_shared_ready=false;
   if (s_active) s_ffb.ZeroForces();
 #endif
 }
@@ -325,6 +351,13 @@ void FzeroFfbShutdown(void) {
   std::lock_guard<std::recursive_mutex> call(s_call_gate);
   s_closed = true;
   s_active = false; /* Reentrant/late frame and silence calls cannot emit exports. */
+  s_shared_ready=false;
+  if(s_shared_core_live) {
+    if(s_ffb.module)s_ffb.PanicStop();
+    std::fprintf(stderr,"[fzero-ffb] copied Core stop unresolved; source slots/module retained with force stopped\n");
+    return;
+  }
+  s_shared_owner.close(); // copied Core has stopped before source slots close
   if (s_ffb.module) {
     s_ffb.PanicStop();
     if (s_release_constant_bursts) s_release_constant_bursts();
@@ -343,6 +376,67 @@ void FzeroFfbShutdown(void) {
   s_release_constant_bursts = nullptr;
   s_active = false;
   s_trace_enabled = false;
+  if(!s_shared_initializing){s_shared_requested=false;s_shared_profile.clear();s_shared_api={};}
 #endif
   std::memset(&s_state, 0, sizeof(s_state));
+}
+
+int FzeroFfbSharedStart(const char *config,void *window,const char *profile,size_t length) {
+#if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
+  std::lock_guard<std::recursive_mutex> call(s_call_gate);
+  if(s_shared_core_live || !profile || !length || length>131072)return 0;
+  s_shared_requested=true;s_shared_ready=false;s_shared_profile.assign(profile,length);
+  s_shared_initializing=true;FzeroFfbInit(config,window);s_shared_initializing=false;
+  if(!s_active)return 0;
+  std::string why;
+  if(!s_shared_owner.prepare(profile,length,s_force_guid,s_shared_api,why)) {
+    std::fprintf(stderr,"[fzero-ffb] copied source refused: %s\n",why.c_str());
+    FzeroFfbShutdown();return 0;
+  }
+  s_ffb.ZeroForces();return 1;
+#else
+  (void)config;(void)window;(void)profile;(void)length;return 0;
+#endif
+}
+int FzeroFfbSharedDevices(WheelReadDeviceInfoV1 *out,wchar_t (*paths)[260],int capacity) {
+#if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
+  std::lock_guard<std::recursive_mutex> call(s_call_gate);
+  int count=s_shared_owner.count();
+  if(s_closed || !s_active || !s_shared_requested || !out || !paths || count<1 || capacity<count)return 0;
+  std::copy_n(s_shared_owner.devices(),count,out);
+  for(int i=0;i<count;++i)std::copy_n(s_shared_owner.path(i),260,paths[i]);
+  return count;
+#else
+  (void)out;(void)paths;(void)capacity;return 0;
+#endif
+}
+int FzeroFfbSharedRead(WheelReadSnapshotV1 *out,int capacity) {
+#if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
+  std::lock_guard<std::recursive_mutex> call(s_call_gate);
+  if(s_closed || !s_active || !s_shared_core_live || capacity<FzeroSharedOwner::capacity)return 0;
+  std::string why;
+  s_shared_ready=s_shared_owner.sample(out,why);
+  if(!s_shared_ready){s_ffb.ZeroForces();std::fprintf(stderr,"[fzero-ffb] %s\n",why.c_str());}
+  return s_shared_ready?s_shared_owner.count():0;
+#else
+  (void)out;(void)capacity;return 0;
+#endif
+}
+void FzeroFfbSharedCoreState(int live) {
+#if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
+  std::lock_guard<std::recursive_mutex> call(s_call_gate);
+  s_shared_core_live=live!=0;s_shared_ready=false;
+#else
+  (void)live;
+#endif
+}
+
+void FzeroFfbSharedAccept(int live) {
+#if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
+  std::lock_guard<std::recursive_mutex> call(s_call_gate);
+  s_shared_ready=s_shared_ready && live!=0;
+  if(!s_shared_ready && s_active)s_ffb.ZeroForces();
+#else
+  (void)live;
+#endif
 }
