@@ -301,6 +301,7 @@ add_executable(FZeroSNESRecompHeadless
     src/fzero_output_latch.c
     src/fzero_hotkeys.c
     src/fzero_runtime.c)
+target_compile_features(FZeroSNESRecompHeadless PRIVATE cxx_std_17) # shared owner's canonical controls parser
 
 # The desktop host takes the REAL host_report.c (always-on breadcrumb ring,
 # crash minidump writer, build-version stamp) and the REAL keybinds.c, so the
