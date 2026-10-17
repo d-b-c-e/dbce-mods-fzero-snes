@@ -2,6 +2,7 @@
 # Never execute its install body, inspect a real game, or load a DLL.
 $ErrorActionPreference = 'Stop'
 $source = Join-Path (Split-Path $PSScriptRoot -Parent) 'tools/Install-StreamDeck.ps1'
+. (Join-Path (Split-Path $PSScriptRoot -Parent) 'tools/Private-ControlsSetup.ps1')
 $tokens=$null; $errors=$null
 $ast=[Management.Automation.Language.Parser]::ParseFile($source,[ref]$tokens,[ref]$errors)
 if ($errors.Count) { throw ($errors | Out-String) }
@@ -98,9 +99,9 @@ try {
         $destination=Join-Path $Target $name; $saved=Join-Path $backup $name
         [void][IO.Directory]::CreateDirectory((Split-Path -Parent $destination)); [void][IO.Directory]::CreateDirectory((Split-Path -Parent $saved))
         $existed=$name -cne 'shared-input/PROVENANCE.md'
-        if ($existed) { [IO.File]::WriteAllText($saved,'old ' + $name) }
+        if ($existed) { [IO.File]::WriteAllText($saved,$(if($name -ceq $receiptName){'{"schemaVersion":1,"files":[],"fixture":"old"}'}else{'old ' + $name})) }
         $state.files+=@{name=$name;existed=$existed;sha256=(HashOrNull $saved)}
-        [IO.File]::WriteAllText($destination,'new ' + $name)
+        [IO.File]::WriteAllText($destination,$(if($name -ceq $receiptName){'{"schemaVersion":1,"files":[],"fixture":"new"}'}else{'new ' + $name}))
     }
     [IO.File]::WriteAllText((Join-Path $Target 'config.ini'),'owner settings fixture')
     Restore-Files $backup $state
