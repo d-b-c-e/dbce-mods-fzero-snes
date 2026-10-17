@@ -32,6 +32,11 @@ try {
     $sharedNames=@('dbce_shim.dll','shared-input/dbce_shim.h','shared-input/PIN.json','shared-input/PROVENANCE.md')
     Check ($shared.files.Count -eq 4 -and @($sharedNames | Where-Object { !$shared.files.ContainsKey($_) }).Count -eq 0) 'Private ownership must contain exactly the existing four paths.'
     Check ($shared.metadata.sourceRevision -ceq $pin.sourceRevision -and $shared.metadata.runtimeSha256 -ceq $pin.files.'dbce_shim.dll') 'Metadata must derive from the verified source pin.'
+    Check ($shared.metadata.controls.consumer -ceq 'FZeroSNESRecomp-wheel-launcher.exe') 'Deluxe receipt must name its renamed launcher as the Shared controls consumer.'
+    # One partition for both producers: the stock stager's contract with this installer's consumer.
+    $compare="import json,sys; sys.path.insert(0, sys.argv[1]); import stage_unified as s; c = s.shared_controls_contract(); c['consumer'] = 'FZeroSNESRecomp-wheel-launcher.exe'; sys.exit(0 if json.loads(sys.stdin.read()) == c else 1)"
+    $shared.metadata.controls | ConvertTo-Json -Depth 4 -Compress | & (Get-Command python).Source -I -c $compare (Join-Path (Split-Path $PSScriptRoot -Parent) 'tools')
+    Check ($LASTEXITCODE -eq 0) 'Installer controls contract differs from the stock stager partition.'
     foreach ($name in @('dbce_shim.dll','shared-input/dbce_shim.h')) {
         $path=$shared.files[$name]; $old=[IO.File]::ReadAllBytes($path); [IO.File]::WriteAllText($path,'different')
         Refuses { Private-SharedSources $root $build } 'A changed DLL or header must refuse before installation.'
@@ -77,6 +82,8 @@ try {
     Refuses { Assert-SharedExtrasConsumer ($hosts.declaration+[char]0+'SharedExtras'+[char]0) $true } 'Host capability cannot be published without linked opt-in.'
     $hostSource=Private-SharedSources $root $build $true
     Check ($hostSource.metadata.extras.declarationSha256 -ceq $hosts.declarationSha256 -and $hostSource.files.Count -eq 5) 'Host inventory reuses the same qualified five files.'
+    $hostReceipt=[ordered]@{privateSharedInput=$hostSource.metadata} | ConvertTo-Json -Depth 4 | ConvertFrom-Json
+    Check ($hostReceipt.privateSharedInput.controls.unsupported.gear8 -ceq 'F-Zero has no gearbox' -and $hostReceipt.privateSharedInput.extras.presentation[5].id -ceq 'fzero-snes.rewind') 'The receipt writer depth must keep the controls and host contracts intact.'
     $hostPrevious=@{privateSharedInput=@{extras=@{declarationSha256=$hosts.declarationSha256}};files=@()}
     Refuses { Assert-SharedOwnershipTransition $true $hostPrevious } 'A host capability cannot be silently withdrawn on upgrade.'
     Assert-SharedOwnershipTransition $true $hostPrevious $null $true

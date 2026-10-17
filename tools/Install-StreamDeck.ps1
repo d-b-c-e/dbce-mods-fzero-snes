@@ -15,6 +15,8 @@
     -PrivateSharedInput additionally owns the private shim DLL, header, PIN and provenance from the existing
     vendor inventory. It declares ordinary Shared recording only after their hashes verify; it never selects
     the Shared backend or changes force settings. Shared recording still requires ForceFeedback Enabled=0.
+    The receipt also declares the Shared controls contract naming the launcher, which Wheelkit's helper
+    requires before it admits this BS Deluxe copy.
 
 .EXAMPLE
     .\tools\Install-StreamDeck.ps1 -Label ground-filter
@@ -70,6 +72,19 @@ function Shared-ExtrasDescriptor([bool]$HostControls=$false) {
             [ordered]@{id='fzero-snes.rewind';label='Rewind';group='Host controls';effects='Opens the existing rewind browser.';limits='Ordinary play only; requires explicit SharedExtras=1 and SharedHostControls=1; not recorded.'})
     }
     return $contract
+}
+function Shared-ControlsDescriptor {
+    # stage_unified.shared_controls_contract for this installer's renamed launcher; Wheelkit
+    # admits a Deluxe copy only when its receipt names that consumer.
+    $unsupported=[ordered]@{ clutch='F-Zero has no clutch'; handbrake='F-Zero has no handbrake'
+        shiftUp='F-Zero has no gearbox'; shiftDown='F-Zero has no gearbox'; neutral='F-Zero has no gearbox'; reverse='F-Zero has no reverse gear'
+        camera='no generic F-Zero camera action'; lookBack='no F-Zero look-back action'; reset='guest reset remains a native host hotkey'
+        horn='F-Zero has no horn'; modMenu='the F-Zero launcher is not an in-game mod menu'; muteFfb='shared input does not own the native force lifecycle' }
+    foreach($n in 1..8){$unsupported['gear'+$n]='F-Zero has no gearbox'}
+    [ordered]@{ schema=1; adapter='fzero-shim-ini-controls-1'; consumer='FZeroSNESRecomp-wheel-launcher.exe'; profile='config.ini'; settings='config.ini'; shimAbi=2
+        optIn=[ordered]@{section='Input';key='Backend';value='Shared';default='Native';appliesAfterRestart=$true}
+        delivered=@('steer','throttle','brake','confirm','back','start','select','navUp','navDown','navLeft','navRight')
+        unsupported=$unsupported; requires=[ordered]@{directRom=$true;forceFeedbackDisabled=$true} }
 }
 function Assert-SharedExtrasConsumer([string]$LinkedText,[bool]$HostControls=$false) {
     $extras=Shared-ExtrasDescriptor $HostControls
@@ -128,6 +143,7 @@ function Private-SharedSources([string]$SourceRoot, [string]$BuildRoot, [bool]$H
     }
     $metadata=[ordered]@{ abi=2; distribution='private-only'; sourceRevision=$pin.sourceRevision; runtimeSha256=$pin.files.'dbce_shim.dll' }
     if ($extras) { $metadata.extrasAbi=1; $metadata.extras=Shared-ExtrasDescriptor $HostControls }
+    $metadata.controls=Shared-ControlsDescriptor
     @{ files=$files; metadata=$metadata }
 }
 function Restore-Files([string]$from, $state,
