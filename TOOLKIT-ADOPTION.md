@@ -21,7 +21,7 @@ Audited 2026-10-04 (read-only standards audit); STD-001 and STD-010 revised 2026
 
 | STD-011 | Work lands on main | adopted | Packaging research starts from b7eb125 and returns to main; private ROMs, generated content and recordings remain outside release archives. |
 | STD-012 | Reproduce the route and preserve original signals | partial | October 12 private Deluxe player Practice original has 2,351 exact cold WRAM checkpoints; final consumed words equal the shared capture and computed force/telemetry remain available under muted delivery. Original immutable. New CLI graphically replays the same 2,351 frames and a fresh 900-frame preview exactly, with rendered status; owner normalization remains open. |
-| STD-013 | The installed build launches plainly | partial | The Stream Deck key launches the integration build with no extra arguments (grid PLN ðŸ§ª); triple screens start only when the Triple Screen mod is on in the launcher |
+| STD-013 | The installed build launches plainly | partial | The Stream Deck key launches the integration build with no extra arguments (grid PLN 🧪); triple screens start only when the Triple Screen mod is on in the launcher |
 | STD-014 | Request reciprocal review when progress stalls | adopted | Process standard; reviews go through the portfolio inbox |
 | STD-015 | Triples on Surround and on separate monitors | partial | Display layout Surround (one spanning fullscreen display) or Separate monitors (one borderless SDL window per display); Surround seen at the rig 2026-10-05, separate displays not yet at the rig |
 | STD-016 | Telemetry: Forza Horizon layout, on by default | partial | Forza Horizon 324-byte UDP built in, but off by default (`[Telemetry] Enabled=1` in config.ini) |
