@@ -346,3 +346,18 @@ the exact final identity audit closes all children and the lease. See
 docs/2026-10-16-shared-host-controls.md. All 37 ledger IDs are present.
 STD-019 remains unchecked; STD-021/031 physical normalization and STD-037 schema 2
 remain pending. No installed capability, ready candidate or force tuning changed.
+
+## October 17 matching stock private host-controls package
+
+The source-qualified host controls now have a matching stock graphical/headless
+build and exact standalone helper. New common helper b695fe39 restores F-Zero
+controls-only scope/import and the existing exact-process-exit/60000 ms contract;
+the old f115 helper did not expose F-Zero and was not substituted. Current scoped
+object manifests are admitted explicitly without removing wait/hash checks.
+Three new manifest cases, incremental host builds, private staging, all577 archive
+member hashes/linkage and packaged f-zero PlanOnly pass. Initial missing headless
+C++17 compile failure is retained; prior passes were not repeated. No game, owner
+install, native dependency rebuild, force tune or public distribution occurred.
+See docs/2026-10-17-host-controls-private-package.md. The older Deluxe candidate is
+unchanged; Deluxe portable admission and existing pending/unchecked standards
+remain separate.
