@@ -71,7 +71,7 @@ try {
   $script:result.steps+=,[ordered]@{name='installer-tests';state='running'};Save-Result
   Invoke-OwnedProcess -Name 'installer-tests' -Executable (Get-Command pwsh).Source -Arguments @('-NoProfile','-File',(Join-Path $sourceRoot 'tests/test_private_shared_install.ps1')) -TimeoutSeconds 60
   $script:result.steps+=,[ordered]@{name='wheelkit-tests';state='running'};Save-Result
-  Invoke-OwnedProcess -Name 'wheelkit-tests' -Executable (Get-Command dotnet).Source -Arguments @('test',(Join-Path $WheelkitRoot 'tests/Wheelkit.Core.Tests/Wheelkit.Core.Tests.csproj'),'-c','Release','--filter','FullyQualifiedName~FZeroShimControlTests','--logger',('trx;LogFileName='+ (Join-Path $outputRoot 'wheelkit.trx'))) -TimeoutSeconds 180
+  Invoke-OwnedProcess -Name 'wheelkit-tests' -Executable (Get-Command dotnet).Source -Arguments @('test',(Join-Path $WheelkitRoot 'tests/Wheelkit.Core.Tests/Wheelkit.Core.Tests.csproj'),'-c','Release','-p:UseSharedCompilation=false','--filter','FullyQualifiedName~FZeroShimControlTests','--logger',('trx;LogFileName='+ (Join-Path $outputRoot 'wheelkit.trx'))) -TimeoutSeconds 180
   }
   $script:result.state='pass'
 } catch {$script:result.state='failed';$script:result.error=$_.Exception.Message}

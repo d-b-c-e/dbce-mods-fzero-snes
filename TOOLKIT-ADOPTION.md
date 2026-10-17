@@ -338,7 +338,11 @@ existing host panel handlers through an explicit six-slot declaration. Native an
 Shared share the edge/strip helper; host bits never enter the guest or recordings.
 Private staging/installer receipt publication requires an explicit host-controls
 variant and linked consumer markers. Wheelkit game-specific admission and Apply
-preserve flags, unknown settings and default C4 behavior. Focused qualification is
-queued; see docs/2026-10-16-shared-host-controls.md. All 37 ledger IDs are present.
+preserve flags, unknown settings and default C4 behavior. Focused qualification
+passes: three fake target builds, 9 CTests, 3 package +1 host contract tests,
+47 synthetic installer checks, and 61 Wheelkit cases including common host-only
+dispatch. Original import/fixture failures and cleanup corrections remain recorded;
+the exact final identity audit closes all children and the lease. See
+docs/2026-10-16-shared-host-controls.md. All 37 ledger IDs are present.
 STD-019 remains unchecked; STD-021/031 physical normalization and STD-037 schema 2
 remain pending. No installed capability, ready candidate or force tuning changed.
