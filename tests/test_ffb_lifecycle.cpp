@@ -217,11 +217,11 @@ static int shared_core_test(bool extras) {
   CHECK(FzeroShimPrepare(config.string().c_str(),1,0,0,0,0));
   CHECK(!FzeroNoForceLatched());CHECK(FzeroShimStart(nullptr,"fixture"));
   unsigned char ram[0x20000]{};ram[0x54]=2;ram[0x55]=3;uint32_t word=0;
-  CHECK(FzeroShimInput(&word,ram,sizeof(ram)) && shared_sequence==1 && s_shared_ready);
-  CHECK(FzeroShimConsumed(1,word,ram,sizeof(ram)));
+  CHECK(FzeroShimInput(&word,ram,sizeof(ram)) && shared_sequence==1 && !s_shared_ready);
+  CHECK(FzeroShimConsumed(1,word,ram,sizeof(ram)) && s_shared_ready);
   size_t before=events.size();FzeroFfbFrame(ram,sizeof(ram),word);CHECK(events.size()>before+1);
   FzeroShimNeutral();CHECK(!s_shared_ready);
-  CHECK(FzeroShimOverlayInput(&word) && shared_sequence==2);
+  CHECK(FzeroShimOverlayInput(&word) && shared_sequence==2 && !s_shared_ready);
   shared_bad_sample=true;CHECK(!FzeroShimInput(&word,ram,sizeof(ram)) && word==0 && !s_shared_ready);
   CHECK(!FzeroShimStop()); // input failure retained even though cleanup succeeds
   CHECK(!s_ffb.module && unloads==1 && !worker_active);

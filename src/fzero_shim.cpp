@@ -437,13 +437,11 @@ static int input_tick(uint32_t *extras_word) {
     std::memcpy(copied,native,sizeof(copied));
     if(!use_extras) {
       bool ok=bridge_tick(handle,copied,count,&frame)==DBCE_SHIM_OK;
-      FzeroFfbSharedAccept(ok && frame.action[0].status==12 && !frame.action[0].injected && std::isfinite(frame.action[0].value));
       return ok;
     }
     dbce_shim_extras_frame extras{};extras.struct_size=sizeof(extras);
     bool ok=bridge_tick_extras(handle,copied,count,0,&frame,&extras)==DBCE_SHIM_OK &&
       FzeroShimExtrasWord(&frame,&extras,extras_word);
-    FzeroFfbSharedAccept(ok && frame.action[0].status==12 && !frame.action[0].injected && std::isfinite(frame.action[0].value));
     return ok;
   }
   if (!use_extras) return tick(handle, &frame) == DBCE_SHIM_OK;
@@ -481,6 +479,7 @@ int FzeroShimOverlayInput(uint32_t *word) {
       frame.latched || frame.suppress_native || frame.run != 0)
     return refuse("ordinary overlay input failed");
   *word |= extras_word;
+  if(use_force_bridge)FzeroFfbSilence(); // overlay input never arms driving forces
   return 1;
 }
 uint32_t FzeroShimSupplementalMask(void) {
@@ -492,7 +491,10 @@ int FzeroShimConsumed(uint64_t simulation_frame, uint32_t input, const uint8_t *
   if (!pending || failed || !handle) return refuse("no pending simulation input");
   // The ordinary game's .fzpt writer records this same final input after the
   // real guest frame. No duplicate shared recorder or diagnostic model instance.
-  if (ordinary) { pending = false; return 1; }
+  if (ordinary) {
+    if(use_force_bridge)FzeroFfbSharedAccept(frame.action[0].status==12 && !frame.action[0].injected && std::isfinite(frame.action[0].value));
+    pending = false; return 1;
+  }
   if (!ram || ram_size < 0x0be2) return refuse("post-frame WRAM unavailable");
   FzeroFfbOutput f{}; uint8_t packet[324];
   FzeroFfbComputeSteering(&force_state, ram, ram_size, input, strength, steering_strength, &f);
