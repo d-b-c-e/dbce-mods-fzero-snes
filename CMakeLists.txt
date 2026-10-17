@@ -4,6 +4,7 @@ project(FZeroSNESRecomp VERSION ${FZERO_VERSION} LANGUAGES C)
 set(CMAKE_C_STANDARD 11)
 
 include(CTest)
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FzeroSharedForceDependencies.cmake")
 option(FZERO_BUILD_GAME "Build game hosts (requires privately generated ROM sources)" ON)
 set(FZERO_SETUP_BUNDLE "" CACHE PATH "Qualified private standalone controls bundle; optional, no default setup action")
 set(FZERO_SETUP_IDENTITY "${CMAKE_BINARY_DIR}/generated/fzero_setup_identity.h")
@@ -403,24 +404,33 @@ if(WIN32)
     endif()
     # A native-only toolkit update must refresh the runtime beside an otherwise
     # unchanged executable; POST_BUILD alone would leave the old DLL staged.
-    set_property(TARGET FZeroSNESRecomp APPEND PROPERTY LINK_DEPENDS
-        "${CMAKE_SOURCE_DIR}/lib/toolkit/native/WheelFfb.dll")
+    set(_fzero_wheel_runtime "${CMAKE_SOURCE_DIR}/lib/toolkit/native/WheelFfb.dll")
+    if(FZERO_SHARED_FORCE_DEPENDENCIES)
+        set(_fzero_wheel_runtime "${FZERO_SHARED_FORCE_WHEEL_DLL}")
+    endif()
+    set_property(TARGET FZeroSNESRecomp APPEND PROPERTY LINK_DEPENDS "${_fzero_wheel_runtime}")
     add_custom_command(TARGET FZeroSNESRecomp POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_SOURCE_DIR}/lib/toolkit/native/WheelFfb.dll"
+            "${_fzero_wheel_runtime}"
             "$<TARGET_FILE_DIR:FZeroSNESRecomp>/WheelFfb.dll"
         COMMENT "Staging WheelFfb runtime"
         VERBATIM)
     # Provisional private dependency, not a default player-package payload.
     set(FZERO_SHIM_DLL "" CACHE FILEPATH "Reviewed ABI2 DLL for private shim diagnostics only")
-    if(FZERO_SHIM_DLL)
-        file(SHA256 "${FZERO_SHIM_DLL}" FZERO_SHIM_SHA)
+    set(_fzero_shim_runtime "${FZERO_SHIM_DLL}")
+    if(FZERO_SHARED_FORCE_DEPENDENCIES)
+        set(_fzero_shim_runtime "${FZERO_SHARED_FORCE_SHIM_DLL}")
+    endif()
+    if(_fzero_shim_runtime AND NOT FZERO_SHARED_FORCE_DEPENDENCIES)
+        file(SHA256 "${_fzero_shim_runtime}" FZERO_SHIM_SHA)
         if(NOT FZERO_SHIM_SHA STREQUAL "bf6455e63696a93b37c19dabf09b1e0606f26b0534bce828417b1df602dd8a7a")
             message(FATAL_ERROR "FZERO_SHIM_DLL is not the reviewed ea568c2 extras-capable private runtime")
         endif()
-        set_property(TARGET FZeroSNESRecomp APPEND PROPERTY LINK_DEPENDS "${FZERO_SHIM_DLL}")
+    endif()
+    if(_fzero_shim_runtime)
+        set_property(TARGET FZeroSNESRecomp APPEND PROPERTY LINK_DEPENDS "${_fzero_shim_runtime}")
         add_custom_command(TARGET FZeroSNESRecomp POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${FZERO_SHIM_DLL}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_fzero_shim_runtime}"
                 "$<TARGET_FILE_DIR:FZeroSNESRecomp>/dbce_shim.dll"
             COMMENT "Staging diagnostic-only shared input shim" VERBATIM)
     endif()

@@ -1,0 +1,35 @@
+# Optional private dependency pair. This module only reads files/hashes: no DLL
+# is loaded and no compiler, game or input provider is started.
+set(FZERO_SHARED_FORCE_DEPENDENCIES "" CACHE PATH "Explicit qualified private SharedForceBridge dependency folder")
+if(FZERO_SHARED_FORCE_DEPENDENCIES)
+    if(DEFINED CMAKE_SIZEOF_VOID_P AND NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+        message(FATAL_ERROR "The qualified SharedForceBridge dependency pair requires an x64 host")
+    endif()
+    if(FZERO_SHIM_DLL)
+        message(FATAL_ERROR "Use one dependency route: SharedForceBridge pair or FZERO_SHIM_DLL")
+    endif()
+    if(NOT IS_ABSOLUTE "${FZERO_SHARED_FORCE_DEPENDENCIES}")
+        message(FATAL_ERROR "SharedForceBridge dependency folder must be absolute")
+    endif()
+    file(READ "${CMAKE_CURRENT_LIST_DIR}/../vendor/dbce-shim/SHARED-FORCE-PIN.json" _fzero_pair_pin)
+    foreach(_fzero_dll IN ITEMS WheelFfb.dll dbce_shim.dll)
+        set(_fzero_file "${FZERO_SHARED_FORCE_DEPENDENCIES}/${_fzero_dll}")
+        if(NOT EXISTS "${_fzero_file}" OR IS_DIRECTORY "${_fzero_file}")
+            message(FATAL_ERROR "SharedForceBridge dependency missing: ${_fzero_dll}")
+        endif()
+        string(JSON _fzero_expected GET "${_fzero_pair_pin}" files "${_fzero_dll}")
+        file(SHA256 "${_fzero_file}" _fzero_actual)
+        if(NOT _fzero_actual STREQUAL _fzero_expected)
+            message(FATAL_ERROR "SharedForceBridge dependency hash mismatch: ${_fzero_dll}")
+        endif()
+    endforeach()
+    set(FZERO_SHARED_FORCE_WHEEL_DLL "${FZERO_SHARED_FORCE_DEPENDENCIES}/WheelFfb.dll")
+    set(FZERO_SHARED_FORCE_SHIM_DLL "${FZERO_SHARED_FORCE_DEPENDENCIES}/dbce_shim.dll")
+    if(NOT CMAKE_SCRIPT_MODE_FILE)
+        # Recheck admission if a previously configured dependency is replaced;
+        # LINK_DEPENDS alone would copy the changed DLL without another hash check.
+        set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_LIST_DIR}/../vendor/dbce-shim/SHARED-FORCE-PIN.json"
+            "${FZERO_SHARED_FORCE_WHEEL_DLL}" "${FZERO_SHARED_FORCE_SHIM_DLL}")
+    endif()
+endif()

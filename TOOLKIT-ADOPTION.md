@@ -318,3 +318,15 @@ Original run01 remains FAILED10/52; run02 closes children/query/exactlease at
 00:45:08.337Z. This qualifies source ownership behavior only. Paired actual DLL
 pins/private candidate adoption and physical normalization remain separate;
 accepted native/shim pins and the ready Deluxe candidate remain unchanged.
+
+
+The optional paired dependency pin is now qualified separately:
+shared83DD742F (productd926566, fixturec1e2ddb, canonical83b8ce92) plus
+native600EFA948E7 (source5948603). Explicit CMake admission/staging verifies
+both hashes and x64, refuses tampering/conflicting routes, and revalidates on
+DLL/pin replacement. Two unchanged DLLs are staged as a dependency-only
+candidate with an exact receipt. The seven game runtime sources remaina720d34
+and their52 passing cases stand. Default native/shim pins, ready Deluxe
+candidate and owner install are unchanged. A graphical host rebuilt with this
+pair and actual runtime/physical force are still unqualified; pending standards
+remain pending. See docs/shared-force-dependencies-qualification.json.

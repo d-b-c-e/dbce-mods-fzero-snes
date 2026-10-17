@@ -69,3 +69,11 @@ Optional bridge header source for the isolated SharedForceBridge implementation:
 This header is source-only preparation; PIN.json and the accepted DLL hash remain
 unchanged until the paired runtime is qualified. Missing optional exports refuse
 before the source owner initializes.
+
+
+Qualified optional x64 pair is now recorded separately in
+`SHARED-FORCE-PIN.json`, productd926566 / fixturec1e2ddb / DLL83DD742F.
+`PIN.json` retains the existing default ea568c2/BF6455E6 route. The new pair
+is selected only by explicit `FZERO_SHARED_FORCE_DEPENDENCIES`; no baseline
+binary or installed candidate is replaced. See the game ownership report and
+`docs/shared-force-dependencies-qualification.json` for exact receipts.
