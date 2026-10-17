@@ -49,7 +49,7 @@ bool s_trace_enabled = false;
  * loader-lock callback owns it. Shutdown drains the current call before close. */
 std::recursive_mutex s_call_gate;
 bool s_closed = false;
-bool s_shared_requested=false, s_shared_ready=false, s_shared_core_live=false, s_shared_initializing=false;
+bool s_shared_requested=false, s_shared_ready=false, s_shared_sample_ok=false, s_shared_core_live=false, s_shared_initializing=false;
 std::string s_shared_profile;
 unsigned char s_force_guid[16]{};
 FzeroSharedOwner s_shared_owner;
@@ -341,7 +341,7 @@ void FzeroFfbFrame(const uint8_t *ram, size_t ram_size, uint32_t input) {
 void FzeroFfbSilence(void) {
 #if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
   std::lock_guard<std::recursive_mutex> call(s_call_gate);
-  s_shared_ready=false;
+  s_shared_ready=s_shared_sample_ok=false;
   if (s_active) s_ffb.ZeroForces();
 #endif
 }
@@ -351,7 +351,7 @@ void FzeroFfbShutdown(void) {
   std::lock_guard<std::recursive_mutex> call(s_call_gate);
   s_closed = true;
   s_active = false; /* Reentrant/late frame and silence calls cannot emit exports. */
-  s_shared_ready=false;
+  s_shared_ready=s_shared_sample_ok=false;
   if(s_shared_core_live) {
     if(s_ffb.module)s_ffb.PanicStop();
     std::fprintf(stderr,"[fzero-ffb] copied Core stop unresolved; source slots/module retained with force stopped\n");
@@ -385,7 +385,7 @@ int FzeroFfbSharedStart(const char *config,void *window,const char *profile,size
 #if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
   std::lock_guard<std::recursive_mutex> call(s_call_gate);
   if(s_shared_core_live || !profile || !length || length>131072)return 0;
-  s_shared_requested=true;s_shared_ready=false;s_shared_profile.assign(profile,length);
+  s_shared_requested=true;s_shared_ready=s_shared_sample_ok=false;s_shared_profile.assign(profile,length);
   s_shared_initializing=true;FzeroFfbInit(config,window);s_shared_initializing=false;
   if(!s_active)return 0;
   std::string why;
@@ -413,11 +413,12 @@ int FzeroFfbSharedDevices(WheelReadDeviceInfoV1 *out,wchar_t (*paths)[260],int c
 int FzeroFfbSharedRead(WheelReadSnapshotV1 *out,int capacity) {
 #if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
   std::lock_guard<std::recursive_mutex> call(s_call_gate);
+  s_shared_ready=s_shared_sample_ok=false;
   if(s_closed || !s_active || !s_shared_core_live || capacity<FzeroSharedOwner::capacity)return 0;
   std::string why;
-  s_shared_ready=s_shared_owner.sample(out,why);
-  if(!s_shared_ready){s_ffb.ZeroForces();std::fprintf(stderr,"[fzero-ffb] %s\n",why.c_str());}
-  return s_shared_ready?s_shared_owner.count():0;
+  s_shared_sample_ok=s_shared_owner.sample(out,why);
+  if(!s_shared_sample_ok){s_ffb.ZeroForces();std::fprintf(stderr,"[fzero-ffb] %s\n",why.c_str());}
+  return s_shared_sample_ok?s_shared_owner.count():0;
 #else
   (void)out;(void)capacity;return 0;
 #endif
@@ -425,7 +426,7 @@ int FzeroFfbSharedRead(WheelReadSnapshotV1 *out,int capacity) {
 void FzeroFfbSharedCoreState(int live) {
 #if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
   std::lock_guard<std::recursive_mutex> call(s_call_gate);
-  s_shared_core_live=live!=0;s_shared_ready=false;
+  s_shared_core_live=live!=0;s_shared_ready=s_shared_sample_ok=false;
 #else
   (void)live;
 #endif
@@ -434,7 +435,7 @@ void FzeroFfbSharedCoreState(int live) {
 void FzeroFfbSharedAccept(int live) {
 #if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
   std::lock_guard<std::recursive_mutex> call(s_call_gate);
-  s_shared_ready=s_shared_ready && live!=0;
+  s_shared_ready=!s_closed && s_active && s_shared_core_live && s_shared_sample_ok && live!=0;
   if(!s_shared_ready && s_active)s_ffb.ZeroForces();
 #else
   (void)live;

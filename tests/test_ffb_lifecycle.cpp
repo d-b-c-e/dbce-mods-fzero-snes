@@ -188,7 +188,9 @@ static int shared_test(bool exports) {
   size_t before=events.size();FzeroFfbFrame(ram,sizeof(ram),0);
   CHECK(events.size()==before+1 && events.back()=="ZeroForces");
   FzeroFfbSharedCoreState(1);WheelReadSnapshotV1 samples[8]{};
-  CHECK(FzeroFfbSharedRead(samples,8)==1 && shared_sequence==1);
+  CHECK(FzeroFfbSharedRead(samples,8)==1 && shared_sequence==1 && !s_shared_ready);
+  before=events.size();FzeroFfbFrame(ram,sizeof(ram),0);
+  CHECK(events.size()==before+1 && events.back()=="ZeroForces"); // no force between source read and Core acceptance
   FzeroFfbSharedAccept(1);CHECK(s_shared_ready);
   before=events.size();FzeroFfbFrame(ram,sizeof(ram),0);CHECK(events.size()>before+1);
   FzeroFfbSilence();CHECK(!s_shared_ready);
