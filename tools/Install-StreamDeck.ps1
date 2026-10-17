@@ -28,12 +28,14 @@ param(
     [string]$Rollback,
     [switch]$PrivateSharedInput,
     [switch]$PrivateControlsSetup,
+    [switch]$PrivateHostControls,
     [string]$SetupPython = 'python'
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 . (Join-Path $PSScriptRoot 'Private-ControlsSetup.ps1')
 if ($PrivateControlsSetup -and !$PrivateSharedInput) { throw '-PrivateControlsSetup requires -PrivateSharedInput. Nothing changed.' }
+if ($PrivateHostControls -and !$PrivateSharedInput) { throw '-PrivateHostControls requires -PrivateSharedInput. Nothing changed.' }
 if (!$BuildDir) { $BuildDir = Join-Path $repo 'build-merge' }
 $launcher = 'FZeroSNESRecomp-wheel-launcher.exe'
 $sharedOwned = @('dbce_shim.dll', 'shared-input/dbce_shim.h', 'shared-input/PIN.json', 'shared-input/PROVENANCE.md', 'shared-input/dbce_shim_extras.h')
@@ -51,23 +53,33 @@ function Recording-Capability([bool]$PrivateShared, [string]$LinkedText) {
         recordBackends=@('Native') + @(if ($PrivateShared) { 'Shared' })
         automatedRecordBackends=@(if ($PrivateShared) { 'Shared' }) }
 }
-function Shared-ExtrasDescriptor {
+function Shared-ExtrasDescriptor([bool]$HostControls=$false) {
     $declaration = "game fzero-snes`nfzero-snes.x digital`nfzero-snes.y digital`nfzero-snes.l digital`nfzero-snes.r digital`n"
-    [ordered]@{ abi=1; acceptedSchema=1; declaration=$declaration
+    if($HostControls){$declaration += "fzero-snes.saveMenu digital`nfzero-snes.rewind digital`n"}
+    $contract=[ordered]@{ abi=1; acceptedSchema=1; declaration=$declaration
         declarationSha256=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::ASCII.GetBytes($declaration))).ToLowerInvariant()
         presentation=@(foreach($name in @('x','y','l','r')) {
             [ordered]@{id=('fzero-snes.'+$name);label=('SNES '+$name.ToUpperInvariant());group='SNES buttons'
                 effects='Guest button in menus and gameplay; keyboard retained.'
                 limits='Requires explicit SharedExtras=1; no physical force qualification.'}
         }) }
+    if($HostControls) {
+        $contract.optIn=[ordered]@{section='Input';key='SharedHostControls';value='1';default='0';appliesAfterRestart=$true}
+        $contract.presentation+=@(
+            [ordered]@{id='fzero-snes.saveMenu';label='Save-state browser';group='Host controls';effects='Opens the existing save-state browser; no immediate save or load.';limits='Ordinary play only; requires explicit SharedExtras=1 and SharedHostControls=1; not recorded.'},
+            [ordered]@{id='fzero-snes.rewind';label='Rewind';group='Host controls';effects='Opens the existing rewind browser.';limits='Ordinary play only; requires explicit SharedExtras=1 and SharedHostControls=1; not recorded.'})
+    }
+    return $contract
 }
-function Assert-SharedExtrasConsumer([string]$LinkedText) {
-    $extras=Shared-ExtrasDescriptor
+function Assert-SharedExtrasConsumer([string]$LinkedText,[bool]$HostControls=$false) {
+    $extras=Shared-ExtrasDescriptor $HostControls
     if (!$LinkedText.Contains($extras.declaration+[char]0) -or !$LinkedText.Contains('SharedExtras'+[char]0)) {
         throw 'Built Shared extras consumer lacks the linked declaration or opt-in flag. Nothing changed.'
     }
+    if($HostControls -and !$LinkedText.Contains('SharedHostControls'+[char]0)){throw 'Built Shared host consumer lacks its linked opt-in flag. Nothing changed.'}
 }
-function Assert-SharedOwnershipTransition([bool]$Requested, $PreviousReceipt, $IncomingPrivatePaths=$null) {
+function Assert-SharedOwnershipTransition([bool]$Requested, $PreviousReceipt, $IncomingPrivatePaths=$null, [bool]$IncomingHostControls=$false) {
+    if($Requested -and !$IncomingHostControls -and $PreviousReceipt.privateSharedInput.extras.declarationSha256 -ieq '761789a517b35b88395d6b3ba06e2d2ba60628168abda6637e69d581a7a51cf7'){throw 'The previous private install declares host controls. Keep -PrivateHostControls or roll it back before withdrawing that capability. Nothing changed.'}
     if (!$PreviousReceipt) { return }
     $privatePaths = @('dbce_shim.dll', 'shared-input/dbce_shim.h', 'shared-input/PIN.json', 'shared-input/PROVENANCE.md', 'shared-input/dbce_shim_extras.h')
     $ownedPrivate = @($PreviousReceipt.files | Where-Object { $_.name -and $_.name.Replace('\','/') -in $privatePaths })
@@ -84,7 +96,7 @@ function Assert-SharedOwnershipTransition([bool]$Requested, $PreviousReceipt, $I
         throw 'The previous install owns private Shared files. Keep -PrivateSharedInput or roll back that Shared install first; Native installation cannot withdraw ownership while leaving its files behind. Nothing changed.'
     }
 }
-function Private-SharedSources([string]$SourceRoot, [string]$BuildRoot) {
+function Private-SharedSources([string]$SourceRoot, [string]$BuildRoot, [bool]$HostControls=$false) {
     # Same private-only files and metadata as stage_unified.private_shared_files;
     # the ordinary installer retains its own Deluxe/source identity checks.
     $vendor = Join-Path $SourceRoot 'vendor/dbce-shim'
@@ -97,6 +109,7 @@ function Private-SharedSources([string]$SourceRoot, [string]$BuildRoot) {
         $pin.distribution -cne 'private-only' -or $pin.sourceRevision -cnotmatch '^[0-9a-f]{40}$' -or
         $keys.Count -ne $(if ($extras) { 3 } else { 2 }) -or 'dbce_shim.dll' -cnotin $keys -or 'dbce_shim.h' -cnotin $keys -or
         $(if ($extras) { $pin.extrasAbi -ne 1 } else { $null -ne $pin.extrasAbi })) { throw 'Invalid private Shared source pin.' }
+    if($HostControls -and !$extras){throw 'Private host controls require the extras-capable private pin.'}
     $files = @{'dbce_shim.dll'=(Join-Path $BuildRoot 'dbce_shim.dll'); 'shared-input/dbce_shim.h'=(Join-Path $vendor 'dbce_shim.h')
         'shared-input/PIN.json'=$pinPath; 'shared-input/PROVENANCE.md'=(Join-Path $vendor 'PROVENANCE.md')}
     if ($extras) { $files['shared-input/dbce_shim_extras.h'] = Join-Path $vendor 'dbce_shim_extras.h' }
@@ -114,7 +127,7 @@ function Private-SharedSources([string]$SourceRoot, [string]$BuildRoot) {
         }
     }
     $metadata=[ordered]@{ abi=2; distribution='private-only'; sourceRevision=$pin.sourceRevision; runtimeSha256=$pin.files.'dbce_shim.dll' }
-    if ($extras) { $metadata.extrasAbi=1; $metadata.extras=Shared-ExtrasDescriptor }
+    if ($extras) { $metadata.extrasAbi=1; $metadata.extras=Shared-ExtrasDescriptor $HostControls }
     @{ files=$files; metadata=$metadata }
 }
 function Restore-Files([string]$from, $state,
@@ -200,7 +213,7 @@ if ($Rollback) {
 if (-not $Label) { throw 'Name this install with -Label (lower-case words and hyphens).' }
 $oldReceiptPath = Join-Path $Target $receiptName
 $oldReceipt = if (Test-Path -LiteralPath $oldReceiptPath -PathType Leaf) { Get-Content -LiteralPath $oldReceiptPath -Raw | ConvertFrom-Json } else { $null }
-Assert-SharedOwnershipTransition ([bool]$PrivateSharedInput) $oldReceipt
+Assert-SharedOwnershipTransition ([bool]$PrivateSharedInput) $oldReceipt $null ([bool]$PrivateHostControls)
 Assert-PrivateControlsTransition ([bool]$PrivateControlsSetup) $oldReceipt
 $built = Join-Path $BuildDir 'FZeroSNESRecomp.exe'
 if (-not (Test-Path -LiteralPath $built)) { throw "No build at $built" }
@@ -212,8 +225,8 @@ if ($dirty.Count) { throw 'Commit the source first: the receipt names the commit
 $sources = @{ $launcher = $built; 'WheelFfb.dll' = (Join-Path $BuildDir 'WheelFfb.dll'); 'tools/Recording.ps1' = (Join-Path $repo 'tools/Recording.ps1') }
 $shared = $null
 if ($PrivateSharedInput) {
-    $shared = Private-SharedSources $repo $BuildDir
-    Assert-SharedOwnershipTransition $true $oldReceipt @($shared.files.Keys)
+    $shared = Private-SharedSources $repo $BuildDir ([bool]$PrivateHostControls)
+    Assert-SharedOwnershipTransition $true $oldReceipt @($shared.files.Keys) ([bool]$PrivateHostControls)
     foreach ($name in $shared.files.Keys) { $sources[$name] = $shared.files[$name] }
     # Legacy four-file pins remain readable; a new extras pin owns five files.
     $owned = @($launcher, 'WheelFfb.dll', 'tools/Recording.ps1') + @($shared.files.Keys)
@@ -241,7 +254,7 @@ if (!(Test-Path -LiteralPath $header) -or
     throw 'Build source stamp is stale or absent; reconfigure and rebuild from this clean commit. Nothing changed.'
 }
 $sessionCapability = Recording-Capability ([bool]$PrivateSharedInput) $linkedText
-if ($PrivateSharedInput -and $shared.metadata.extrasAbi -eq 1) { Assert-SharedExtrasConsumer $linkedText }
+if ($PrivateSharedInput -and $shared.metadata.extrasAbi -eq 1) { Assert-SharedExtrasConsumer $linkedText ([bool]$PrivateHostControls) }
 $setup = $null
 if ($PrivateControlsSetup) {
     $setup = Private-ControlsSetupSources $repo $BuildDir $linkedText $SetupPython

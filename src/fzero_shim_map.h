@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "fzero_analog.h"
+#include "fzero_host_buttons.h"
 /* The pinned Windows ABI header is kept byte-exact; its import annotation is
  * irrelevant to the ROM-free pure mapper on other build hosts. */
 #ifndef _WIN32
@@ -24,6 +25,10 @@ extern const char kFzeroShimUnsupported[];
 /* Declaration order is also the four scalar slots: X, Y, L, R. No generic
  * action aliases or migration of legacy SDL button indices. */
 extern const char kFzeroShimExtrasDeclaration[];
+/* Explicit SharedHostControls selects six slots; the first four stay X/Y/L/R. */
+extern const char kFzeroShimHostDeclaration[];
+int FzeroShimExtrasWordWithHosts(const dbce_shim_frame *frame,
+                       const dbce_shim_extras_frame *extras, int host_controls, uint32_t *word);
 int FzeroShimExtrasWord(const dbce_shim_frame *frame,
                        const dbce_shim_extras_frame *extras, uint32_t *word);
 typedef struct FzeroShimMap {

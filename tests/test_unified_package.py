@@ -228,6 +228,26 @@ class PackageTests(unittest.TestCase):
                 stage.validate_shared_consumer(image, stamp, True)
         stage.validate_shared_consumer(common, stamp)  # legacy common route remains independent
 
+    def test_host_controls_descriptor_is_explicit_and_matches_linked_consumer(self):
+        source = (pack.ROOT / "src/fzero_shim_map.c").read_text()
+        block = source.split("const char kFzeroShimHostDeclaration[] =", 1)[1].split(";", 1)[0]
+        declaration = "".join(json.loads('"' + value + '"') for value in re.findall(r'"((?:[^"\\]|\\.)*)"', block))
+        contract = stage.shared_extras_contract(True)
+        self.assertEqual(contract["declaration"], declaration)
+        self.assertEqual(contract["declarationSha256"], "761789a517b35b88395d6b3ba06e2d2ba60628168abda6637e69d581a7a51cf7")
+        self.assertEqual([x["id"] for x in contract["presentation"]][-2:], ["fzero-snes.saveMenu", "fzero-snes.rewind"])
+        self.assertEqual(contract["optIn"]["key"], "SharedHostControls")
+        common = b"fixture-clean\0[fzero-shim]SharedExtras\0"
+        valid = common + declaration.encode("ascii") + b"\0SharedHostControls\0"
+        stage.validate_shared_consumer(valid, "fixture-clean", True, True)
+        for data in (common, common + declaration.encode("ascii") + b"\0"):
+            with self.assertRaisesRegex(ValueError, "linked"):
+                stage.validate_shared_consumer(data, "fixture-clean", True, True)
+        with self.assertRaisesRegex(ValueError, "require"):
+            stage.validate_shared_consumer(valid, "fixture-clean", False, True)
+        with self.assertRaisesRegex(ValueError, "require"):
+            stage.stage(self.base / "absent-build", self.base / "absent-output", private_host_controls=True)
+
     def test_private_payload_receipt_reuses_outer_inventory_without_self_hash(self):
         folder = self.base / "receipts"
         (folder / "payload").mkdir(parents=True)

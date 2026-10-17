@@ -68,6 +68,17 @@ try {
     $pin.extrasAbi=2;[IO.File]::WriteAllText($pinPath,($pin | ConvertTo-Json -Depth 4))
     Refuses { Private-SharedSources $root $build } 'Unknown extras ABI must refuse.'
     $pin.extrasAbi=1;[IO.File]::WriteAllText($pinPath,($pin | ConvertTo-Json -Depth 4))
+    $hosts=Shared-ExtrasDescriptor $true
+    Check ($hosts.declarationSha256 -ceq '761789a517b35b88395d6b3ba06e2d2ba60628168abda6637e69d581a7a51cf7') 'Host declaration hash differs.'
+    Check ($hosts.presentation.Count -eq 6 -and $hosts.optIn.key -ceq 'SharedHostControls') 'Host capability must remain explicit.'
+    $hostLinked=$hosts.declaration+[char]0+'SharedExtras'+[char]0+'SharedHostControls'+[char]0
+    Assert-SharedExtrasConsumer $hostLinked $true
+    Refuses { Assert-SharedExtrasConsumer ($hosts.declaration+[char]0+'SharedExtras'+[char]0) $true } 'Host capability cannot be published without linked opt-in.'
+    $hostSource=Private-SharedSources $root $build $true
+    Check ($hostSource.metadata.extras.declarationSha256 -ceq $hosts.declarationSha256 -and $hostSource.files.Count -eq 5) 'Host inventory reuses the same qualified five files.'
+    $hostPrevious=@{privateSharedInput=@{extras=@{declarationSha256=$hosts.declarationSha256}};files=@()}
+    Refuses { Assert-SharedOwnershipTransition $true $hostPrevious } 'A host capability cannot be silently withdrawn on upgrade.'
+    Assert-SharedOwnershipTransition $true $hostPrevious $null $true
     $sharedNames+= 'shared-input/dbce_shim_extras.h'
     $legacyNames=@($sharedNames | Where-Object { $_ -cne 'shared-input/dbce_shim_extras.h' })
     $fiveReceipt=@{privateSharedInput=@{abi=2;extrasAbi=1};files=@($sharedNames | ForEach-Object { @{name=$_} })}

@@ -20,6 +20,7 @@ int FzeroShimOrdinary(void);
 /* Presentation capability only: the admitted ordinary handle has the four-slot declaration.
  * This does not certify a binding, live device or physical input response. */
 int FzeroShimHasExtras(void);
+int FzeroShimHasHostControls(void);
 int FzeroShimLatched(void);
 int FzeroShimCompleted(void);
 const char *FzeroShimSaveRoot(void);

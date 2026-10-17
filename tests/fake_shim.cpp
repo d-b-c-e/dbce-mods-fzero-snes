@@ -16,7 +16,7 @@ static const char *names[] = {
  "confirm","back","start","select","navUp","navDown","navLeft","navRight","camera","lookBack",
  "reset","horn","modMenu","muteFfb","gear1","gear2","gear3","gear4","gear5","gear6","gear7","gear8"
 };
-struct Fake { uint64_t seq=0; bool latched=false, capture=false, extras=false, bridge=false, published=false; std::filesystem::path folder; };
+struct Fake { uint64_t seq=0; bool latched=false, capture=false, extras=false, bridge=false, hosts=false, published=false; std::filesystem::path folder; };
 static bool flag(const char *name) { auto s=std::getenv(name); return s && *s; }
 int32_t dbce_shim_abi_version(void) { return flag("FZERO_FAKE_BAD_ABI") ? 1 : 2; }
 int32_t dbce_shim_frame_size(void) { return sizeof(dbce_shim_frame); }
@@ -79,7 +79,7 @@ int32_t dbce_shim_open_extras(const wchar_t *folder,const char *nonce,const char
  a.profile_len=profile_len;a.unsupported=unsupported;a.hwnd=hwnd;
  if (!declaration || declaration_len<=0) return DBCE_SHIM_BAD_ARGUMENT;
  int r=dbce_shim_open2(&a,out,why,len);if(r) return r;
- auto f=static_cast<Fake *>(*out);f->extras=true;
+ auto f=static_cast<Fake *>(*out);f->extras=true;f->hosts=std::string(declaration,declaration_len).find("fzero-snes.saveMenu digital\n")!=std::string::npos;
  std::ofstream d(f->folder/"declaration.spy",std::ios::binary);d.write(declaration,declaration_len);
  return DBCE_SHIM_OK;
 }
@@ -87,8 +87,8 @@ int32_t dbce_shim_tick_extras(void *handle,uint32_t contexts,dbce_shim_frame *ou
  auto f=static_cast<Fake *>(handle);
  if (!f || !f->extras || contexts || !x || x->struct_size!=sizeof(*x)) return DBCE_SHIM_BAD_ARGUMENT;
  int r=fill_tick(handle,out);if(r) return r;
- *x={};x->struct_size=sizeof(*x);x->abi=DBCE_SHIM_EXTRAS_ABI;x->seq=out->seq;x->count=4;
- for(int i=0;i<4;++i){x->slot[i].status=flag("FZERO_FAKE_EXTRAS_MISSING")?3:12;x->slot[i].value=1;}
+ *x={};x->struct_size=sizeof(*x);x->abi=DBCE_SHIM_EXTRAS_ABI;x->seq=out->seq;x->count=f->hosts?6:4;
+ for(uint32_t i=0;i<x->count;++i){x->slot[i].status=flag("FZERO_FAKE_EXTRAS_MISSING")?3:12;x->slot[i].value=1;}
  if(flag("FZERO_FAKE_EXTRAS_SEQ")) ++x->seq;
  if(flag("FZERO_FAKE_EXTRAS_COUNT")) --x->count;
  std::ofstream(f->folder/"extras-tick.spy",std::ios::app|std::ios::binary)<<out->seq<<"\n";

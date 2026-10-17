@@ -46,6 +46,32 @@ int main(void) {
   CHECK(!FzeroShimExtrasWord(&common,&extra,&extra_word) && extra_word==0); extra.slot[3].injected=0;
   extra.slot[3].value=2; CHECK(!FzeroShimExtrasWord(&common,&extra,&extra_word) && extra_word==0);
   CHECK(!FzeroShimExtrasWord(NULL,&extra,&extra_word));
+  // Six-slot host declaration is explicit. Old four-slot consumers cannot
+  // mistake host actions for guest SNES buttons or accept the new frame size.
+  extra = (dbce_shim_extras_frame){0};extra.struct_size=sizeof(extra);extra.abi=1;extra.seq=common.seq;extra.count=6;
+  for(int i=0;i<6;++i){extra.slot[i].status=12;extra.slot[i].value=1;}
+  CHECK(!FzeroShimExtrasWord(&common,&extra,&extra_word));
+  CHECK(FzeroShimExtrasWordWithHosts(&common,&extra,1,&extra_word) && extra_word==(0xe02u|FZERO_HOST_BUTTON_MASK));
+  CHECK(FzeroShimGuestWord(extra_word|0x40000000u)==(0xe02u|0x40000000u));
+  for(int status=0;status<=14;++status){
+    extra.slot[4].status=extra.slot[5].status=(uint8_t)status;
+    CHECK(FzeroShimExtrasWordWithHosts(&common,&extra,1,&extra_word));
+    CHECK((extra_word&FZERO_HOST_BUTTON_MASK)==(status==12?FZERO_HOST_BUTTON_MASK:0));
+  }
+  extra.slot[4].status=extra.slot[5].status=12;extra.slot[4].injected=1;
+  CHECK(!FzeroShimExtrasWordWithHosts(&common,&extra,1,&extra_word) && extra_word==0);
+  extra.slot[4].injected=0;extra.seq++;
+  CHECK(!FzeroShimExtrasWordWithHosts(&common,&extra,1,&extra_word));extra.seq--;
+  extra.count=4;CHECK(!FzeroShimExtrasWordWithHosts(&common,&extra,1,&extra_word));extra.count=6;
+  CHECK(!FzeroShimExtrasWordWithHosts(&common,&extra,2,&extra_word));
+  uint32_t held=0,pressed=0;
+  CHECK(FzeroHostButtonsTake(FZERO_WHEEL_SAVE_MENU|0x40000001u,&held,1,&pressed)==0x40000001u && pressed==FZERO_WHEEL_SAVE_MENU);
+  CHECK(FzeroHostButtonsTake(FZERO_WHEEL_SAVE_MENU,&held,1,&pressed)==0 && pressed==0);
+  CHECK(FzeroHostButtonsTake(0,&held,1,&pressed)==0 && pressed==0);
+  CHECK(FzeroHostButtonsTake(FZERO_WHEEL_REWIND,&held,0,&pressed)==0 && pressed==0);
+  CHECK(FzeroHostButtonsTake(FZERO_WHEEL_REWIND,&held,1,&pressed)==0 && pressed==0); // held through blocked/modal state
+  FzeroHostButtonsTake(0,&held,1,&pressed);
+  CHECK(FzeroHostButtonsTake(FZERO_WHEEL_REWIND,&held,1,&pressed)==0 && pressed==FZERO_WHEEL_REWIND);
   CHECK(FzeroShimGuestWord(0x400000f1u)==0x40000001u);
   CHECK(FzeroShimGuestWord(0x400f00f1u)==0x40000001u);
   CHECK(FzeroShimGuestWord(0x40040041u)==0x40040041u);

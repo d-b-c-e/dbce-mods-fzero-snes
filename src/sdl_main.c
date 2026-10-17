@@ -892,10 +892,9 @@ static bool session_live_input(void *context, uint32_t *word) {
             debug_server_get_controller_inputs() | (1u << 30) |
             debug_server_get_controller_active_mask();
   }
-  uint32_t wheel_host_buttons = input & (FZERO_WHEEL_SAVE_MENU | FZERO_WHEEL_REWIND);
-  uint32_t wheel_host_pressed = wheel_host_buttons & ~*ctx->held_wheel_host_buttons;
-  *ctx->held_wheel_host_buttons = wheel_host_buttons;
-  input &= ~(FZERO_WHEEL_SAVE_MENU | FZERO_WHEEL_REWIND);
+  uint32_t wheel_host_pressed = 0;
+  input = FzeroHostButtonsTake(input, ctx->held_wheel_host_buttons,
+                              !g_isolated_owner_state, &wheel_host_pressed);
   if (!g_isolated_owner_state && (wheel_host_pressed & FZERO_WHEEL_SAVE_MENU)) {
     (void)snes_savestate_menu_poll_open(FZERO_MENU_GESTURE);
   }
@@ -1421,8 +1420,9 @@ static void session_status_draw(const FzeroPresenter *p) {
   snes_ovl_draw_text(pixels, w, h, 8, 22, bottom, 0xffffffffu, 1);
   if (limited_shared)
     snes_ovl_draw_text(pixels, w, h, 8, 37,
-        FzeroShimHasExtras() ? "X/Y/L/R bindings available; host keys/gestures"
-                            : "Extra wheel buttons unavailable; use keyboard",
+        FzeroShimHasHostControls() ? "X/Y/L/R and save/rewind bindings available"
+        : FzeroShimHasExtras() ? "X/Y/L/R bindings available; host keys/gestures"
+                              : "Extra wheel buttons unavailable; use keyboard",
         0xffffb348u, 1);
   FzeroRect game = overlay_rect(p, 1);
   int draw_w = game.w * 4 / 5;

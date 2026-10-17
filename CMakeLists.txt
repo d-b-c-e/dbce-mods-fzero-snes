@@ -98,7 +98,7 @@ if(BUILD_TESTING)
         set_target_properties(fzero_shim_host_tests PROPERTIES
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/shim-fixture")
         add_dependencies(fzero_shim_host_tests fzero_shim_fake)
-        foreach(mode off args replay normal abi pending record stop fences latched expired provenance session)
+        foreach(mode off args replay normal abi pending record stop fences latched expired provenance session hostcontrols)
             add_test(NAME fzero_shim_host_${mode} COMMAND fzero_shim_host_tests ${mode})
         endforeach()
         add_executable(fzero_shim_ordinary_tests tests/test_shim_ordinary.cpp src/fzero_shim.cpp
@@ -114,7 +114,8 @@ if(BUILD_TESTING)
         foreach(mode normal native replay force forcechanged unknown session profile profileinfo missing unexpected launcher
             extras extrasmissing extrasseq extrascount extrasabi extrasinfo extrasnosection extrasduplicate extrasfirst extrasbom
             configlimit configoversize extrasconfiglimit extrasconfigoversize
-            launchersaved launcherempty launcherbackendchanged launcherbadextras launcherrecord)
+            launchersaved launcherempty launcherbackendchanged launcherbadextras launcherrecord
+            hosts hostsnoflag hostsrecord hostschanged)
             add_test(NAME fzero_shim_ordinary_${mode} COMMAND fzero_shim_ordinary_tests ${mode})
         endforeach()
     endif()

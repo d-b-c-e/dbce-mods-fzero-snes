@@ -25,7 +25,7 @@ extern "C" {
 
 namespace {
 bool requested, ordinary, failed, latched, completed, host_persistence, host_debug;
-bool use_extras, deferred_launcher_profile, use_force_bridge, stop_attempted;
+bool use_extras, deferred_launcher_profile, use_force_bridge, stop_attempted, use_host_controls;
 std::string config_path, profile, recording_path, save_root, session_nonce;
 std::filesystem::path session_file, batch_file;
 FzeroFfbState force_state{};
@@ -198,6 +198,7 @@ int FzeroShimRequested(void) { return requested; }
 int FzeroShimUsingInput(void) { return requested || ordinary; }
 int FzeroShimOrdinary(void) { return ordinary; }
 int FzeroShimHasExtras(void) { return ordinary && use_extras && handle && !failed; }
+int FzeroShimHasHostControls(void) { return ordinary && use_host_controls && handle && !failed; }
 int FzeroShimLatched(void) { return latched; }
 int FzeroShimCompleted(void) { return completed && !failed; }
 const char *FzeroShimSaveRoot(void) { return save_root.c_str(); }
@@ -231,6 +232,11 @@ int FzeroShimPrepare(const char *config, int direct_rom, int replay, int script,
     FzeroIniReadInt(config, "Input", "SharedExtras", &extras);
     if (extras != 0 && extras != 1) return refuse("SharedExtras must be 0 or 1");
     use_extras = extras == 1;
+    int hosts=0;FzeroIniReadInt(config,"Input","SharedHostControls",&hosts);
+    if(hosts!=0 && hosts!=1)return refuse("SharedHostControls must be 0 or 1");
+    use_host_controls=hosts==1;
+    if(use_host_controls && (!use_extras || explicit_recording))
+      return refuse("SharedHostControls requires SharedExtras=1 and ordinary play without recording");
     // Only the paired keyboard/mouse UI plus qualified bundled helper may
     // reach a launcher. An old/missing setup bundle keeps the prior refusal.
     if (!direct_rom && !qualified_launcher)
@@ -255,6 +261,8 @@ int FzeroShimPrepare(const char *config, int direct_rom, int replay, int script,
    * into a normal force-enabled launch. */
   if (!FzeroLatchNoForce()) return refuse("force already initialized");
   if (!FzeroTelemetryLatchNoDelivery()) return refuse("telemetry delivery already initialized");
+  int hosts=0;FzeroIniReadInt(config,"Input","SharedHostControls",&hosts);
+  if(hosts)return refuse("SharedHostControls is ordinary play only, not a diagnostic/capture route");
   if (!direct_rom || replay || script || explicit_recording)
     return refuse("requires an explicit ROM, no launcher and no other record/replay mode");
   for (const char *key : {"FZERO_STATE_SAVE_AT", "FZERO_STATE_LOAD_AT", "FZERO_VIEWPORT_SCRIPT", "FZERO_OVERLAY_SELFTEST"})
@@ -309,6 +317,8 @@ int FzeroShimStart(void *window, const char *legacy_guid) {
   if(ordinary) {
     int bridge=0;FzeroIniReadInt(config_path.c_str(),"Input","SharedForceBridge",&bridge);
     if(bridge!=(use_force_bridge?1:0))return refuse("SharedForceBridge changed after startup; restart required");
+    int hosts=0;FzeroIniReadInt(config_path.c_str(),"Input","SharedHostControls",&hosts);
+    if(hosts!=(use_host_controls?1:0))return refuse("SharedHostControls changed after startup; restart required");
   }
   const bool fences = host_persistence && host_debug && FzeroTelemetryDeliveryBlocked();
   if (requested && !fences) return refuse("host persistence/debug/telemetry fences not established");
@@ -323,6 +333,7 @@ int FzeroShimStart(void *window, const char *legacy_guid) {
     FzeroIniReadInt(config_path.c_str(), "Input", "SharedExtras", &extras);
     if (extras != 0 && extras != 1) return refuse("SharedExtras must be 0 or 1");
     use_extras = extras == 1;
+    if(use_host_controls && !use_extras)return refuse("SharedHostControls requires SharedExtras=1");
     if (!read_profile(config_path.c_str())) return 0;
   }
 #ifdef _WIN32
@@ -354,12 +365,13 @@ int FzeroShimStart(void *window, const char *legacy_guid) {
       a.adapter_version = "fzero-shim-diagnostic-3"; a.hz = kHz; a.seconds = kSeconds;
     }
     char why[512]{};
+    const char *declaration=use_host_controls?kFzeroShimHostDeclaration:kFzeroShimExtrasDeclaration;
     int opened = use_force_bridge
-      ? (use_extras ? bridge_open_extras(&a,kFzeroShimExtrasDeclaration,(int32_t)std::strlen(kFzeroShimExtrasDeclaration),&handle,why,sizeof(why))
+      ? (use_extras ? bridge_open_extras(&a,declaration,(int32_t)std::strlen(declaration),&handle,why,sizeof(why))
                     : bridge_open(&a,&handle,why,sizeof(why)))
       : use_extras
       ? open_extras(a.folder, a.nonce, a.profile, a.profile_len, a.unsupported, a.hwnd,
-          kFzeroShimExtrasDeclaration, (int32_t)std::strlen(kFzeroShimExtrasDeclaration), &handle, why, sizeof(why))
+          declaration, (int32_t)std::strlen(declaration), &handle, why, sizeof(why))
       : open2(&a, &handle, why, sizeof(why));
     if(use_force_bridge && handle)FzeroFfbSharedCoreState(1);
     if (opened != DBCE_SHIM_OK || !handle) return refuse(why);
@@ -416,10 +428,11 @@ int FzeroShimStart(void *window, const char *legacy_guid) {
       origin.close(); if (!origin) return refuse("origin receipt write failed");
     }
     started = Clock::now();
+    if(use_host_controls)std::fprintf(stderr,"[fzero-shim] dedicated save-state browser/rewind bindings enabled; host-only, no guest bits or recording\n");
     if (use_extras) std::fprintf(stderr, "[fzero-shim] declared X/Y/L/R extras enabled; same owned tick; no legacy binding fallback\n");
     std::fprintf(stderr, "[fzero-shim] ABI 2 %s opened; steering range=%d response=%d; Core calibration; keyboard=%s; %s\n",
       ordinary ? "ordinary input" : "capture", range, response, latched ? "suppressed" : "retained",
-      ordinary ? "SDL devices disabled; X/Y/L/R require declared SharedExtras; legacy wheel save/rewind and unbound buttons unavailable; keyboard retained; physical FFB requires explicit SharedForceBridge and qualified owned snapshots" : "native SDL controller lane disabled");
+      ordinary ? "SDL devices disabled; X/Y/L/R require declared SharedExtras; dedicated save/rewind require declared SharedHostControls; no legacy button fallback; keyboard retained; physical FFB requires explicit SharedForceBridge and qualified owned snapshots" : "native SDL controller lane disabled");
     return 1;
   } catch (const std::exception &e) { return refuse(e.what()); }
 #else
@@ -441,13 +454,13 @@ static int input_tick(uint32_t *extras_word) {
     }
     dbce_shim_extras_frame extras{};extras.struct_size=sizeof(extras);
     bool ok=bridge_tick_extras(handle,copied,count,0,&frame,&extras)==DBCE_SHIM_OK &&
-      FzeroShimExtrasWord(&frame,&extras,extras_word);
+      FzeroShimExtrasWordWithHosts(&frame,&extras,use_host_controls,extras_word);
     return ok;
   }
   if (!use_extras) return tick(handle, &frame) == DBCE_SHIM_OK;
   dbce_shim_extras_frame extras{}; extras.struct_size = sizeof(extras);
   return tick_extras(handle, 0, &frame, &extras) == DBCE_SHIM_OK &&
-      FzeroShimExtrasWord(&frame, &extras, extras_word);
+      FzeroShimExtrasWordWithHosts(&frame, &extras, use_host_controls, extras_word);
 }
 int FzeroShimInput(uint32_t *word, const uint8_t *ram, size_t ram_size) {
   if (word) *word = 0;
@@ -478,7 +491,7 @@ int FzeroShimOverlayInput(uint32_t *word) {
   if (!input_tick(&extras_word) || !FzeroShimMapOverlayFrame(&map,&frame,word) ||
       frame.latched || frame.suppress_native || frame.run != 0)
     return refuse("ordinary overlay input failed");
-  *word |= extras_word;
+  *word |= extras_word & ~FZERO_HOST_BUTTON_MASK;
   if(use_force_bridge)FzeroFfbSilence(); // overlay input never arms driving forces
   return 1;
 }

@@ -330,3 +330,15 @@ and their52 passing cases stand. Default native/shim pins, ready Deluxe
 candidate and owner install are unchanged. A graphical host rebuilt with this
 pair and actual runtime/physical force are still unqualified; pending standards
 remain pending. See docs/shared-force-dependencies-qualification.json.
+
+## October 16 optional Shared host controls
+
+Dedicated save-state browser/rewind bindings now use the same extras tick and
+existing host panel handlers through an explicit six-slot declaration. Native and
+Shared share the edge/strip helper; host bits never enter the guest or recordings.
+Private staging/installer receipt publication requires an explicit host-controls
+variant and linked consumer markers. Wheelkit game-specific admission and Apply
+preserve flags, unknown settings and default C4 behavior. Focused qualification is
+queued; see docs/2026-10-16-shared-host-controls.md. All 37 ledger IDs are present.
+STD-019 remains unchecked; STD-021/031 physical normalization and STD-037 schema 2
+remain pending. No installed capability, ready candidate or force tuning changed.

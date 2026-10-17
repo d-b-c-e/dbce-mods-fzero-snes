@@ -20,7 +20,7 @@ int main(int argc,char **argv) {
  CHECK(argc==2); std::string mode=argv[1];
  CHECK(mode=="off" || mode=="args" || mode=="replay" || mode=="normal" ||
        mode=="abi" || mode=="pending" || mode=="record" || mode=="stop" || mode=="fences" ||
-       mode=="latched" || mode=="expired" || mode=="provenance" || mode=="session");
+       mode=="latched" || mode=="expired" || mode=="provenance" || mode=="session" || mode=="hostcontrols");
  _putenv_s("FZERO_SHIM_DIAGNOSTIC_RUN","");
  _putenv_s("FZERO_FAKE_BAD_ABI",""); _putenv_s("FZERO_FAKE_BAD_RECORD",""); _putenv_s("FZERO_FAKE_BAD_STOP","");
  _putenv_s("FZERO_SHIM_SESSION_FILE",""); _putenv_s("FZERO_SHIM_BATCH_FILE",""); _putenv_s("FZERO_SHIM_SESSION_NONCE","");
@@ -37,7 +37,8 @@ int main(int argc,char **argv) {
  const std::string profile="[Controls]\r\nSchema=1\r\nProfile=fixture\r\nRevision=1\r\n"
    "steer = axis 0 dev={11111111-2222-3333-4444-555555555555} prod={0006346e-0000-0000-0000-504944564944} "
    "range=0..65535 rest=32768 travel=-1\r\n";
- const std::string original="[Other]\r\nKept=yes\r\n"+profile+"[ForceFeedback]\r\nEnabled=1\r\nStrength=12\r\n[Telemetry]\r\nEnabled=1\r\n";
+ const std::string original="[Other]\r\nKept=yes\r\n"+profile+"[ForceFeedback]\r\nEnabled=1\r\nStrength=12\r\n[Telemetry]\r\nEnabled=1\r\n"+
+   (mode=="hostcontrols"?"[Input]\r\nSharedHostControls=1\r\n":"");
  {std::ofstream f(cfg,std::ios::binary); f<<original;}
  _putenv_s("FZERO_SHIM_DIAGNOSTIC_RUN",run.string().c_str());
  bool latched=mode=="latched" || mode=="expired" || mode=="provenance";
@@ -49,7 +50,7 @@ int main(int argc,char **argv) {
    _putenv_s("FZERO_SHIM_SESSION_FILE",session.string().c_str());
    if(mode!="session") _putenv_s("FZERO_SHIM_BATCH_FILE",batch.string().c_str());
  }
- if(mode=="args" || mode=="replay" || mode=="session") {
+ if(mode=="args" || mode=="replay" || mode=="session" || mode=="hostcontrols") {
    CHECK(!FzeroShimPrepare(cfg.string().c_str(),mode!="args",mode=="replay",0,0,0));
    CHECK(FzeroShimRequested() && FzeroNoForceLatched()); CHECK(!std::filesystem::exists(run));
  } else {

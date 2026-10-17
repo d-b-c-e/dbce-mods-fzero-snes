@@ -73,19 +73,30 @@ def shared_controls_contract():
             "unsupported": unsupported, "requires": {"directRom": True, "forceFeedbackDisabled": True}}
 
 
-def shared_extras_contract():
+def shared_extras_contract(host_controls=False):
     declaration = ("game fzero-snes\n"
                    "fzero-snes.x digital\nfzero-snes.y digital\n"
                    "fzero-snes.l digital\nfzero-snes.r digital\n")
-    return {"abi": 1, "acceptedSchema": 1, "declaration": declaration,
+    if host_controls:
+        declaration += "fzero-snes.saveMenu digital\nfzero-snes.rewind digital\n"
+    contract = {"abi": 1, "acceptedSchema": 1, "declaration": declaration,
             "declarationSha256": digest(declaration.encode("ascii")),
             "presentation": [{"id": "fzero-snes." + name, "label": "SNES " + name.upper(),
                               "group": "SNES buttons", "effects": "Guest button in menus and gameplay; keyboard retained.",
                               "limits": "Requires explicit SharedExtras=1; no physical force qualification."}
                              for name in ("x", "y", "l", "r")]}
+    if host_controls:
+        contract["optIn"] = {"section": "Input", "key": "SharedHostControls", "value": "1",
+                             "default": "0", "appliesAfterRestart": True}
+        contract["presentation"] += [
+            {"id": "fzero-snes." + name, "label": label, "group": "Host controls",
+             "effects": effect, "limits": "Ordinary play only; requires explicit SharedExtras=1 and SharedHostControls=1; not recorded."}
+            for name, label, effect in (("saveMenu", "Save-state browser", "Opens the existing save-state browser; no immediate save or load."),
+                                        ("rewind", "Rewind", "Opens the existing rewind browser."))]
+    return contract
 
 
-def private_shared_files(build, root=ROOT):
+def private_shared_files(build, root=ROOT, host_controls=False):
     """Explicit private add-on only; never infer permission from a nearby DLL."""
     vendor = root / "vendor/dbce-shim"
     pin_bytes = (vendor / "PIN.json").read_bytes()
@@ -98,6 +109,8 @@ def private_shared_files(build, root=ROOT):
             set(pin.get("files", {})) != base_files | ({"dbce_shim_extras.h"} if extras else set()) or \
             (pin.get("extrasAbi") != 1 if extras else "extrasAbi" in pin):
         raise ValueError("Invalid private shared-input source pin")
+    if host_controls and not extras:
+        raise ValueError("Private host controls require the extras-capable private pin")
     files = {"dbce_shim.dll": (build / "dbce_shim.dll").read_bytes(),
              "shared-input/dbce_shim.h": (vendor / "dbce_shim.h").read_bytes(),
              "shared-input/PIN.json": pin_bytes,
@@ -108,7 +121,7 @@ def private_shared_files(build, root=ROOT):
         key = name if name.endswith(".dll") else "shared-input/" + name
         if not isinstance(expected, str) or not re.fullmatch(r"[0-9a-f]{64}", expected) or digest(files[key]) != expected:
             raise ValueError(f"Private shared-input bytes differ from source pin: {name}")
-    return files, {"abi": 2, "distribution": "private-only", **({"extrasAbi": 1, "extras": shared_extras_contract()} if extras else {}),
+    return files, {"abi": 2, "distribution": "private-only", **({"extrasAbi": 1, "extras": shared_extras_contract(host_controls)} if extras else {}),
                    "sourceRevision": pin["sourceRevision"],
                    "runtimeSha256": pin["files"]["dbce_shim.dll"],
                    "controls": shared_controls_contract()}
@@ -122,14 +135,20 @@ def write_receipts(output, receipt):
         (output / "payload/build-receipt.json").write_text(data)
 
 
-def validate_shared_consumer(image, description, extras=False):
+def validate_shared_consumer(image, description, extras=False, host_controls=False):
     if description.encode() + b"\0" not in image or b"[fzero-shim]" not in image:
         raise ValueError("Private shared consumer lacks the clean linked source stamp or shim adapter")
-    if extras and (shared_extras_contract()["declaration"].encode("ascii") + b"\0" not in image or b"SharedExtras\0" not in image):
+    if host_controls and not extras:
+        raise ValueError("Private host controls require Shared extras")
+    if extras and (shared_extras_contract(host_controls)["declaration"].encode("ascii") + b"\0" not in image or b"SharedExtras\0" not in image):
         raise ValueError("Private shared extras consumer lacks the linked declaration or opt-in flag")
+    if host_controls and b"SharedHostControls\0" not in image:
+        raise ValueError("Private host consumer lacks the linked SharedHostControls opt-in flag")
 
 
-def stage(build, output, private_shared_input=False, private_controls_setup=False):
+def stage(build, output, private_shared_input=False, private_controls_setup=False, private_host_controls=False):
+    if private_host_controls and not private_shared_input:
+        raise ValueError("Private host controls require private Shared input")
     if private_controls_setup and not private_shared_input:
         raise ValueError("Private controls setup requires the owned private Shared consumer")
     cache = {}
@@ -182,8 +201,8 @@ def stage(build, output, private_shared_input=False, private_controls_setup=Fals
         files[name] = (ROOT / name).read_bytes()
     shared = None
     if private_shared_input:
-        extra, shared = private_shared_files(build)
-        validate_shared_consumer(files["FZeroSNESRecomp.exe"], description, shared.get("extrasAbi") == 1)
+        extra, shared = private_shared_files(build, host_controls=private_host_controls)
+        validate_shared_consumer(files["FZeroSNESRecomp.exe"], description, shared.get("extrasAbi") == 1, private_host_controls)
         files.update(extra)
     pending = [n for n in files if n.lower().endswith((".exe", ".dll"))]
     while pending:
@@ -231,8 +250,10 @@ if __name__ == "__main__":
                         help="Stage pinned private-only input DLL; public packager refuses this receipt")
     parser.add_argument("--private-controls-setup", action="store_true",
                         help="Stage the exact qualified portable setup bundle with the private Shared consumer")
+    parser.add_argument("--private-host-controls", action="store_true",
+                        help="Publish the opt-in six-slot Shared save-state browser/rewind consumer contract")
     args = parser.parse_args()
     try:
-        print(stage(args.build.resolve(), args.output.resolve(), args.private_shared_input, args.private_controls_setup))
+        print(stage(args.build.resolve(), args.output.resolve(), args.private_shared_input, args.private_controls_setup, args.private_host_controls))
     except (ValueError, OSError, KeyError, struct.error, subprocess.CalledProcessError) as error:
         raise SystemExit(str(error))

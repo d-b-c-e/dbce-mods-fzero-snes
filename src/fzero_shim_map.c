@@ -28,18 +28,32 @@ const char kFzeroShimExtrasDeclaration[] =
   "fzero-snes.l digital\n"
   "fzero-snes.r digital\n";
 
+const char kFzeroShimHostDeclaration[] =
+  "game fzero-snes\n"
+  "fzero-snes.x digital\n"
+  "fzero-snes.y digital\n"
+  "fzero-snes.l digital\n"
+  "fzero-snes.r digital\n"
+  "fzero-snes.saveMenu digital\n"
+  "fzero-snes.rewind digital\n";
+
 int FzeroShimExtrasWord(const dbce_shim_frame *f,
                        const dbce_shim_extras_frame *x, uint32_t *word) {
+  return FzeroShimExtrasWordWithHosts(f,x,0,word);
+}
+int FzeroShimExtrasWordWithHosts(const dbce_shim_frame *f,
+                       const dbce_shim_extras_frame *x, int hosts, uint32_t *word) {
   if (word) *word = 0;
   if (!word || !f || !x || f->struct_size != sizeof(*f) || f->abi != DBCE_SHIM_ABI ||
       x->struct_size != sizeof(*x) || x->abi != DBCE_SHIM_EXTRAS_ABI ||
-      x->seq != f->seq || x->count != 4 || x->contexts != 0) return 0;
-  static const unsigned bits[] = {9, 1, 10, 11};
+      (hosts != 0 && hosts != 1) || x->seq != f->seq ||
+      x->count != (hosts ? 6u : 4u) || x->contexts != 0) return 0;
+  static const unsigned bits[] = {9, 1, 10, 11, 24, 25};
   uint32_t result = 0;
-  for (int i = 0; i < 4; ++i) {
+  for (unsigned i = 0; i < x->count; ++i) {
     const dbce_shim_action *a = &x->slot[i];
     // Ordinary extras never admit injected provenance; device faults and
-    // rearming stay neutral. Host save/rewind are not part of this declaration.
+    // rearming stay neutral. The six-slot opt-in adds only host bits 24/25.
     if (a->injected || !isfinite(a->value) || a->value < 0 || a->value > 1) return 0;
     if (a->status == 12 && a->value > .5f) result |= 1u << bits[i];
   }
@@ -135,6 +149,7 @@ int FzeroShimMenuValues(const uint8_t *ram, size_t ram_size,
   return 1;
 }
 uint32_t FzeroShimGuestWord(uint32_t input) {
+  input &= ~FZERO_HOST_BUTTON_MASK;
   const uint32_t pairs[] = {0x30u, 0xc0u, 0x30000u, 0xc0000u};
   for (unsigned i = 0; i < 4; ++i)
     if ((input & pairs[i]) == pairs[i]) input ^= pairs[i];
