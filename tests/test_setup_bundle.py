@@ -62,6 +62,35 @@ class SetupBundleTests(unittest.TestCase):
             bad = copy.deepcopy(self.manifest); bad[key] = value; self.write(bad)
             with self.assertRaises(ValueError): setup_bundle.admit(self.root)
 
+    def test_scoped_object_manifest_admits_explicit_fzero_controls(self):
+        self.manifest["supportedGames"] = [{"id": "grid-2019", "scopes": ["settings"]},
+                                            {"id": "f-zero", "scopes": ["controls"]}]
+        self.write(self.manifest)
+        info = setup_bundle.admit(self.root)
+        self.assertEqual(info["sourceCommit"], self.manifest["sourceCommit"])
+        self.assertFalse(info["reportQualified"])
+        image = (info["manifestSha256"] + "\0" + info["exeSha256"] + "\0").encode("ascii")
+        self.assertEqual(setup_bundle.payload(self.root, image)[1]["manifestSha256"], info["manifestSha256"])
+
+    def test_scoped_object_manifest_requires_controls_without_ambiguous_rows(self):
+        for games in ([{"id": "f-zero", "scopes": ["settings"]}],
+                      [{"id": "fzero-recomp", "scopes": ["controls"]}],
+                      [{"id": "f-zero", "scopes": ["controls", "controls"]}],
+                      [{"id": "f-zero", "scopes": ["controls", "future"]}],
+                      [{"id": "f-zero", "scopes": ["controls"], "future": True}],
+                      [{"id": "f-zero", "scopes": ["controls"]}] * 2,
+                      ["f-zero", {"id": "f-zero", "scopes": ["controls"]}]):
+            with self.subTest(games=games):
+                self.manifest["supportedGames"] = games
+                self.write(self.manifest)
+                with self.assertRaises(ValueError): setup_bundle.admit(self.root)
+
+    def test_scoped_object_manifest_still_requires_exact_process_wait_contract(self):
+        self.manifest["supportedGames"] = [{"id": "f-zero", "scopes": ["controls"]}]
+        del self.manifest["waitForProcessContract"]
+        self.write(self.manifest)
+        with self.assertRaises(ValueError): setup_bundle.admit(self.root)
+
     def test_drift_and_unowned_files_refuse_at_package_time(self):
         (self.root / "Wheelkit.dll").write_bytes(b"different-bytes")
         with self.assertRaises(ValueError): setup_bundle.admit(self.root)

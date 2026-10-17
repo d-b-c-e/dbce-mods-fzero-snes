@@ -23,6 +23,30 @@ def no_links(path):
             raise ValueError("Setup bundle cannot traverse links")
 
 
+def supports_fzero(games):
+    if not isinstance(games, list) or not games:
+        return False
+    # Earlier qualified private bundles use game-name strings. Current common
+    # bundles declare explicit scopes; presence alone cannot grant Controls.
+    if all(isinstance(game, str) for game in games):
+        return "f-zero" in games
+    seen = set()
+    controls = False
+    for game in games:
+        if not isinstance(game, dict) or set(game) != {"id", "scopes"}:
+            return False
+        name, scopes = game["id"], game["scopes"]
+        if (not isinstance(name, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", name)
+                or name in seen or not isinstance(scopes, list) or not scopes
+                or any(not isinstance(scope, str) or scope not in ("controls", "screens", "settings") for scope in scopes)
+                or len(set(scopes)) != len(scopes)):
+            return False
+        seen.add(name)
+        if name == "f-zero":
+            controls = "controls" in scopes
+    return controls
+
+
 def admit(root):
     root = Path(root).absolute()
     no_links(root)
@@ -38,8 +62,7 @@ def admit(root):
     if (manifest.get("schema") != 1 or manifest.get("kind") != "private-standalone-helper"
             or manifest.get("rid") != "win-x64" or manifest.get("selfContained") is not True
             or not re.fullmatch(r"[0-9a-f]{40}", manifest.get("sourceCommit", ""))
-            or not isinstance(manifest.get("supportedGames"), list)
-            or "f-zero" not in manifest["supportedGames"]
+            or not supports_fzero(manifest.get("supportedGames"))
             or manifest.get("waitForProcessContract") != CONTRACT
             or manifest.get("waitForProcessTimeoutMs") != 60000):
         raise ValueError("Setup bundle does not declare the F-Zero exact-exit contract")
