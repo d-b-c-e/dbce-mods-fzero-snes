@@ -49,6 +49,55 @@ remain separate future qualification. This feature changes input direction
 only; it does not qualify force polarity or feel. Historical evidence below is
 preserved with its original scope.
 
+### Product qualification and local integration, October 19
+
+Kobe grant284740 built the exact `d0319b59a11a62d5a20bf1435916dd851b7071b0`
+source with MSVC x64 Release/Ninja, one compiler job, `BUILD_TESTING=OFF` and the
+existing private Deluxe payload, UI `6d9b715`, framework `59d2966` and helper
+`89878cd`. Both graphical and headless targets linked. The two existing C4005
+`HIBYTE` macro redefinition warnings remain; no compiler errors. The original
+225-check controls and launcher fixture results were retained without reruns.
+
+| Artifact | SHA256 |
+|---|---|
+| Graphical build / privately staged launcher (7,158,784 bytes) | `AFD7B72F19CED0BA13100F476AC0FAB9B2A4F42EF3F944B72CBADFD2B3256278` |
+| Headless build (3,014,656 bytes) | `26DCA1DD53FADB3E2585BFB6FC25BE05E35B3725896F8DC7392A9BED640C5690` |
+| Existing WheelFfb | `3F6CC51444879D01FEB900098B2DE94242594D093F523E3C34BD511D69C0D946` |
+| Existing private shim | `BF6455E63696A93B37C19DABF09B1E0606F26B0534BCE828417B1DF602DD8A7A` |
+
+The real `Install-StreamDeck.ps1` privately staged
+`E:/fzero-research/native-steering-samo-20261019/candidate-01` with a new
+**538-file** owned receipt, SHA256
+`484DBB5B631C49B86B0E14081F50FAD12E1826DE0B39731234B3CF13193E22E2`.
+It binds this source, renamed Deluxe consumer and existing helper. All receipt
+rows match; linked source/feature/Deluxe markers were checked, unowned bootstrap
+bytes were preserved, and the packaged helper's controls-only PlanOnly passed
+without changing candidate membership or bytes. No game image was executed.
+The baseline authentic receipt, existing candidates, ROM/save/tape assets,
+owner installations/settings and both runtime pins remain unchanged. This is
+a private directory, not a public archive or adoption of the experimental
+Shared force dependency pair.
+
+The original runner exited **1** despite all payload phases passing: its exact
+owned MSVC PDB server remained alive, so it correctly retained the lease.
+Original `product-01/result.json` SHA256
+`D6E4D9FE23C8AADBB588C098914D39961673257130B024213DECB9550E6770B5`
+remains unchanged. Recovery waited for that process's natural exit, with no
+termination, rebuild or test rerun. `cleanup-supplement.json` SHA256
+`73FA9A7A46D50E743C75CEC14976E2690912D2F798222952A4AE892929BE61A9`
+then proved a safe complete census, all98 recorded identities quiescent and
+exact lease release at `2026-10-19T17:28:56.2793842Z` (total610 seconds).
+All1,151 pinned inputs were unchanged. Both receipts and original logs live in
+portfolio hub `.local/fzero-product-samo-20261019/product-01`; read them together.
+
+After release, grant284947 integrated `d0319b5` by fast-forward from clean local
+main `0758a9b`. The exact nine-path change yields tree
+`1ab02dd6f3e0969ebcd73fe94fab9748964c4cf8`. No public push or owner deployment.
+This documentation successor does not relabel the binary's source stamp.
+Next acceptance is the rendered Native checkbox/preview/save and wheel direction
+on the qualified candidate under a fresh runtime scope. Physical force and
+Shared binding/setup acceptance remain separate; accepted driving is not repeated.
+
 Source `af2ffe6` (`src/fzero_controls.cpp`, `src/fzero_controls_sdl.c`, README "Rig-profile controls"). Built in a
 separate tree (`build-claude-merge`, BS Deluxe embedded, SDL3 sources copied from `build-merge`). All 18 ctest suites
 pass there; the new `fzero_controls` has 102 checks. In the first full run `fzero_gamepad` hung once (stopped after 10
