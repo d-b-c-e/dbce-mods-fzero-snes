@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #define CHECK(e) do { if (!(e)) { fprintf(stderr, "%d: %s\n", __LINE__, #e); exit(1); } } while (0)
-static int wrote_wheel_range, wrote_rewind, wrote_ffb, wrote_steering, wrote_impact, wrote_brake_invert;
+static int wrote_wheel_range, wrote_rewind, wrote_ffb, wrote_steering, wrote_impact, wrote_brake_invert, wrote_steer_invert;
 static char wrote_device[256], wrote_impact_type[32];
 static int live_axis_value;
 static int read_live_axis(const char *guid, int axis, int *value) {
@@ -98,6 +98,8 @@ static void note_ini(const char *path, const char *section,
       !strcmp(key, "Device")) strcpy(wrote_device, value);
   if (!strcmp(section, "Controller.030000004c0500006802000000000000") &&
       !strcmp(key, "BrakeInvert")) wrote_brake_invert = atoi(value);
+  if (!strcmp(section, "Controller.030000004c0500006802000000000000") &&
+      !strcmp(key, "SteeringInvert")) wrote_steer_invert = atoi(value);
 }
 static const char *guid_a = "030000004c0500006802000000000000";
 static const char *guid_b = "030000004c0500006802000000000001";
@@ -165,6 +167,7 @@ static void test_selection_rebind(void) {
   CHECK(provider->feature_get(NULL, 5, &wheel) && !strcmp(observed_guid, guid_a));
   CHECK(provider->feature_set_option(NULL, wheel.package_id, wheel.id,
                                      "SteeringRangePercent", "70"));
+  CHECK(provider->feature_set_option(NULL, wheel.package_id, wheel.id, "SteeringInvert", "true"));
   CHECK(provider->select_controller(NULL, 0, 2, guid_a) && !profile_writes);
   const char *invalid[] = {NULL, "", "invalid", "00000000000000000000000000000000",
                           "030000004c0500006802000000000000-extra"};
@@ -172,7 +175,8 @@ static void test_selection_rebind(void) {
     CHECK(!provider->select_controller(NULL, 0, 2, invalid[i]));
     CHECK(!strcmp(FzeroModsWheelGuid(), guid_a) && !profile_writes);
   }
-  CHECK(provider->select_controller(NULL, 0, 2, guid_b) && profile_writes == 24);
+  CHECK(provider->select_controller(NULL, 0, 2, guid_b) && profile_writes == 25);
+  CHECK(provider->feature_option_get(NULL, wheel.package_id, wheel.id, 23, &option) && !strcmp(option.value, "false"));
   CHECK(provider->feature_option_get(NULL, wheel.package_id, wheel.id, 1, &option));
   CHECK(!strcmp(option.value, "80"));
   CHECK(provider->feature_option_get(NULL, wheel.package_id, wheel.id, 3, &option));
@@ -185,6 +189,7 @@ static void test_selection_rebind(void) {
   CHECK(provider->select_controller(NULL, 0, 2, guid_a));
   CHECK(provider->feature_option_get(NULL, wheel.package_id, wheel.id, 1, &option));
   CHECK(!strcmp(option.value, "70")); /* Prior edits saved to their own profile. */
+  CHECK(provider->feature_option_get(NULL, wheel.package_id, wheel.id, 23, &option) && !strcmp(option.value, "true"));
   CHECK(provider->feature_get(NULL, 6, &ffb) && !ffb.enabled);
   CHECK(provider->feature_option_get(NULL, ffb.package_id, ffb.id, 0, &option));
   CHECK(!strcmp(option.value, "12")); /* Rebind doesn't reload/enable force state. */
@@ -305,7 +310,7 @@ int main(void) {
                              "030000004c0500006802000000000000", note_ini, list_ffb, read_live_axis);
   CHECK(p->feature_count(NULL) == 9);
   RecompLauncherCModFeature wheel, ffb, triple_with_wheel;
-  CHECK(p->feature_get(NULL, 5, &wheel) && wheel.option_count == 23);
+  CHECK(p->feature_get(NULL, 5, &wheel) && wheel.option_count == 24);
   live_axis_value = 8192;
   CHECK(p->feature_get(NULL, 5, &wheel));
   CHECK(strstr(wheel.status, "RIGHT 50% of SNES frames") &&
@@ -320,6 +325,19 @@ int main(void) {
   live_axis_value = 0;
   CHECK(p->feature_get(NULL, 5, &wheel) &&
         strstr(wheel.status, "CENTER 0% of SNES frames"));
+  CHECK(p->feature_option_get(NULL, wheel.package_id, wheel.id, 23, &option));
+  CHECK(!strcmp(option.id, "SteeringInvert") && option.type == RECOMP_MOD_OPTION_BOOLEAN &&
+        !strcmp(option.value, "false"));
+  CHECK(!p->feature_set_option(NULL, wheel.package_id, wheel.id, "SteeringInvert", "1"));
+  CHECK(!p->feature_set_option(NULL, wheel.package_id, wheel.id, "SteeringInvert", "yes"));
+  CHECK(p->feature_set_option(NULL, wheel.package_id, wheel.id, "SteeringInvert", "true"));
+  live_axis_value = 8192;
+  CHECK(p->feature_get(NULL, 5, &wheel) && strstr(wheel.status, "LEFT 71% of SNES frames"));
+  live_axis_value = -32768;
+  CHECK(p->feature_get(NULL, 5, &wheel) && strstr(wheel.status, "RIGHT 100% of SNES frames"));
+  live_axis_value = 0;
+  CHECK(p->feature_get(NULL, 5, &wheel) && strstr(wheel.status, "CENTER 0% of SNES frames"));
+  CHECK(p->feature_set_option(NULL, wheel.package_id, wheel.id, "SteeringInvert", "false"));
   CHECK(p->feature_get(NULL, 6, &ffb) && ffb.option_count == 4);
   CHECK(p->feature_get(NULL, 7, &triple_with_wheel) &&
         !strcmp(triple_with_wheel.package_id, triple.package_id) &&
@@ -381,10 +399,14 @@ int main(void) {
                                "Device", "unknown"));
   CHECK(p->feature_set_option(NULL, wheel.package_id, wheel.id,
                               "BrakeInvert", "true"));
+  CHECK(p->feature_set_option(NULL, wheel.package_id, wheel.id, "SteeringInvert", "true"));
   CHECK(p->commit(NULL, NULL));
   CHECK(wrote_wheel_range == 45 && wrote_rewind == 37 && wrote_ffb == 12 && wrote_steering == 40 &&
         wrote_impact == 25 && !strcmp(wrote_impact_type, "Sine"));
   CHECK(wrote_brake_invert == 1 && !strcmp(wrote_device, "MOZA R12 Base"));
+  CHECK(wrote_steer_invert == 1);
+  CHECK(p->feature_set_option(NULL, wheel.package_id, wheel.id, "SteeringInvert", "false"));
+  CHECK(p->commit(NULL, NULL) && wrote_steer_invert == 0);
   remove("test-mods.ini");
   remove("wheel-options.ini");
   test_selection_rebind();

@@ -1,5 +1,54 @@
 # 2026-10-10: rig-profile controls installed and applied on the rig (STD-033)
 
+## October 19 source successor: Native steering inversion
+
+Private branch `samo/fzero-native-steering-invert-20261019`, based on canonical
+`0758a9b`, closes the previously documented Native inverted-steering refusal.
+The schema-1 planner now writes both `SteeringAxis` and `SteeringInvert = 0 | 1`
+under the selected `[Controller.<SDL GUID>]`. Applying a later noninverted
+profile explicitly clears the flag. The existing atomic apply/backup, qualified
+device numbering, Revision gate and unrelated-key preservation remain in use.
+An already-applied unchanged Revision is not automatically reapplied on upgrade;
+the launcher control can explicitly change its direction without reapplying a
+profile or overwriting subsequent local edits.
+
+The existing Native raw-wheel reader inverts once before digital or proportional
+SNES steering. A shared game-owned helper mirrors the normalized signed axis,
+preserving exact zero and both full-lock endpoints despite SDL's asymmetric
+`-32768..32767` range. It does not change the response curve, dead zone, pedals,
+standard gamepad mapping, Shared Core normalization, force output or input ABI.
+Supplemental-only reads still exclude steering; the existing overlay axis path
+uses the same direction as ordinary input. Loading another wheel profile resets
+the flag to off when it is absent.
+
+The existing launcher wheel page adds **Invert steering**, using its current
+Boolean/save route. Its live preview uses the same helper. Native wheel option
+indices remain stable; Shared still suppresses all Native wheel options. There
+is no second reader, physical-device acquisition or new force setting.
+
+Focused offline checks passed in 8.39 seconds after Wheelkit deployment released
+its hold: `fzero_controls` **225 checks**, including actual planner -> disposable
+config -> production reader on an SDL virtual wheel, and `fzero_mods` PASS for
+preview, strict Boolean edits, saved true/false and per-device reload. MSVC x64
+Release compiled all affected fixture source objects plus their small video
+dependencies; only the unchanged cached SDL3 static library was reused. No
+compiler warnings were reported. No full graphical/headless product was built.
+
+Receipt: portfolio hub `.local/fzero-steering-samo-20261019/check-04/result.json`,
+SHA256 `61C2C08EC2F072902ADB38FEBCB04E44FF72E158147945A2371ABEF8F0700231`.
+It pins source/header inputs, cached SDL3 library, compiler response files and
+logs. Initial failures remain in check-01 through check-03: a stale fixture
+write-count expectation; a test incorrectly treating the overlay as
+supplemental-only; then the real new-code endpoint defect from naive negation.
+The final normalized helper resolves that endpoint failure. These are fresh
+source fixtures, not a repeat of accepted gameplay or physical checks.
+
+No owner config/install/ROM/save, public branch or existing candidate changed.
+Product packaging, rendered checkbox behavior and physical wheel direction
+remain separate future qualification. This feature changes input direction
+only; it does not qualify force polarity or feel. Historical evidence below is
+preserved with its original scope.
+
 Source `af2ffe6` (`src/fzero_controls.cpp`, `src/fzero_controls_sdl.c`, README "Rig-profile controls"). Built in a
 separate tree (`build-claude-merge`, BS Deluxe embedded, SDL3 sources copied from `build-merge`). All 18 ctest suites
 pass there; the new `fzero_controls` has 102 checks. In the first full run `fzero_gamepad` hung once (stopped after 10

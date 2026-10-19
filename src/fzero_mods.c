@@ -62,7 +62,9 @@ static const WheelOption wheel_options[] = {
   {"ButtonLeft", "D-pad left", -1, -1, RECOMP_RAW_HAT_MAX},
   {"ButtonRight", "D-pad right", -1, -1, RECOMP_RAW_HAT_MAX},
   {"ButtonSaveStateMenu", "Open save-state menu", -1, -1, 127},
-  {"ButtonRewind", "Open rewind", -1, -1, 127}
+  {"ButtonRewind", "Open rewind", -1, -1, 127},
+  // Append to preserve the existing option indices used by the launcher.
+  {"SteeringInvert", "Invert steering", 0, 0, 1}
 };
 #define WHEEL_OPTIONS ((int)(sizeof(wheel_options) / sizeof(wheel_options[0])))
 typedef struct TripleOption { const char *key, *label; unsigned fallback, min, max; } TripleOption;
@@ -161,6 +163,7 @@ static void wheel_preview_status(RecompLauncherCModFeature *out) {
     COPY(out->status, "Steering preview: selected wheel or axis unavailable");
     return;
   }
+  if (wheel_values[23]) axis = FzeroAnalogInvertAxis(axis);
   int deadzone = (wheel_values[0] * 32767 + 50) / 100;
   double duty = FzeroAnalogSteeringDuty(axis, deadzone, wheel_values[1],
                                         wheel_values[2]);
@@ -278,7 +281,7 @@ static int option_get(void *ctx, const char *package, const char *feature, int i
     memset(out, 0, sizeof(*out));
     COPY(out->id, spec->key); COPY(out->label, spec->label);
     out->type = RECOMP_MOD_OPTION_INTEGER; out->step = 1;
-    if (index == 7 || index == 8) {
+    if (index == 7 || index == 8 || !strcmp(spec->key, "SteeringInvert")) {
       out->type = RECOMP_MOD_OPTION_BOOLEAN;
     } else if (index >= 3 && index <= 5) {
       out->type = RECOMP_MOD_OPTION_RAW_AXIS;
@@ -448,8 +451,8 @@ static int set_option(void *ctx, const char *package, const char *feature,
     }
     if (identity(package, feature) == 6 &&
         (!strcmp(option, "AcceleratorInvert") ||
-         !strcmp(option, "BrakeInvert"))) {
-      int index = !strcmp(option, "AcceleratorInvert") ? 7 : 8;
+         !strcmp(option, "BrakeInvert") || !strcmp(option, "SteeringInvert"))) {
+      int index = !strcmp(option, "SteeringInvert") ? 23 : !strcmp(option, "AcceleratorInvert") ? 7 : 8;
       if (strcmp(value, "true") && strcmp(value, "false")) return 0;
       wheel_values[index] = !strcmp(value, "true");
       wheel_dirty = 1;

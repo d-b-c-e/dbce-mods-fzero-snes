@@ -89,7 +89,7 @@ static void plan_tests(void) {
   CHECK(key(&p, "ButtonX") == -1000 && key(&p, "PedalThreshold") == -1000); /* not the profile's to set */
   CHECK(noted(&p, "clutch: no F-Zero control") && noted(&p, "handbrake: no F-Zero control"));
   CHECK(noted(&p, "shiftUp: no F-Zero control") && noted(&p, "camera: no F-Zero control"));
-  CHECK(p.nkeys == 13);
+  CHECK(p.nkeys == 14);
 
   /* Pedal direction: F-Zero's invert flag follows travel and the contract's inverted flag. */
   plan_one("throttle = axis 2 " WHEEL " range=0..65535 rest=65535 travel=-1", &p);
@@ -125,7 +125,9 @@ static void plan_tests(void) {
   const char *inverted[] = {"Schema = 1", "steer = axis 0 " WHEEL " range=0..65535 rest=32768 travel=-1 inverted",
                             "confirm = button 31 " WHEEL};
   FzeroControlsPlanLines(inverted, 3, &p);
-  CHECK(p.ok && key(&p, "SteeringAxis") == -1000 && noted(&p, "steer: inverted steering"));
+  CHECK(p.ok && key(&p, "SteeringAxis") == 0 && key(&p, "SteeringInvert") == 1);
+  plan_one("start = button 35 " WHEEL, &p);
+  CHECK(p.ok && key(&p, "SteeringInvert") == 0); /* later normal profile clears inversion */
 
   const char *schema2[] = {"Schema = 2", "steer = axis 0 " WHEEL " range=0..65535 rest=32768 travel=-1"};
   FzeroControlsPlanLines(schema2, 2, &p);
@@ -388,6 +390,40 @@ static void startup_tests(void) {
   CHECK(!FzeroInjectTestSession("nonce=abcd-1234\nexpires=1900\n", 1000, why, sizeof why) && strstr(why, "nonce"));
   CHECK(!FzeroInjectTestSession("nonce=abcd1234\n", 1000, why, sizeof why) && strstr(why, "expires"));
   CHECK(!FzeroInjectTestSession("unattended test run (Claude)\n", 1000, why, sizeof why));   /* the 8930d45 format */
+  FzeroGamepadShutdown(&pad);
+
+  /* Real planner -> saved raw profile -> production reader. No physical wheel.
+   * Exercise both PDM and digital paths, signed endpoints and exact center. */
+  char invert_section[64];
+  snprintf(invert_section, sizeof(invert_section), "Controller.%s", guid);
+  CHECK(FzeroControlsIniSet(cfg, "Controls", "Revision", "rev-inverted"));
+  CHECK(FzeroControlsIniSet(cfg, "Controls", "steer",
+      "axis 0 " WHEEL " range=0..65535 rest=32768 travel=-1 inverted"));
+  CHECK(FzeroControlsApplyAtStartup(cfg) == 1);
+  int invert = 0;
+  CHECK(FzeroIniReadInt(cfg, invert_section, "SteeringInvert", &invert) && invert == 1);
+  for (int analog = 0; analog <= 1; ++analog) {
+    CHECK(FzeroControlsIniSet(cfg, invert_section, "AnalogSteering", analog ? "1" : "0"));
+    FzeroGamepadConfigure(cfg, guid, 25); FzeroGamepadRefresh(&pad);
+    static const int samples[] = {-32768, 0, 32767};
+    static const uint32_t expected[] = {0x0080u, 0, 0x0040u};
+    for (int i = 0; i < 3; ++i) {
+      CHECK(SDL_SetJoystickVirtualAxis(wheel, 0, samples[i])); SDL_UpdateJoysticks();
+      CHECK(FzeroGamepadRead(pad) == expected[i]);
+      CHECK(FzeroGamepadReadOverlay(pad) == expected[i]); /* existing menu axis path uses the same direction */
+      CHECK(FzeroGamepadReadSupplemental(pad, 0xffffffffu) == 0); /* supplemental input has no steering */
+    }
+    FzeroGamepadShutdown(&pad);
+  }
+  CHECK(FzeroControlsIniSet(cfg, "Controls", "Revision", "rev-normal"));
+  CHECK(FzeroControlsIniSet(cfg, "Controls", "steer",
+      "axis 0 " WHEEL " range=0..65535 rest=32768 travel=-1"));
+  CHECK(FzeroControlsApplyAtStartup(cfg) == 1);
+  CHECK(FzeroIniReadInt(cfg, invert_section, "SteeringInvert", &invert) && invert == 0);
+  FzeroGamepadConfigure(cfg, guid, 25); FzeroGamepadRefresh(&pad);
+  CHECK(FzeroGamepadRead(pad) == 0x0080u); /* same positive endpoint after profile reset */
+  CHECK(SDL_SetJoystickVirtualAxis(wheel, 0, 0)); SDL_UpdateJoysticks();
+  CHECK(FzeroGamepadRead(pad) == 0);
   FzeroGamepadShutdown(&pad);
 
   /* A new revision is applied again; launcher edits in between are overwritten only for the profile's keys. */

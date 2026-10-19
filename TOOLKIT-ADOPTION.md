@@ -1,5 +1,19 @@
 # Toolkit standards adoption
 
+## October 19 Native profile steering direction
+
+STD-033 source follow-up adds the previously unsupported Native steering
+inversion through the existing schema-1 planner, guarded config transaction and
+raw SDL reader. The Native launcher checkbox and preview share the same
+normalized signed-axis inversion; Shared keeps Core normalization and exposes
+no Native wheel settings. `fzero_controls`225 checks and `fzero_mods` pass in
+focused offline fixtures. See the October 19 source successor in
+`docs/2026-10-10-profile-controls.md` for exact receipt and retained failures.
+All37 ledger IDs remain represented. STD-019 stays unchecked;
+STD-021/031 physical normalization and STD-037 schema2 remain pending, and
+STD-030 in-game F6 parity stays partial. This source change does not promote
+installed, rendered, force, physical or distribution acceptance.
+
 Which entries of the wheel toolkit's standards ledger
 (`E:\Source\toolkits\dbce-wheel-mod-toolkit\STANDARDS.md`) this mod has brought in.
 Update a row in the same commit that adopts it. Statuses: `adopted`, `partial`,

@@ -15,7 +15,7 @@ static bool s_analog_steering;
 static FzeroAnalogSteering s_steering;
 static SDL_Joystick *s_raw;
 static int s_raw_axis = 0, s_gas_axis = -1, s_brake_axis = -1;
-static int s_gas_invert, s_brake_invert, s_pedal_threshold;
+static int s_steer_invert, s_gas_invert, s_brake_invert, s_pedal_threshold;
 static int s_raw_buttons[18];
 static const unsigned s_raw_input_bits[18] = {
     8, 0, 9, 1, 10, 11, 2, 3, 4, 5, 6, 7, 24, 25, 0, 0, 0, 0};
@@ -122,8 +122,9 @@ static void load_raw_profile(SDL_Joystick *stick) {
   FzeroIniReadInt(s_config, section, "SteeringRangePercent", &s_range_percent);
   FzeroIniReadInt(s_config, section, "SteeringResponsePercent", &s_response_percent);
   s_raw_axis = 0; s_gas_axis = s_brake_axis = -1;
-  s_gas_invert = s_brake_invert = 0; s_pedal_threshold = 0;
+  s_steer_invert = s_gas_invert = s_brake_invert = 0; s_pedal_threshold = 0;
   FzeroIniReadInt(s_config, section, "SteeringAxis", &s_raw_axis);
+  FzeroIniReadInt(s_config, section, "SteeringInvert", &s_steer_invert);
   FzeroIniReadInt(s_config, section, "AcceleratorAxis", &s_gas_axis);
   FzeroIniReadInt(s_config, section, "BrakeAxis", &s_brake_axis);
   FzeroIniReadInt(s_config, section, "AcceleratorInvert", &s_gas_invert);
@@ -279,6 +280,9 @@ static uint32_t gamepad_read(SDL_GameController *pad, bool include_pedals, bool 
     const int injecting = axes && FzeroInjectArmed();
     if (injecting) raw_snapshot(&snap);
     int x = axes ? (injecting ? snap_axis(&snap, s_raw_axis) : SDL_JoystickGetAxis(s_raw, s_raw_axis)) : 0;
+    // Invert once, before either digital or PDM mapping. Keep exact center and
+    // the signed SDL range even at -32768; supplemental-only reads stay neutral.
+    if (s_steer_invert) x = FzeroAnalogInvertAxis(x);
     if (axes && s_analog_steering)
       input |= FzeroAnalogSteeringReadTuned(&s_steering, x, s_deadzone,
                                            s_range_percent, s_response_percent);

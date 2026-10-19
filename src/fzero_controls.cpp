@@ -262,8 +262,10 @@ extern "C" void FzeroControlsPlanLines(const char *const *lines, int count, Fzer
                  p->product);
         return;
     }
-    if (steer->inverted) note(p, "steer", "inverted steering has no F-Zero setting; steering axis left as it is");
-    else setKey(p, "SteeringAxis", steer->index);
+    setKey(p, "SteeringAxis", steer->index);
+    // Always write both directions: a later noninverted profile must clear a
+    // prior launcher/profile inversion instead of silently inheriting it.
+    setKey(p, "SteeringInvert", steer->inverted ? 1 : 0);
 
     for (const ctl::Entry &e : s.bound) {
         const ctl::Binding &b = e.binding;

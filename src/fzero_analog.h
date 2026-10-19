@@ -3,6 +3,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+/* Mirror a signed SDL axis in normalized space: exact zero and both full-lock
+ * endpoints survive the unequal negative/positive half ranges. */
+int FzeroAnalogInvertAxis(int axis);
+
 /*
  * A SNES controller has no analog steering value.  Preserve proportional
  * wheel input by pulse-density modulating the digital Left/Right button over

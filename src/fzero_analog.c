@@ -3,6 +3,13 @@
 #include <stdlib.h>
 #include <math.h>
 
+int FzeroAnalogInvertAxis(int axis) {
+  if (axis < -32768) axis = -32768;
+  if (axis > 32767) axis = 32767;
+  return axis < 0 ? (-axis * 32767 + 16384) / 32768
+                  : -(axis * 32768 + 16383) / 32767;
+}
+
 enum {
   FZERO_INPUT_LEFT = 0x0040u,
   FZERO_INPUT_RIGHT = 0x0080u,
