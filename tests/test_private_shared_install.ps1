@@ -129,7 +129,7 @@ try {
         if ($metadataOnly) { $previous.privateSharedInput=@{abi=2;distribution='private-only'} }
         [IO.File]::WriteAllText((Join-Path $transition $receiptName),($previous | ConvertTo-Json -Depth 4))
         $before=@(Get-ChildItem -LiteralPath $transition -File -Recurse | Sort-Object FullName | ForEach-Object { $_.FullName + ':' + (HashOrNull $_.FullName) })
-        & pwsh -NoProfile -File $source -Target $transition -BuildDir $build -Label native-transition *> (Join-Path $root 'transition.log')
+        $ErrorActionPreference='Continue'; & pwsh -NoProfile -File $source -Target $transition -BuildDir $build -Label native-transition *> (Join-Path $root 'transition.log'); $ErrorActionPreference='Stop' # PS5.1 raises native stderr as errors
         Check ($LASTEXITCODE -ne 0 -and (Get-Content (Join-Path $root 'transition.log') -Raw).Contains('Keep -PrivateSharedInput')) 'Real installer did not refuse the exact Shared-to-Native ownership transition.'
         $after=@(Get-ChildItem -LiteralPath $transition -File -Recurse | Sort-Object FullName | ForEach-Object { $_.FullName + ':' + (HashOrNull $_.FullName) })
         Check (($before -join "`n") -ceq ($after -join "`n")) 'Refused transition changed target bytes or membership.'

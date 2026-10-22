@@ -375,3 +375,18 @@ install, native dependency rebuild, force tune or public distribution occurred.
 See docs/2026-10-17-host-controls-private-package.md. The older Deluxe candidate is
 unchanged; Deluxe portable admission and existing pending/unchecked standards
 remain separate.
+
+## October 22 installer suites under Windows PowerShell 5.1
+
+All three authored suites ran under Windows PowerShell 5.1 against synthetic
+temporary targets only (no owner install path, game or device touched):
+Test-InstallControlsSetup 18 checks pass; Test-InstallNativePin 37 pass;
+test_private_shared_install 50 pass. Initial failures, all fixture/installer
+5.1 incompatibilities, were fixed: the native-pin fixture lacked the
+`fzero.session-status@1` marker the installer requires; the shared test used
+`ConvertFrom-Json -AsHashtable` and let 5.1 turn expected native stderr into
+errors; Install-StreamDeck.ps1 used .NET Core `SHA256.HashData`/`ToHexString`.
+The controls suite prints an expected Python "identity differs" traceback from
+its refusal case. Not changed: tools/Recording.ps1 and Stage-SharedForceDependencies.ps1
+still need PowerShell 7 (`-AsHashtable`, System.Text.Json); the Shared transition
+case spawns pwsh 7 for the real installer.
