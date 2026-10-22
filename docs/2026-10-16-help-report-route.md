@@ -58,3 +58,17 @@ and offline behavior evidence only: no game, provider, owner install, browser
 submission, rendered Help acceptance or public release. The A140BCF6 qualified
 candidate and failed runtime05-07 evidence remain unchanged. These docs do not
 relabel the built source revision or authorize another activation attempt.
+
+## Offline recheck on main cfd4e26 (2026-10-22)
+
+Fresh Release/Ninja configure in a temp directory outside the repo; targets fzero_mods_tests, fzero_setup_tests, fzero_setup_no_bundle_tests built with MSVC 2022 BuildTools.
+ctest -R "fzero_mods|fzero_setup": fzero_setup, fzero_setup_no_bundle, fzero_mods all Passed (3/3).
+python -I tests/test_setup_bundle.py: Ran 10 tests, OK (covers report marker 0 for old bundles, marker 1 for the exact capability, malformed or explicit null report refused).
+
+Report action stays unavailable (source read plus the passing checks above):
+- Old controls-only helpers: FZERO_SETUP_REPORT_QUALIFIED is 0, so FzeroReportAvailable() returns 0. The no-bundle test asserts this and that no child launches.
+- Isolated sessions: launcher_report_available() in src/sdl_main.c also requires !g_isolated_owner_state and no replay/record input or env.
+- Linux: FzeroReportAvailable() and FzeroReportLaunch() return 0 outside _WIN32.
+Isolated-session and Linux gates were confirmed by source reading only; no executable test covers them.
+
+No new report framework, uploader or direct HTTP submission. No failures to record. No game, helper publish or rendered check ran.

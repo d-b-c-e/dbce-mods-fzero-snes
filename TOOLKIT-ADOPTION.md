@@ -400,3 +400,5 @@ optional). Documentation only; no acceptance is claimed. Still unqualified:
 closed-game helper binding (controls-setup `Start-ModSetup.ps1 -Game f-zero`
 against a real install), real initial setup on a clean target, and the owner
 install. STD-032 remains partial.
+
+October22 Help report route offline recheck on main cfd4e26: fzero_mods, fzero_setup, fzero_setup_no_bundle and the ten setup_bundle report-marker tests pass. Report action stays unavailable for old controls-only helpers (marker0), isolated sessions and Linux (source-confirmed). No new framework, uploader or HTTP submission; STD-004/030 states unchanged. See docs/2026-10-16-help-report-route.md.
