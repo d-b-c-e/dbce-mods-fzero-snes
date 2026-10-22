@@ -45,3 +45,27 @@ saved device/layout. Use a single screen and Shader None to isolate rendering
 problems. Retain all config files and saves when updating; open the launcher
 with --launcher instead of deleting settings. Recorded replay instructions and
 their software-only force boundaries are in [PLAYTHROUGH_RECORDING.md](PLAYTHROUGH_RECORDING.md).
+
+## Wheelkit-free private install and bind path
+
+Wheelkit is optional. This path uses only tooling already in this repository and
+the launcher; it is source documentation, not a qualified procedure (see
+STD-032 in [TOOLKIT-ADOPTION.md](../TOOLKIT-ADOPTION.md)).
+
+1. Build the configured integration build, as described in the header of
+   `tools/Install-StreamDeck.ps1`.
+2. Install it with that script, passing both opt-ins explicitly. Neither is
+   implied by the other or by the default install:
+   `.\tools\Install-StreamDeck.ps1 -Label <label> -PrivateSharedInput -PrivateControlsSetup`
+   Add `-Target <folder>` to install somewhere disposable first. It refuses while
+   the game runs, backs up what it replaces, writes `install-receipt.json`, and
+   never touches `config.ini`, saves or the ROM. `-Rollback <date>-<label>`
+   undoes it. Details: [install ownership](2026-10-15-controls-setup-install-ownership.md),
+   [private integration](2026-10-16-private-installer-integration.md).
+3. Start the game with `Setup.cmd` or `FZeroSNESRecomp.exe --launcher`, select
+   your own ROM, then bind on the launcher Controls page (Mods > Controls >
+   Racing wheel controls), as in steps 1 and 2 above. The owned
+   `controls-setup/` helper (`Start-ModSetup.ps1 -Game f-zero`) is the
+   closed-game alternative; it waits for the launcher to exit before editing.
+4. Optional: Wheelkit can write the same bindings to `config.ini`
+   ([README, Rig-profile controls](../README.md#rig-profile-controls)).

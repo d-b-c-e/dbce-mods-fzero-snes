@@ -390,3 +390,13 @@ The controls suite prints an expected Python "identity differs" traceback from
 its refusal case. Not changed: tools/Recording.ps1 and Stage-SharedForceDependencies.ps1
 still need PowerShell 7 (`-AsHashtable`, System.Text.Json); the Shared transition
 case spawns pwsh 7 for the real installer.
+
+## October 22 STD-032 Wheelkit-free path documentation
+
+[docs/SETUP.md](docs/SETUP.md#wheelkit-free-private-install-and-bind-path) now gives
+one ordered path (Install-StreamDeck.ps1 with explicit PrivateSharedInput and
+PrivateControlsSetup, then binding on the launcher Controls page; Wheelkit
+optional). Documentation only; no acceptance is claimed. Still unqualified:
+closed-game helper binding (controls-setup `Start-ModSetup.ps1 -Game f-zero`
+against a real install), real initial setup on a clean target, and the owner
+install. STD-032 remains partial.

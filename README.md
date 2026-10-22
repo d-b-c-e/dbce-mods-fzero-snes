@@ -330,6 +330,9 @@ Available button keys are `ButtonA`, `ButtonB`, `ButtonX`, `ButtonY`,
 
 ### Rig-profile controls
 
+Wheelkit is optional: for the install-and-bind path without it, see
+[docs/SETUP.md](docs/SETUP.md#wheelkit-free-private-install-and-bind-path).
+
 Wheelkit can write a rig profile's bindings into `config.ini` as a `[Controls]`
 section (toolkit STD-033, `docs/controls-contract.md`). At start, before the
 launcher opens, the game translates a new revision into the keys above:
