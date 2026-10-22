@@ -43,7 +43,7 @@ try {
         [IO.File]::WriteAllBytes($path,$old)
     }
     foreach ($mutation in @('abi','distribution','extra')) {
-        $copy=($pin | ConvertTo-Json -Depth 4 | ConvertFrom-Json -AsHashtable)
+        $copy=$pin.Clone(); $copy.files=$pin.files.Clone() # PS5.1 has no -AsHashtable
         if ($mutation -eq 'abi') { $copy.abi=3 } elseif ($mutation -eq 'distribution') { $copy.distribution='public' } else { $copy.files.'other.dll'='f' * 64 }
         [IO.File]::WriteAllText($pinPath,($copy | ConvertTo-Json -Depth 4))
         Refuses { Private-SharedSources $root $build } 'Unsupported pin metadata/inventory must refuse.'

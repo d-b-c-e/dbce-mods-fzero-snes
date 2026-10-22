@@ -59,7 +59,7 @@ function Shared-ExtrasDescriptor([bool]$HostControls=$false) {
     $declaration = "game fzero-snes`nfzero-snes.x digital`nfzero-snes.y digital`nfzero-snes.l digital`nfzero-snes.r digital`n"
     if($HostControls){$declaration += "fzero-snes.saveMenu digital`nfzero-snes.rewind digital`n"}
     $contract=[ordered]@{ abi=1; acceptedSchema=1; declaration=$declaration
-        declarationSha256=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::ASCII.GetBytes($declaration))).ToLowerInvariant()
+        declarationSha256=([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::ASCII.GetBytes($declaration))) -replace "-","").ToLowerInvariant()
         presentation=@(foreach($name in @('x','y','l','r')) {
             [ordered]@{id=('fzero-snes.'+$name);label=('SNES '+$name.ToUpperInvariant());group='SNES buttons'
                 effects='Guest button in menus and gameplay; keyboard retained.'
