@@ -1,6 +1,5 @@
 """Device-free package boundary tests using synthetic x64 PE fixtures."""
 import copy
-import importlib.util
 import io
 import json
 from pathlib import Path
@@ -12,13 +11,9 @@ import tempfile
 import unittest
 import zipfile
 
-SPEC = importlib.util.spec_from_file_location("package_unified", Path(__file__).resolve().parents[1] / "tools/package_unified.py")
-pack = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(pack)
-sys.modules["package_unified"] = pack
-STAGE_SPEC = importlib.util.spec_from_file_location("stage_unified", pack.ROOT / "tools/stage_unified.py")
-stage = importlib.util.module_from_spec(STAGE_SPEC)
-STAGE_SPEC.loader.exec_module(stage)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+import package_unified as pack
+import stage_unified as stage
 
 
 def pe(imports=()):
