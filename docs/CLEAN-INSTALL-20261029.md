@@ -38,7 +38,7 @@ then `python tools/stage_unified.py --build <build> --output <stage>` (stock-onl
 `python tools/package_unified.py --payload <stage> --output <dir>`, then `--verify <zip>`. Record zip SHA-256, VERSION
 and source commit. Offline gates first: `tests/test_unified_package.py`, the geometry and video tests.
 
-Rig block (one guna slot, ~25 min, game closed beforehand, force Off unless step 6):
+Rig block (one guna slot, ~25 min, game closed beforehand, force Off throughout):
 1. Extract the zip to a fresh `E:/Source/temp/fzero/clean-<date>` (not under E:/Games). Hash the tree.
 2. Setup.cmd opens the launcher. With no ROM: the launcher asks for one (capture the launcher window by hwnd).
 3. Pick a wrong file (any non-ROM): refused with a readable error, nothing written but settings.
@@ -46,9 +46,13 @@ Rig block (one guna slot, ~25 min, game closed beforehand, force Off unless step
    `rom.cfg` written, hash check passes, game starts to the title. Close.
 5. Restart via Setup.cmd: ROM remembered, launcher settings kept; set Skip launcher, restart, then recover the
    launcher through Setup.cmd.
-6. Controls/screens through the launcher only (no DLL copying); triples with the owner's geometry incl.
-   `TripleCurveRadiusMm=1500` on separate monitors: title/race view on three windows, sides curved (capture).
-7. Remove: delete the folder; confirm nothing was written outside it (diff `%APPDATA%`/`%LOCALAPPDATA%` lists
-   before/after) and the owner's installed F-Zero and its receipt are byte-identical.
+6. Controls/screens through the launcher only (no DLL copying); qualify flat/default output first. A separate
+   diagnostic with `TripleCurveRadiusMm=1500` may check curved sides, but the center is still planar at c587f1b;
+   do not count that as complete corrected triples. Record the actual output/window arrangement and captures.
+7. Removal/rollback: retain configs, ROM references, profiles, saves and evidence before removing any disposable
+   extracted payload. Verify each resolved removal path stays inside the isolated test root. Confirm the owner's
+   installed F-Zero and receipt remain byte-identical. Check writes outside the test root; directory listings alone
+   do not establish unchanged file contents. A normal portable-folder removal does not prove update/rollback;
+   those remain separate checks against an exact prior package.
 Input only to the launcher/game window when it is the verified foreground (or through the launcher's own
 automation if it has one); no Steam involvement. Pass/fail per step goes in this file with capture paths.
