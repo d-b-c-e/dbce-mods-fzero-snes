@@ -402,3 +402,15 @@ against a real install), real initial setup on a clean target, and the owner
 install. STD-032 remains partial.
 
 October22 Help report route offline recheck on main cfd4e26: fzero_mods, fzero_setup, fzero_setup_no_bundle and the ten setup_bundle report-marker tests pass. Report action stays unavailable for old controls-only helpers (marker0), isolated sessions and Linux (source-confirmed). No new framework, uploader or HTTP submission; STD-004/030 states unchanged. See docs/2026-10-16-help-report-route.md.
+
+## October 29 clean-install plan ledger refresh
+
+The current ledger contains STD-038 through STD-040, which were absent from the older 37-entry snapshot above.
+
+| Standard | Title | Status | Notes |
+|---|---|---|---|
+| STD-038 | Game window lands on the racing row | unchecked | Fresh-package qualification must observe actual window placement; no runtime evidence added by the plan review. |
+| STD-039 | In-process input instead of a virtual controller | unchecked | Existing Native/Shared paths need a current consumer audit; no new compliance claim from packaging preparation. |
+| STD-040 | Standalone configuration and one complete package | partial | Stock-only Setup.cmd/launcher package path exists; docs/CLEAN-INSTALL-20261029.md covers the intended ordinary flow. Real package dependency closure, ROM pick, configuration, restart and F6 parity remain unqualified. |
+
+This refresh records gaps only. No build, public push, install or hardware action; existing pending physical/FFB and F6 parity gates remain.
