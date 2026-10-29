@@ -74,7 +74,8 @@ static const TripleOption triple_options[] = {
   {"TripleLeftAngleDeg", "Left screen angle (degrees)", 70, 0, 89},
   {"TripleRightAngleDeg", "Right screen angle (degrees)", 70, 0, 89},
   {"TripleBezelGapMm", "Bezel gap at each join (mm)", 8, 0, 100},
-  {"TripleEyeHeightMm", "Eye above screen center (mm)", 0, 0, 1000}
+  {"TripleEyeHeightMm", "Eye above screen center (mm)", 0, 0, 1000},
+  {"TripleCurveRadiusMm", "Screen curve radius (mm, 0 = flat; 1500R = 1500)", 0, 0, 20000}
 };
 #define TRIPLE_OPTIONS ((int)(sizeof(triple_options) / sizeof(triple_options[0])))
 static unsigned *triple_value(int index) {
@@ -85,6 +86,7 @@ static unsigned *triple_value(int index) {
   case 3: return &video->triple_right_yaw_deg;
   case 4: return &video->triple_bezel_gap_mm;
   case 5: return &video->triple_eye_height_mm;
+  case 6: return &video->triple_curve_radius_mm;
   default: return NULL;
   }
 }

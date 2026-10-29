@@ -1337,10 +1337,18 @@ static FzeroTripleRig triple_rig_for_span(const FzeroVideoSettings *video,
                                          int span_width, int span_height) {
   double panel_width = (double)video->triple_panel_width_mm;
   double physical_height = panel_width * span_height / (span_width / 3);
+  double radius = (double)video->triple_curve_radius_mm;
+  /* The setting is eye to the glass center (Wheelkit's measurement); the rig
+   * wants the center chord plane. Converted here, once; flat is unchanged.
+   * A curve deeper than the eye distance leaves the rig invalid (stock view). */
+  double chord_eye = 0;
+  if (!FzeroTripleChordEyeDistance((double)video->triple_eye_distance_mm,
+                                   panel_width, radius, &chord_eye)) chord_eye = 0;
   return (FzeroTripleRig){panel_width, physical_height,
-      (double)video->triple_eye_distance_mm, (double)video->triple_eye_height_mm,
+      chord_eye, (double)video->triple_eye_height_mm,
       (double)video->triple_left_yaw_deg, (double)video->triple_right_yaw_deg,
-      (double)video->triple_bezel_gap_mm, kTriplePanelWidth, kTriplePanelHeight};
+      (double)video->triple_bezel_gap_mm, kTriplePanelWidth, kTriplePanelHeight,
+      radius};
 }
 
 static SDL_Texture *g_overlay_texture;

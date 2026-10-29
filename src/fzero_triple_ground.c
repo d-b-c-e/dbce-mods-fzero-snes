@@ -106,7 +106,9 @@ bool FzeroTripleGroundBuildRowAt(const FzeroTripleGround *ground,
                                  const FzeroTripleSurface *panel,
                                  double y, int width, int height,
                                  FzeroTripleGroundRow *out) {
+  /* Row stepping is linear across a flat panel only; curved panels use rays. */
   if (!ground || !panel || !out || width < 1 || height < 1 ||
+      panel->curve_radius_mm != 0 ||
       !(y >= -0.5) || !(y <= height - 0.5)) return false;
   double u = 0.5 / width;
   double v = 1.0 - (y + 0.5) / height;
@@ -148,8 +150,9 @@ bool FzeroTripleGroundHorizon(const FzeroTripleGround *ground,
       x < 0 || x >= width) return false;
   double u = (x + 0.5) / width;
   double v = 1.0 - 0.5 / height;
-  double py = panel->lower_left.y + u * panel->right.y + v * panel->up.y;
-  double pz = panel->lower_left.z + u * panel->right.z + v * panel->up.z;
+  FzeroTripleVec3 point;
+  if (!FzeroTriplePanelPoint(panel, u, v, &point)) return false;
+  double py = point.y, pz = point.z;
   double top = -pz * ground->pitch_sin - py * ground->pitch_cos;
   double slope = (panel->up.z * ground->pitch_sin +
                   panel->up.y * ground->pitch_cos) / height;

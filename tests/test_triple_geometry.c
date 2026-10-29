@@ -315,6 +315,67 @@ int main(void) {
                                     transition_near, 180, &ground));
   rig.right_yaw_deg = 90;
   CHECK(!FzeroTripleBuild(&rig, panel));
+
+  /* Curved panels (toolkit 09e6c4f values for this 708.4 mm chord at 1500R):
+   * the glass-center eye 660 is the chord plane 617.58; radius 0 unchanged. */
+  double chord_eye;
+  CHECK(FzeroTripleChordEyeDistance(660, 708.4165965748336, 0, &chord_eye) &&
+        chord_eye == 660);
+  CHECK(FzeroTripleChordEyeDistance(660, 708.4165965748336, 1500, &chord_eye));
+  CHECK(fabs(chord_eye - 617.5789794808144) < 1e-9);
+  CHECK(!FzeroTripleChordEyeDistance(40, 708.4165965748336, 1500, &chord_eye));
+  CHECK(!FzeroTripleChordEyeDistance(660, 708.4165965748336, 350, &chord_eye));
+  FzeroTripleRig curved = {708.4165965748336, 398.4843355733439, 0,
+                           0, 70, 70, 8, 512, 288, 1500};
+  curved.eye_distance_mm = 617.5789794808144;
+  FzeroTripleSurface flat[3], arc[3];
+  FzeroTripleRig flat_rig = curved;
+  flat_rig.curve_radius_mm = 0;
+  CHECK(FzeroTripleBuild(&flat_rig, flat) && FzeroTripleBuild(&curved, arc));
+  CHECK(FzeroTripleGroundCalibrate(&curved, 342, car_far, 80, car_near, 180,
+                                   &ground));
+  CHECK(arc[1].curve_radius_mm == 0 && arc[0].curve_radius_mm == 1500 &&
+        arc[2].curve_radius_mm == 1500);
+  for (int side = 0; side < 3; side += 2) {
+    /* The arc runs through the chord ends (hinges unchanged) and its middle
+     * sits one sagitta (42.42 mm) behind the chord middle, away from the eye. */
+    FzeroTripleVec3 a0, a1, f0, f1, am, fm;
+    CHECK(FzeroTriplePanelPoint(&arc[side], 0, 0.3, &a0) &&
+          FzeroTriplePanelPoint(&arc[side], 1, 0.3, &a1) &&
+          FzeroTriplePanelPoint(&flat[side], 0, 0.3, &f0) &&
+          FzeroTriplePanelPoint(&flat[side], 1, 0.3, &f1) &&
+          FzeroTriplePanelPoint(&arc[side], 0.5, 0.3, &am) &&
+          FzeroTriplePanelPoint(&flat[side], 0.5, 0.3, &fm));
+    CHECK(fabs(a0.x - f0.x) + fabs(a0.z - f0.z) < 1e-9);
+    CHECK(fabs(a1.x - f1.x) + fabs(a1.z - f1.z) < 1e-9);
+    double behind = sqrt(am.x * am.x + am.z * am.z) - sqrt(fm.x * fm.x + fm.z * fm.z);
+    double depth = hypot(am.x - fm.x, am.z - fm.z);
+    CHECK(behind > 0 && fabs(depth - (660 - 617.5789794808144)) < 1e-9);
+    CHECK(fabs(am.y - fm.y) < 1e-12);
+    /* Rays and the inverse projection agree on the arc, at corners too. */
+    const int xs[4] = {0, 100, 300, 511}, ys[3] = {0, 140, 287};
+    for (int i = 0; i < 4; ++i)
+      for (int j = 0; j < 3; ++j) {
+        FzeroTripleVec3 ray;
+        double px, py;
+        CHECK(FzeroTripleRay(&arc[side], xs[i], ys[j], 512, 288, &ray));
+        CHECK(FzeroTripleProjectDirection(&arc[side], ray, 512, 288, &px, &py));
+        CHECK(fabs(px - xs[i]) < 1e-6 && fabs(py - ys[j]) < 1e-6);
+      }
+    /* The middle column's ray differs from the flat chord's (the check can tell). */
+    FzeroTripleVec3 ray_arc, ray_flat;
+    CHECK(FzeroTripleRay(&arc[side], 128, 144, 512, 288, &ray_arc) &&
+          FzeroTripleRay(&flat[side], 128, 144, 512, 288, &ray_flat));
+    CHECK(fabs(ray_arc.x - ray_flat.x) > 1e-4);
+    /* Row stepping refuses the arc; the horizon follows each arc column. */
+    FzeroTripleGroundRow row;
+    double horizon;
+    CHECK(!FzeroTripleGroundBuildRowAt(&ground, &arc[side], 100, 512, 288, &row));
+    CHECK(FzeroTripleGroundHorizon(&ground, &arc[side], 128, 512, 288, &horizon) &&
+          isfinite(horizon));
+  }
+  curved.curve_radius_mm = 300;   /* chord 708 needs at least 354.2 */
+  CHECK(!FzeroTripleBuild(&curved, arc));
   puts("F-Zero triple-screen physical rays passed");
   return 0;
 }

@@ -25,11 +25,21 @@ static bool parse_bounded_unsigned(const char *text, unsigned low,
   return true;
 }
 
+/* How far the curved glass center sits behind the chord (the eye must be in front of it). */
+static double triple_sagitta(const FzeroVideoSettings *s) {
+  double h = s->triple_panel_width_mm / 2.0, r = s->triple_curve_radius_mm;
+  return h * h / (r + sqrt(r * r - h * h));
+}
+
 bool FzeroTripleValidLayout(const FzeroVideoSettings *s) {
   return s && s->triple_panel_width_mm >= 200 && s->triple_panel_width_mm <= 3000 &&
          s->triple_eye_distance_mm >= 200 && s->triple_eye_distance_mm <= 3000 &&
          s->triple_left_yaw_deg <= 89 && s->triple_right_yaw_deg <= 89 &&
-         s->triple_bezel_gap_mm <= 100 && s->triple_eye_height_mm <= 1000;
+         s->triple_bezel_gap_mm <= 100 && s->triple_eye_height_mm <= 1000 &&
+         (s->triple_curve_radius_mm == 0 ||
+          (s->triple_curve_radius_mm >= 300 && s->triple_curve_radius_mm <= 20000 &&
+           2 * s->triple_curve_radius_mm >= s->triple_panel_width_mm &&
+           s->triple_eye_distance_mm > triple_sagitta(s)));
 }
 
 bool FzeroTriplePanelSupported(int width, int height) {
@@ -186,6 +196,8 @@ bool FzeroVideoLoad(FzeroVideoSettings *s, const char *path) {
       if (!parse_bounded_unsigned(value, 0, 100, &s->triple_bezel_gap_mm)) valid = false;
     } else if (!strcmp(key, "TripleEyeHeightMm")) {
       if (!parse_bounded_unsigned(value, 0, 1000, &s->triple_eye_height_mm)) valid = false;
+    } else if (!strcmp(key, "TripleCurveRadiusMm")) {
+      if (!parse_bounded_unsigned(value, 0, 20000, &s->triple_curve_radius_mm)) valid = false;
     } else if (!strcmp(key, "ReduceCrashFlash")) {
       if (!strcmp(value, "0") || !strcmp(value, "1")) s->reduce_crash_flash = value[0] == '1';
       else valid = false;
@@ -221,6 +233,7 @@ bool FzeroVideoSave(const FzeroVideoSettings *s, const char *path) {
                     s->triple_bezel_gap_mm, s->triple_eye_height_mm,
                     s->reduce_crash_flash) > 0;
   if (ok) ok = fprintf(f, "ShowFPS=%d\n", s->show_fps) > 0;
+  if (ok) ok = fprintf(f, "TripleCurveRadiusMm=%u\n", s->triple_curve_radius_mm) > 0;
   if (fclose(f)) ok = false;
   if (ok) {
 #ifdef _WIN32

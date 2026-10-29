@@ -1046,7 +1046,10 @@ static bool draw_triple_sides(uint32_t *output, size_t capacity,
   const int pw = rig->panel_width_px, ph = rig->panel_height_px;
   /* The normal rational ground path only needs rays at the two vertical
    * edges for skyline angle and the optional old-horizon comparison. */
-  bool use_row_projection = !getenv("FZERO_TRIPLE_DISABLE_ROW");
+  /* shortcut: curved side panels take the per-pixel ray path (no row stepping,
+   * so no tile-mip filtering either); add an arc row stepper if it shimmers. */
+  bool use_row_projection = !getenv("FZERO_TRIPLE_DISABLE_ROW") &&
+                            rig->curve_radius_mm == 0;
   memcpy(&scanout, f->lines[80].registers, PPU_SAVESTATE_REGS_SIZE);
   if ((scanout.bgmode & 7) != 7) return false;
   FzeroMode7Line far = FzeroMode7Transform(scanout.m7matrix, scanout.m7sel, 81);

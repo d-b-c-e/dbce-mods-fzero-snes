@@ -124,7 +124,18 @@ static void config_tests(void) {
   CHECK(FzeroTripleValidLayout(&b) && b.triple_panel_width_mm == 620 &&
         b.triple_eye_distance_mm == 780 && b.triple_left_yaw_deg == 55 &&
         b.triple_right_yaw_deg == 65 && b.triple_bezel_gap_mm == 12 &&
-        b.triple_eye_height_mm == 45);
+        b.triple_eye_height_mm == 45 && b.triple_curve_radius_mm == 0);
+  /* Curve radius: saved and read back; 0 or 300..20000 and at least half the
+   * width, with the eye in front of the curved glass center. */
+  a.triple_curve_radius_mm = 1500;
+  CHECK(FzeroVideoSave(&a, "test-video.ini"));
+  CHECK(FzeroVideoLoad(&b, "test-video.ini"));
+  CHECK(b.triple_curve_radius_mm == 1500 && FzeroTripleValidLayout(&b));
+  b.triple_curve_radius_mm = 299; CHECK(!FzeroTripleValidLayout(&b));
+  b.triple_curve_radius_mm = 309; CHECK(!FzeroTripleValidLayout(&b)); /* 620 mm chord needs R >= 310 */
+  b.triple_curve_radius_mm = 310; b.triple_eye_distance_mm = 310; CHECK(!FzeroTripleValidLayout(&b)); /* sag 310 */
+  b.triple_eye_distance_mm = 780; CHECK(FzeroTripleValidLayout(&b));
+  a.triple_curve_radius_mm = 0;
   a.fps = 0; a.aspect = FZERO_ASPECT_21_9;
   CHECK(FzeroVideoSave(&a, "test-video.ini")); /* atomic replacement */
   CHECK(FzeroVideoLoad(&b, "test-video.ini"));

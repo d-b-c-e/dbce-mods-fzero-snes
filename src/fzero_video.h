@@ -34,10 +34,11 @@ typedef struct FzeroVideoSettings {
   bool triple_screen; /* Experimental Surround ground projection. */
   FzeroTripleOutputMode triple_output_mode;
   unsigned triple_panel_width_mm; /* Visible chord width of one panel. */
-  unsigned triple_eye_distance_mm; /* Eye to center-panel plane. */
+  unsigned triple_eye_distance_mm; /* Eye to the center panel's glass center (equals its plane when flat). */
   unsigned triple_left_yaw_deg, triple_right_yaw_deg;
   unsigned triple_bezel_gap_mm; /* Physical gap at each panel hinge. */
   unsigned triple_eye_height_mm; /* Eye above panel center; zero at center. */
+  unsigned triple_curve_radius_mm; /* 0 = flat; otherwise 300..20000 and at least half the width (1500R = 1500). */
   bool reduce_crash_flash; /* Hold the prior presentation over brief white impact frames. */
 } FzeroVideoSettings;
 
