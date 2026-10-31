@@ -203,12 +203,14 @@ int main(void) {
   RecompLauncherCModOption option;
   CHECK(p->package_count(NULL) == 7 && p->feature_count(NULL) == 7);
   RecompLauncherCModFeature triple;
-  CHECK(p->feature_get(NULL, 5, &triple) && !triple.enabled && triple.option_count == 7);
+  CHECK(p->feature_get(NULL, 5, &triple) && !triple.enabled && triple.option_count == 8); /* 7 rig values incl. curve radius + display mode */
   CHECK(p->feature_enable(NULL, triple.package_id, triple.id, 1) && s.triple_screen);
   CHECK(p->feature_option_get(NULL, triple.package_id, triple.id, 0, &option));
   CHECK(!strcmp(option.id, "TriplePanelWidthMm") && !strcmp(option.value, "708") &&
         option.min_value == 200 && option.max_value == 3000);
   CHECK(p->feature_option_get(NULL, triple.package_id, triple.id, 6, &option));
+  CHECK(!strcmp(option.id, "TripleCurveRadiusMm") && !strcmp(option.value, "0") && option.max_value == 20000);
+  CHECK(p->feature_option_get(NULL, triple.package_id, triple.id, 7, &option));
   CHECK(!strcmp(option.id, "TripleOutputMode") && !strcmp(option.value, "Span") &&
         option.type == RECOMP_MOD_OPTION_CHOICE && option.choice_count == 2);
   RecompLauncherCModChoice triple_choice;
@@ -341,7 +343,7 @@ int main(void) {
   CHECK(p->feature_get(NULL, 6, &ffb) && ffb.option_count == 4);
   CHECK(p->feature_get(NULL, 7, &triple_with_wheel) &&
         !strcmp(triple_with_wheel.package_id, triple.package_id) &&
-        triple_with_wheel.enabled && triple_with_wheel.option_count == 7);
+        triple_with_wheel.enabled && triple_with_wheel.option_count == 8);
   RecompLauncherCModFeature flash_with_wheel;
   CHECK(p->feature_get(NULL, 8, &flash_with_wheel) &&
         !strcmp(flash_with_wheel.package_id, flash.package_id) &&
