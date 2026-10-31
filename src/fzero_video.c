@@ -267,6 +267,73 @@ const char *FzeroCompareName(unsigned step) {
                                                        : "Angle + curve correction";
 }
 
+bool FzeroVideoSaveKey(const char *path, const char *key, const char *value) {
+  enum { kMaxFile = 1 << 16 };
+  char temporary[1024];
+  if (!path || !key || !value || strchr(value, '\n') ||
+      snprintf(temporary, sizeof(temporary), "%s.tmp", path) >= (int)sizeof(temporary)) return false;
+  char *text = calloc(1, kMaxFile + 1);
+  if (!text) return false;
+  size_t length = 0;
+  FILE *in = fopen(path, "rb");
+  if (in) {
+    length = fread(text, 1, kMaxFile + 1, in);
+    bool bad = ferror(in) || length > kMaxFile;
+    fclose(in);
+    if (bad) { free(text); return false; }
+  } else if (errno != ENOENT) { free(text); return false; }
+  /* Find the key's line, else the end of the [FZeroVideo] section. */
+  size_t key_length = strlen(key), found = (size_t)-1, found_end = 0, section_end = (size_t)-1;
+  bool in_section = false;
+  for (size_t line = 0; line < length;) {
+    size_t end = line;
+    while (end < length && text[end] != '\n') ++end;
+    size_t next = end < length ? end + 1 : end, p = line;
+    while (p < end && (text[p] == ' ' || text[p] == '\t')) ++p;
+    if (p < end && text[p] == '[') {
+      in_section = end - p >= 12 && !strncmp(text + p, "[FZeroVideo]", 12);
+    } else if (in_section) {
+      section_end = next;
+      if (end - p > key_length && !strncmp(text + p, key, key_length)) {
+        size_t q = p + key_length;
+        while (q < end && (text[q] == ' ' || text[q] == '\t')) ++q;
+        if (q < end && text[q] == '=') { found = line; found_end = end; break; }
+      }
+    }
+    line = next;
+  }
+  if (in_section && section_end == (size_t)-1) section_end = length;
+  const char *eol = memchr(text, '\r', length) ? "\r\n" : "\n";
+  FILE *f = fopen(temporary, "wb");
+  if (!f) { free(text); return false; }
+  bool ok;
+  if (found != (size_t)-1) {
+    if (found_end > found && text[found_end - 1] == '\r') --found_end;
+    ok = fwrite(text, 1, found, f) == found && fprintf(f, "%s=%s", key, value) > 0 &&
+         fwrite(text + found_end, 1, length - found_end, f) == length - found_end;
+  } else if (section_end != (size_t)-1) {
+    bool needs_break = section_end > 0 && text[section_end - 1] != '\n';
+    ok = fwrite(text, 1, section_end, f) == section_end &&
+         fprintf(f, "%s%s=%s%s", needs_break ? eol : "", key, value, eol) > 0 &&
+         fwrite(text + section_end, 1, length - section_end, f) == length - section_end;
+  } else {
+    bool needs_break = length > 0 && text[length - 1] != '\n';
+    ok = fwrite(text, 1, length, f) == length &&
+         fprintf(f, "%s[FZeroVideo]%s%s=%s%s", needs_break ? eol : "", eol, key, value, eol) > 0;
+  }
+  free(text);
+  if (fclose(f)) ok = false;
+  if (ok) {
+#ifdef _WIN32
+    ok = MoveFileExA(temporary, path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+#else
+    ok = rename(temporary, path) == 0;
+#endif
+  }
+  if (!ok) remove(temporary);
+  return ok;
+}
+
 void FzeroClockReset(FzeroClock *c, double now, double hz) {
   *c = (FzeroClock){.next_simulation = now, .next_presentation = now,
                     .presentation_hz = isfinite(hz) && hz > 0 ? hz : 60};

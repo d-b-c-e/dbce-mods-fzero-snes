@@ -5,6 +5,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 /* Do not use assert: Release builds must execute all validation. */
 #define CHECK(expr) do { if (!(expr)) { \
@@ -153,6 +156,45 @@ static void config_tests(void) {
       CHECK(f && fprintf(f, "[FZeroVideo]\nTripleScreen=1\nTripleCompareView=%s\n", bad[i]) > 0 && !fclose(f));
       CHECK(FzeroVideoLoad(&b, "test-video.ini") && b.triple_compare_view == 0 && b.triple_screen);
     }
+  }
+  /* F9 writes only its own line: comments, unknown keys and other sections stay
+   * byte-exact, in either line ending; a failed replacement keeps the file. */
+  {
+    static const struct { const char *before, *after2, *after3; } cases[] = {
+      {"; mine\n[FZeroVideo]\nTripleScreen=1\nUnknownKey=7\n\n[Other]\nTripleCompareView=9\n",
+       "; mine\n[FZeroVideo]\nTripleScreen=1\nUnknownKey=7\n\nTripleCompareView=2\n[Other]\nTripleCompareView=9\n",
+       "; mine\n[FZeroVideo]\nTripleScreen=1\nUnknownKey=7\n\nTripleCompareView=3\n[Other]\nTripleCompareView=9\n"},
+      {"[FZeroVideo]\r\nTripleCompareView = 1\r\nAspect=Fit\r\n",
+       "[FZeroVideo]\r\nTripleCompareView=2\r\nAspect=Fit\r\n",
+       "[FZeroVideo]\r\nTripleCompareView=3\r\nAspect=Fit\r\n"},
+      {"; no section", "; no section\n[FZeroVideo]\nTripleCompareView=2\n",
+       "; no section\n[FZeroVideo]\nTripleCompareView=3\n"},
+    };
+    for (unsigned i = 0; i < sizeof(cases) / sizeof(*cases); ++i) {
+      char text[512];
+      FILE *f = fopen("test-video-key.ini", "wb");
+      CHECK(f && fputs(cases[i].before, f) >= 0 && !fclose(f));
+      CHECK(FzeroVideoSaveKey("test-video-key.ini", "TripleCompareView", "2"));
+      f = fopen("test-video-key.ini", "rb"); CHECK(f);
+      size_t n = fread(text, 1, sizeof(text) - 1, f); fclose(f); text[n] = 0;
+      CHECK(!strcmp(text, cases[i].after2));
+      CHECK(FzeroVideoSaveKey("test-video-key.ini", "TripleCompareView", "3"));
+      f = fopen("test-video-key.ini", "rb"); CHECK(f);
+      n = fread(text, 1, sizeof(text) - 1, f); fclose(f); text[n] = 0;
+      CHECK(!strcmp(text, cases[i].after3));
+    }
+    remove("test-video-key.ini");
+    CHECK(FzeroVideoSaveKey("test-video-key.ini", "TripleCompareView", "1"));
+    CHECK(FzeroVideoLoad(&b, "test-video-key.ini") && b.triple_compare_view == 1);
+#ifdef _WIN32
+    /* A read-only target refuses the replacement: false, file unchanged, no temp left. */
+    CHECK(SetFileAttributesA("test-video-key.ini", FILE_ATTRIBUTE_READONLY));
+    CHECK(!FzeroVideoSaveKey("test-video-key.ini", "TripleCompareView", "2"));
+    CHECK(FzeroVideoLoad(&b, "test-video-key.ini") && b.triple_compare_view == 1);
+    CHECK(GetFileAttributesA("test-video-key.ini.tmp") == INVALID_FILE_ATTRIBUTES);
+    CHECK(SetFileAttributesA("test-video-key.ini", FILE_ATTRIBUTE_NORMAL));
+#endif
+    remove("test-video-key.ini");
   }
   /* The cycle starts from what is shown; the curve step only with a radius. */
   CHECK(FzeroCompareCurrent(0, true) == 3 && FzeroCompareCurrent(0, false) == 2 &&

@@ -1153,6 +1153,10 @@ static FzeroHotkey g_hotkey_rewind;
  * g_video.triple_compare_view, which follows only a successful save. */
 static FzeroHotkey g_hotkey_compare;
 static unsigned g_compare_view;
+/* The curve step needs the center warp, which only the SDL_Renderer span path
+ * draws; elsewhere the cycle has no curve step and a saved curve pick shows
+ * the flat angle views (the pick itself is kept). */
+static bool g_curve_presentable;
 static char g_compare_notice[64];
 static Uint64 g_compare_notice_until;
 
@@ -1399,8 +1403,11 @@ static FzeroTripleRig triple_rig_for_span(const FzeroVideoSettings *video,
                                          int span_width, int span_height) {
   double panel_width = (double)video->triple_panel_width_mm;
   double physical_height = panel_width * span_height / (span_width / 3);
-  /* Angle correction compares flat angled views; the saved radius stays. */
-  double radius = g_compare_view == 2 ? 0 : (double)video->triple_curve_radius_mm;
+  /* Only the curve step uses the saved radius; Angle correction and a presenter
+   * that cannot draw the curved center get flat angled views. */
+  bool curve = video->triple_curve_radius_mm > 0 && g_curve_presentable;
+  double radius = FzeroCompareCurrent(g_compare_view, curve) == 3 ?
+      (double)video->triple_curve_radius_mm : 0;
   /* The setting is eye to the glass center (Wheelkit's measurement); the rig
    * wants the center chord plane. Converted here, once; flat is unchanged.
    * A curve deeper than the eye distance leaves the rig invalid (stock view). */
@@ -1499,11 +1506,13 @@ static void compare_press(void) {
     fprintf(stderr, "[fzero-triple] view switching: not racing, view unchanged\n");
     return;
   }
-  bool curve = g_video.triple_curve_radius_mm > 0;
-  unsigned next = FzeroCompareNext(g_compare_view, curve), previous = g_video.triple_compare_view;
-  g_video.triple_compare_view = next;
-  bool saved = FzeroVideoSave(&g_video, kVideoConfig);
-  if (!saved) g_video.triple_compare_view = previous; /* never write a pick the player was told failed */
+  bool curve = g_video.triple_curve_radius_mm > 0 && g_curve_presentable;
+  unsigned next = FzeroCompareNext(g_compare_view, curve);
+  char value[4];
+  snprintf(value, sizeof(value), "%u", next);
+  /* Only this line is written; the in-memory pick follows a successful write. */
+  bool saved = FzeroVideoSaveKey(kVideoConfig, "TripleCompareView", value);
+  if (saved) g_video.triple_compare_view = next;
   g_compare_view = next;
   snprintf(g_compare_notice, sizeof(g_compare_notice), "%s (%u/%u)%s%s",
            FzeroCompareName(next), next, curve ? 3u : 2u, next == 1 ? "" : " - Game FOV",
@@ -1781,11 +1790,6 @@ static void present_frame(FzeroPresenter *p, const uint32_t *panel,
       Die("Unable to restore center OpenGL context");
 #endif
     FzeroDiagnosticsEnd(FZERO_DIAG_CENTER_RESTORE, restore_start);
-    if (p->center_warped && triple_ready && !p->triple_separate) {
-      /* shortcut: the shader-preset (GL) path keeps the center flat; add the warp grid there when presets meet curved rigs. */
-      static bool warned;
-      if (!warned) { fprintf(stderr, "[fzero-triple] curved center not drawn with a shader preset; center flat\n"); warned = true; }
-    }
     fzero_gl_render(p->gl, pixels, width, height, p->viewport,
                     p->drawable_width, p->drawable_height,
                     p->triple_active && !p->triple_separate, triple_ready);
@@ -2890,6 +2894,11 @@ int main(int argc, char **argv) {
   presenter.window = window;
   presenter.renderer = renderer;
   presenter.texture = texture;
+  /* shortcut: the curved center is drawn only by the SDL_Renderer span path; add the warp grid to the GL (shader preset) and separate-window presenters to offer the curve there. */
+  g_curve_presentable = !use_gl_renderer && !triple_separate;
+  if (triple_requested && g_video.triple_curve_radius_mm > 0 && !g_curve_presentable)
+    fprintf(stderr, "[fzero-triple] curve unavailable with %s; flat angled views (radius %u mm kept)\n",
+            use_gl_renderer ? "a shader preset" : "separate displays", g_video.triple_curve_radius_mm);
   presenter.gl = use_gl_renderer ? &gl_renderer : NULL;
   presenter.pixels = pixels;
   presenter.triple_separate = triple_separate;

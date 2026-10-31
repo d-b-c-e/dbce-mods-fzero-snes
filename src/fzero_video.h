@@ -89,5 +89,9 @@ double FzeroClockNextDeadline(const FzeroClock *clock);
  * shown now for a saved pick (0 = none follows the settings), the step after
  * one press, and its on-screen name. */
 unsigned FzeroCompareCurrent(unsigned pick, bool curve);
+/* Writes one Key=value line in place (temp file, then replace): every other
+ * line, comment, unknown key and section stays as it is; a missing key goes at
+ * the end of [FZeroVideo] (created when absent). False leaves the file as it was. */
+bool FzeroVideoSaveKey(const char *path, const char *key, const char *value);
 unsigned FzeroCompareNext(unsigned pick, bool curve);
 const char *FzeroCompareName(unsigned step);
