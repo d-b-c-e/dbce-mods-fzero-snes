@@ -64,7 +64,7 @@ automation if it has one); no Steam involvement. Pass/fail per step goes in this
 
 Candidate `05299de` stock-only static-runtime ZIP SHA-256 `871EC38E81A02DCF92F8CE0C8CC3EF7A8FBE2C73930F40FA730DAAA96C713723`
 (verify pass). Lease vemi, force never configured (no config.ini). Only processes this run started were stopped; no
-clicks or keys. Evidence: `E:\Source	empzero\clean-20261030\evidence` (result.json, captures, stdout/stderr).
+clicks or keys. Evidence: `E:\Source\temp\fzero\clean-20261030\evidence` (result.json, captures, stdout/stderr).
 
 | Step | Result |
 |---|---|
