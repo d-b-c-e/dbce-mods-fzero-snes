@@ -135,6 +135,34 @@ static void config_tests(void) {
   b.triple_curve_radius_mm = 309; CHECK(!FzeroTripleValidLayout(&b)); /* 620 mm chord needs R >= 310 */
   b.triple_curve_radius_mm = 310; b.triple_eye_distance_mm = 310; CHECK(!FzeroTripleValidLayout(&b)); /* sag 310 */
   b.triple_eye_distance_mm = 780; CHECK(FzeroTripleValidLayout(&b));
+  /* View switching pick: saved and restored with the rest; none is not written;
+   * an unknown value is no pick and never refuses the file. */
+  for (unsigned pick = 1; pick <= 3; ++pick) {
+    a.triple_compare_view = pick;
+    CHECK(FzeroVideoSave(&a, "test-video.ini") && FzeroVideoLoad(&b, "test-video.ini"));
+    CHECK(b.triple_compare_view == pick && b.triple_curve_radius_mm == 1500 &&
+          b.triple_eye_distance_mm == 780 && b.aspect == a.aspect);
+  }
+  a.triple_compare_view = 0;
+  CHECK(FzeroVideoSave(&a, "test-video.ini") && FzeroVideoLoad(&b, "test-video.ini") &&
+        b.triple_compare_view == 0);
+  {
+    const char *bad[] = {"4", "0", "x", "99"};
+    for (unsigned i = 0; i < 4; ++i) {
+      FILE *f = fopen("test-video.ini", "w");
+      CHECK(f && fprintf(f, "[FZeroVideo]\nTripleScreen=1\nTripleCompareView=%s\n", bad[i]) > 0 && !fclose(f));
+      CHECK(FzeroVideoLoad(&b, "test-video.ini") && b.triple_compare_view == 0 && b.triple_screen);
+    }
+  }
+  /* The cycle starts from what is shown; the curve step only with a radius. */
+  CHECK(FzeroCompareCurrent(0, true) == 3 && FzeroCompareCurrent(0, false) == 2 &&
+        FzeroCompareCurrent(3, false) == 2 && FzeroCompareCurrent(1, true) == 1);
+  CHECK(FzeroCompareNext(0, true) == 1 && FzeroCompareNext(1, true) == 2 &&
+        FzeroCompareNext(2, true) == 3 && FzeroCompareNext(3, true) == 1);
+  CHECK(FzeroCompareNext(0, false) == 1 && FzeroCompareNext(2, false) == 1 &&
+        FzeroCompareNext(3, false) == 1 && FzeroCompareNext(9, false) == 1);
+  CHECK(!strcmp(FzeroCompareName(1), "Original game view") &&
+        !strcmp(FzeroCompareName(3), "Angle + curve correction"));
   a.triple_curve_radius_mm = 0;
   a.fps = 0; a.aspect = FZERO_ASPECT_21_9;
   CHECK(FzeroVideoSave(&a, "test-video.ini")); /* atomic replacement */

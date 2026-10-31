@@ -38,6 +38,9 @@ then `python tools/stage_unified.py --build <build> --output <stage>` (stock-onl
 `python tools/package_unified.py --payload <stage> --output <dir>`, then `--verify <zip>`. Record zip SHA-256, VERSION
 and source commit. Offline gates first: `tests/test_unified_package.py`, the geometry and video tests.
 
+Correction (2026-10-30): build with the `docs/UNIFIED-PRODUCT.md` recipe (`-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded`,
+no Deluxe); a `/MD` build cannot be staged. Step 1 done offline: `docs/2026-10-30-offline-candidate-check.md`.
+
 Rig block (one guna slot, ~25 min, game closed beforehand, force Off throughout):
 1. Extract the zip to a fresh `E:/Source/temp/fzero/clean-<date>` (not under E:/Games). Hash the tree.
 2. Setup.cmd opens the launcher. With no ROM: the launcher asks for one (capture the launcher window by hwnd).

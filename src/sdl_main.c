@@ -1148,6 +1148,13 @@ typedef struct FzeroHotkey {
 
 static FzeroHotkey g_hotkey_menu;
 static FzeroHotkey g_hotkey_rewind;
+/* View switching ([KeyMap] TripleCompare, F9 by default; F7 stays the save-state
+ * menu). g_compare_view is the step this session shows; the saved pick is
+ * g_video.triple_compare_view, which follows only a successful save. */
+static FzeroHotkey g_hotkey_compare;
+static unsigned g_compare_view;
+static char g_compare_notice[64];
+static Uint64 g_compare_notice_until;
 
 static FzeroHotkey resolve_hotkey(const char *name, const char *fallback) {
   FzeroHotkeySpec spec;
@@ -1392,7 +1399,8 @@ static FzeroTripleRig triple_rig_for_span(const FzeroVideoSettings *video,
                                          int span_width, int span_height) {
   double panel_width = (double)video->triple_panel_width_mm;
   double physical_height = panel_width * span_height / (span_width / 3);
-  double radius = (double)video->triple_curve_radius_mm;
+  /* Angle correction compares flat angled views; the saved radius stays. */
+  double radius = g_compare_view == 2 ? 0 : (double)video->triple_curve_radius_mm;
   /* The setting is eye to the glass center (Wheelkit's measurement); the rig
    * wants the center chord plane. Converted here, once; flat is unchanged.
    * A curve deeper than the eye distance leaves the rig invalid (stock view). */
@@ -1459,6 +1467,50 @@ static void overlay_draw_sdl_rect(const FzeroPresenter *p, const uint32_t *panel
 static void overlay_draw_sdl(const FzeroPresenter *p, const uint32_t *panel,
                              int pw, int ph, int is_menu) {
   overlay_draw_sdl_rect(p, panel, pw, ph, overlay_rect(p, is_menu));
+}
+
+/* The view-switching label: about 2.5 s, centred on the center screen. */
+static void compare_notice_draw(const FzeroPresenter *p) {
+  if (!g_compare_notice[0] || SDL_GetTicks() >= g_compare_notice_until) return;
+  enum { w = 448, h = 20 };
+  uint32_t pixels[w * h];
+  int text = (int)strlen(g_compare_notice) * 8;
+  snes_ovl_fill_rect(pixels, w, h, 0, 0, w, h, 0xc0000000u);
+  snes_ovl_draw_text(pixels, w, h, text < w ? (w - text) / 2 : 0, 6,
+                     g_compare_notice, 0xffffffffu, 1);
+  FzeroRect game = overlay_rect(p, 1);
+  int draw_w = game.w * 4 / 5;
+  if (draw_w > w * 3) draw_w = w * 3;
+  if (draw_w < 1) return;
+  int draw_h = h * draw_w / w;
+  if (draw_h < 1) draw_h = 1;
+  FzeroRect rect = {game.x + (game.w - draw_w) / 2, game.y + (game.h - draw_h) / 2,
+                    draw_w, draw_h};
+  if (p->gl) fzero_gl_draw_overlay(p->gl, pixels, w, h, rect, p->drawable_height);
+  else overlay_draw_sdl_rect(p, pixels, w, h, rect);
+}
+
+/* One press while racing: the next step, saved through the existing video
+ * settings writer. Menus and other screens report and change nothing. */
+static void compare_press(void) {
+  g_compare_notice_until = SDL_GetTicks() + 2500;
+  if (!FzeroShimGameplayState(g_ram, sizeof(g_ram))) {
+    snprintf(g_compare_notice, sizeof(g_compare_notice), "View switching available while driving");
+    fprintf(stderr, "[fzero-triple] view switching: not racing, view unchanged\n");
+    return;
+  }
+  bool curve = g_video.triple_curve_radius_mm > 0;
+  unsigned next = FzeroCompareNext(g_compare_view, curve), previous = g_video.triple_compare_view;
+  g_video.triple_compare_view = next;
+  bool saved = FzeroVideoSave(&g_video, kVideoConfig);
+  if (!saved) g_video.triple_compare_view = previous; /* never write a pick the player was told failed */
+  g_compare_view = next;
+  snprintf(g_compare_notice, sizeof(g_compare_notice), "%s (%u/%u)%s%s",
+           FzeroCompareName(next), next, curve ? 3u : 2u, next == 1 ? "" : " - Game FOV",
+           saved ? "" : " - Couldn't save view");
+  fprintf(stderr, "[fzero-triple] view switching (%s): %s; radius %u mm\n",
+          saved ? "saved" : "save failed, saved pick kept", g_compare_notice,
+          next == 3 ? g_video.triple_curve_radius_mm : 0u);
 }
 
 static void session_status_draw(const FzeroPresenter *p) {
@@ -1698,7 +1750,7 @@ static void present_frame(FzeroPresenter *p, const uint32_t *panel,
   }
   if (p->gl) {
     bool triple_ready = false;
-    if (p->triple_active && p->triple_pixels) {
+    if (p->triple_active && p->triple_pixels && g_compare_view != 1) {
       uint64_t projection_start = FzeroDiagnosticsBegin();
       triple_ready = FzeroRendererDrawTripleSides(p->triple_pixels,
           (size_t)2 * kTriplePanelWidth * kTriplePanelHeight,
@@ -1743,6 +1795,7 @@ static void present_frame(FzeroPresenter *p, const uint32_t *panel,
       overlay_dump(p, is_menu);
     }
     session_status_draw(p);
+    compare_notice_draw(p);
     frame_stats_draw(p);
     uint64_t diagnostic_start = FzeroDiagnosticsBegin();
     output_probe(p->gl->window, "center", pixels, width, height,
@@ -1758,7 +1811,7 @@ static void present_frame(FzeroPresenter *p, const uint32_t *panel,
   SDL_UpdateTexture(p->texture, &source, pixels, width * kBytesPerPixel);
   FzeroDiagnosticsEnd(FZERO_DIAG_UPLOAD, diagnostic_start);
   bool triple_ready = false;
-  if (p->triple_active && p->triple_pixels &&
+  if (p->triple_active && p->triple_pixels && g_compare_view != 1 &&
       (p->triple_texture || p->triple_separate)) {
     diagnostic_start = FzeroDiagnosticsBegin();
     triple_ready = FzeroRendererDrawTripleSides(p->triple_pixels,
@@ -1822,6 +1875,7 @@ static void present_frame(FzeroPresenter *p, const uint32_t *panel,
   overlay_draw_sdl(p, panel, pw, ph, is_menu);
   if (panel) overlay_dump(p, is_menu);
   session_status_draw(p);
+  compare_notice_draw(p);
   frame_stats_draw(p);
   FzeroDiagnosticsEnd(FZERO_DIAG_DRAW, diagnostic_start);
   diagnostic_start = FzeroDiagnosticsBegin();
@@ -2340,6 +2394,7 @@ int main(int argc, char **argv) {
   }
   if (!FzeroVideoLoad(&g_video, kVideoConfig))
     fprintf(stderr, "[fzero] Invalid video settings; invalid fields use defaults\n");
+  g_compare_view = g_video.triple_compare_view; /* the saved view-switching pick (0 = none) */
 #ifndef FZERO_HAS_DELUXE
   /* BS Deluxe is on by default, but a build configured without the native
    * module cannot honour it and FzeroDeluxePrepare would refuse to start. */
@@ -2415,6 +2470,7 @@ int main(int argc, char **argv) {
   /* After the launcher, which may have just rewritten [KeyMap]. */
   g_hotkey_menu = resolve_hotkey("SaveStateMenu", "F7");
   g_hotkey_rewind = resolve_hotkey("Rewind", "F8");
+  g_hotkey_compare = resolve_hotkey("TripleCompare", "F9");
   configure_rewind(&launcher_settings);
   size_t rom_size = 0;
   uint8_t *rom = read_rom(rom_path, &rom_size);
@@ -2687,10 +2743,11 @@ int main(int argc, char **argv) {
     snesrecomp_sdl_get_drawable_size(window, &drawable_width, &drawable_height);
   else
     snesrecomp_sdl_get_render_output_size(renderer, &drawable_width, &drawable_height);
+  /* Original game view (1): the span shows the game's own wide picture. */
   bool triple_active = triple_separate ||
-      (triple_requested && FzeroTripleSpanSupported(drawable_width,
-                                                     drawable_height));
-  if (triple_requested && !triple_separate && !triple_active)
+      (triple_requested && g_compare_view != 1 &&
+       FzeroTripleSpanSupported(drawable_width, drawable_height));
+  if (triple_requested && !triple_separate && !triple_active && g_compare_view != 1)
     fprintf(stderr, "[fzero-triple] expected three equal 1.2:1–2.5:1 panels in one fullscreen span; got %dx%d, using stock view\n",
             drawable_width, drawable_height);
   FzeroViewport viewport = FzeroCalculateViewport(&g_video,
@@ -2928,6 +2985,15 @@ int main(int argc, char **argv) {
         }
         continue;
       }
+      /* Presentation only, so it also works while the wheel (shim) owns input; with
+       * triples off the key stays the quick slot behind it. */
+      if (triple_requested && !g_isolated_owner_state && g_playthrough.mode != 2 &&
+          event.type == SDL_KEYDOWN && !event.key.repeat &&
+          hotkey_matches(&g_hotkey_compare, SNESRECOMP_SDL_EVENT_KEY(event),
+                         (Uint16)SNESRECOMP_SDL_EVENT_MOD(event))) {
+        compare_press();
+        continue;
+      }
       if ((g_isolated_owner_state || g_playthrough.mode == 2 || FzeroShimRequested()) && event.type == SDL_KEYDOWN) {
         if (SNESRECOMP_SDL_EVENT_KEY(event) == SDLK_ESCAPE) running = 0;
         continue; /* SNES keyboard state still passes through; no mutating host hotkeys */
@@ -3105,8 +3171,8 @@ int main(int argc, char **argv) {
       else
         snesrecomp_sdl_get_render_output_size(renderer, &drawable_width, &drawable_height);
       triple_active = triple_separate ||
-          (triple_requested && FzeroTripleSpanSupported(drawable_width,
-                                                         drawable_height));
+          (triple_requested && g_compare_view != 1 &&
+           FzeroTripleSpanSupported(drawable_width, drawable_height));
       if (triple_active)
         presenter_set_rig(&presenter, triple_rig_for_span(&g_video,
             triple_separate ? drawable_width * 3 : drawable_width,

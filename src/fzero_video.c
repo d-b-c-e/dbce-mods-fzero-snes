@@ -198,6 +198,10 @@ bool FzeroVideoLoad(FzeroVideoSettings *s, const char *path) {
       if (!parse_bounded_unsigned(value, 0, 1000, &s->triple_eye_height_mm)) valid = false;
     } else if (!strcmp(key, "TripleCurveRadiusMm")) {
       if (!parse_bounded_unsigned(value, 0, 20000, &s->triple_curve_radius_mm)) valid = false;
+    } else if (!strcmp(key, "TripleCompareView")) {
+      /* An unknown pick is no pick (the old startup); it never refuses the file. */
+      unsigned view;
+      s->triple_compare_view = parse_bounded_unsigned(value, 1, 3, &view) ? view : 0;
     } else if (!strcmp(key, "ReduceCrashFlash")) {
       if (!strcmp(value, "0") || !strcmp(value, "1")) s->reduce_crash_flash = value[0] == '1';
       else valid = false;
@@ -234,6 +238,8 @@ bool FzeroVideoSave(const FzeroVideoSettings *s, const char *path) {
                     s->reduce_crash_flash) > 0;
   if (ok) ok = fprintf(f, "ShowFPS=%d\n", s->show_fps) > 0;
   if (ok) ok = fprintf(f, "TripleCurveRadiusMm=%u\n", s->triple_curve_radius_mm) > 0;
+  if (ok && s->triple_compare_view >= 1 && s->triple_compare_view <= 3)
+    ok = fprintf(f, "TripleCompareView=%u\n", s->triple_compare_view) > 0;
   if (fclose(f)) ok = false;
   if (ok) {
 #ifdef _WIN32
@@ -244,6 +250,21 @@ bool FzeroVideoSave(const FzeroVideoSettings *s, const char *path) {
   }
   if (!ok) remove(temporary);
   return ok;
+}
+
+unsigned FzeroCompareCurrent(unsigned pick, bool curve) {
+  if (pick == 3 && !curve) return 2; /* a saved curve pick on a flat rig shows flat */
+  return pick >= 1 && pick <= 3 ? pick : curve ? 3 : 2;
+}
+
+unsigned FzeroCompareNext(unsigned pick, bool curve) {
+  unsigned current = FzeroCompareCurrent(pick, curve), count = curve ? 3 : 2;
+  return current >= count ? 1 : current + 1;
+}
+
+const char *FzeroCompareName(unsigned step) {
+  return step == 1 ? "Original game view" : step == 2 ? "Angle correction"
+                                                       : "Angle + curve correction";
 }
 
 void FzeroClockReset(FzeroClock *c, double now, double hz) {

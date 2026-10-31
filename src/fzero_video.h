@@ -39,6 +39,7 @@ typedef struct FzeroVideoSettings {
   unsigned triple_bezel_gap_mm; /* Physical gap at each panel hinge. */
   unsigned triple_eye_height_mm; /* Eye above panel center; zero at center. */
   unsigned triple_curve_radius_mm; /* 0 = flat; otherwise 300..20000 and at least half the width (1500R = 1500). */
+  unsigned triple_compare_view; /* Last view-switching pick: 1 original, 2 angle, 3 angle + curve; 0 or unknown = none. */
   bool reduce_crash_flash; /* Hold the prior presentation over brief white impact frames. */
 } FzeroVideoSettings;
 
@@ -82,3 +83,11 @@ bool FzeroClockPresentationDue(const FzeroClock *clock, double now);
 void FzeroClockPresentationDone(FzeroClock *clock, double now);
 double FzeroClockAlpha(const FzeroClock *clock, double now);
 double FzeroClockNextDeadline(const FzeroClock *clock);
+
+/* View switching (camera policy rev 3): 1 original game view, 2 angle
+ * correction, 3 angle + curve correction (only with a curve radius). The step
+ * shown now for a saved pick (0 = none follows the settings), the step after
+ * one press, and its on-screen name. */
+unsigned FzeroCompareCurrent(unsigned pick, bool curve);
+unsigned FzeroCompareNext(unsigned pick, bool curve);
+const char *FzeroCompareName(unsigned step);
