@@ -1,4 +1,5 @@
 #include "fzero_panel.h"
+#include "fzero_hotkeys.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,6 +12,24 @@
 #define CHECK(expr) do { if (!(expr)) { \
   fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #expr); exit(1); \
 } } while (0)
+
+static void write_file(const char *path, const char *text) {
+  FILE *f = fopen(path, "wb");
+  CHECK(f && fputs(text, f) >= 0 && !fclose(f));
+}
+
+static int file_is(const char *path, const char *text) {
+  char got[512];
+  FILE *f = fopen(path, "rb");
+  if (!f) return 0;
+  size_t n = fread(got, 1, sizeof(got) - 1, f); fclose(f); got[n] = 0;
+  return !strcmp(got, text);
+}
+
+static int fullscreen(const char *path) {
+  int value = 0;
+  return FzeroIniReadInt(path, "Graphics", "Fullscreen", &value) && value != 0;
+}
 
 static int value_is(const FzeroVideoSettings *s, int row, const char *text) {
   char out[48];
@@ -108,6 +127,45 @@ int main(void) {
     CHECK(SetFileAttributesA("test-panel.ini", FILE_ATTRIBUTE_NORMAL));
 #endif
     remove("test-panel.ini");
+  }
+  /* Closing the panel: video keys first; turning triples on then makes the
+   * game's own reader see Fullscreen on, or reports that it could not. */
+  {
+    FzeroVideoSettings on;
+    FzeroVideoDefaults(&on);
+    CHECK(FzeroPanelAdjust(&on, FZERO_PANEL_TRIPLE, +1) && on.triple_screen);
+    const unsigned triple = 1u << FZERO_PANEL_TRIPLE;
+    /* No Fullscreen yet: written, and read back on. */
+    write_file("test-panel-video.ini", "[FZeroVideo]\nAspect=Fit\n");
+    write_file("test-panel-config.ini", "; launcher\n[Graphics]\nWindowScale=3\n");
+    CHECK(FzeroPanelSave(&on, triple, "test-panel-video.ini", "test-panel-config.ini", FzeroIniReadInt) == FZERO_PANEL_SAVED);
+    CHECK(fullscreen("test-panel-config.ini") &&
+          file_is("test-panel-config.ini", "; launcher\n[Graphics]\nWindowScale=3\nFullscreen=1\n"));
+    CHECK(file_is("test-panel-video.ini", "[FZeroVideo]\nAspect=Fit\nTripleScreen=1\nTripleOutputMode=Span\n"));
+    /* Already on (any case, first match): config.ini is not touched. */
+    write_file("test-panel-config.ini", "[graphics]\nfullscreen=1\n");
+    CHECK(FzeroPanelSave(&on, triple, "test-panel-video.ini", "test-panel-config.ini", FzeroIniReadInt) == FZERO_PANEL_SAVED);
+    CHECK(file_is("test-panel-config.ini", "[graphics]\nfullscreen=1\n"));
+    /* A spelling the writer does not own still reads off: reported, not claimed. */
+    write_file("test-panel-config.ini", "[graphics]\nfullscreen=0\n");
+    CHECK(FzeroPanelSave(&on, triple, "test-panel-video.ini", "test-panel-config.ini", FzeroIniReadInt) ==
+          FZERO_PANEL_FULLSCREEN_FAILED && !fullscreen("test-panel-config.ini"));
+    /* Turning triples off leaves fullscreen alone. */
+    FzeroVideoSettings off = on;
+    off.triple_screen = false;
+    write_file("test-panel-config.ini", "[Graphics]\nFullscreen=0\n");
+    CHECK(FzeroPanelSave(&off, triple, "test-panel-video.ini", "test-panel-config.ini", FzeroIniReadInt) == FZERO_PANEL_SAVED);
+    CHECK(file_is("test-panel-config.ini", "[Graphics]\nFullscreen=0\n"));
+#ifdef _WIN32
+    /* The video file refuses: nothing is written anywhere, config.ini included. */
+    write_file("test-panel-config.ini", "[Graphics]\nWindowScale=3\n");
+    CHECK(SetFileAttributesA("test-panel-video.ini", FILE_ATTRIBUTE_READONLY));
+    CHECK(FzeroPanelSave(&on, triple, "test-panel-video.ini", "test-panel-config.ini", FzeroIniReadInt) == FZERO_PANEL_SAVE_FAILED);
+    CHECK(file_is("test-panel-config.ini", "[Graphics]\nWindowScale=3\n"));
+    CHECK(SetFileAttributesA("test-panel-video.ini", FILE_ATTRIBUTE_NORMAL));
+#endif
+    remove("test-panel-video.ini");
+    remove("test-panel-config.ini");
   }
   puts("F-Zero F6 panel model passed");
   return 0;

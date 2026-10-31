@@ -131,3 +131,30 @@ int FzeroPanelKeys(const FzeroVideoSettings *s, int row,
 #undef PUT
   return n;
 }
+
+static bool fullscreen_on(const char *config_path, FzeroIniIntReader read_int) {
+  int value = 0;
+  return read_int(config_path, "Graphics", "Fullscreen", &value) && value != 0;
+}
+
+FzeroPanelSaveResult FzeroPanelSave(const FzeroVideoSettings *s, unsigned edited,
+                                    const char *video_path, const char *config_path,
+                                    FzeroIniIntReader read_int) {
+  const char *keys[FZERO_PANEL_ROWS * FZERO_PANEL_MAX_KEYS], *values[FZERO_PANEL_ROWS * FZERO_PANEL_MAX_KEYS];
+  char text[FZERO_PANEL_ROWS][FZERO_PANEL_MAX_KEYS][16];
+  int count = 0;
+  for (int row = 0; row < FZERO_PANEL_ROWS; ++row) {
+    if (!(edited & (1u << row))) continue;
+    const char *row_keys[FZERO_PANEL_MAX_KEYS];
+    int n = FzeroPanelKeys(s, row, row_keys, text[row]);
+    for (int k = 0; k < n; ++k) { keys[count] = row_keys[k]; values[count++] = text[row][k]; }
+  }
+  if (count && !FzeroIniSaveKeys(video_path, "FZeroVideo", count, keys, values))
+    return FZERO_PANEL_SAVE_FAILED;
+  if ((edited & (1u << FZERO_PANEL_TRIPLE)) && s->triple_screen && !fullscreen_on(config_path, read_int)) {
+    static const char *const key[] = {"Fullscreen"}, *const on[] = {"1"};
+    if (!FzeroIniSaveKeys(config_path, "Graphics", 1, key, on) || !fullscreen_on(config_path, read_int))
+      return FZERO_PANEL_FULLSCREEN_FAILED;
+  }
+  return FZERO_PANEL_SAVED;
+}

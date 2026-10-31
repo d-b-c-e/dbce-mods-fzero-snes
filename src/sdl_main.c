@@ -2329,7 +2329,7 @@ static void panel_key_down(int key, int repeat) {
  * Ctrl+F6 does) and are saved through the launcher's own fzero-video.ini
  * writer when the panel closes. Returns true when anything changed. */
 static bool mod_panel_loop(FzeroPresenter *p, int *running, SDL_GameController **pad,
-                           SDL_Window *window, Uint64 *feedback_until, bool fullscreen_set) {
+                           SDL_Window *window, Uint64 *feedback_until) {
   enum { w = 448, line = 14, top = 28, rows = FZERO_PANEL_ROWS, h = top + rows * line + 36 };
   static uint32_t pixels[w * h];
   static int row;
@@ -2386,33 +2386,23 @@ static bool mod_panel_loop(FzeroPresenter *p, int *running, SDL_GameController *
   }
   g_panel_pixels = NULL;
   g_overlay_release_mask |= overlay_nav_inputs(*pad);
-  /* Only the keys of the edited rows are written, in one replacement. Turning
-   * triple screens on also needs fullscreen, the launcher's own setting; Off
-   * leaves it alone. A failed save undoes this opening's changes in memory. */
-  const char *keys[FZERO_PANEL_ROWS * FZERO_PANEL_MAX_KEYS];
-  const char *values[FZERO_PANEL_ROWS * FZERO_PANEL_MAX_KEYS];
-  char text[FZERO_PANEL_ROWS][FZERO_PANEL_MAX_KEYS][16];
-  int count = 0;
-  for (int i = 0; i < FZERO_PANEL_ROWS; ++i) {
-    if (!(edited & (1u << i))) continue;
-    const char *row_keys[FZERO_PANEL_MAX_KEYS];
-    int n = FzeroPanelKeys(&g_video, i, row_keys, text[i]);
-    for (int k = 0; k < n; ++k) { keys[count] = row_keys[k]; values[count++] = text[i][k]; }
-  }
-  bool saved = true;
-  if (count) {
-    static const char *const fullscreen_key[] = {"Fullscreen"}, *const fullscreen_on[] = {"1"};
-    if ((edited & (1u << FZERO_PANEL_TRIPLE)) && g_video.triple_screen && !fullscreen_set)
-      saved = FzeroIniSaveKeys(g_config_path, "Graphics", 1, fullscreen_key, fullscreen_on);
-    if (saved) saved = FzeroIniSaveKeys(kVideoConfig, "FZeroVideo", count, keys, values);
-    if (!saved) {
-      g_video = before;
-      changed = false;
-      set_title_message(window, "Couldn't save settings; changes undone", feedback_until);
-    }
+  /* Only the keys of the edited rows are written, in one replacement; turning
+   * triple screens on also needs fullscreen, the launcher's own setting (Off
+   * leaves it alone). A failed save undoes this opening's changes in memory. */
+  FzeroPanelSaveResult result = edited ?
+      FzeroPanelSave(&g_video, edited, kVideoConfig, g_config_path, FzeroIniReadInt) : FZERO_PANEL_SAVED;
+  if (result == FZERO_PANEL_SAVE_FAILED) {
+    g_video = before;
+    changed = false;
+    set_title_message(window, "Couldn't save settings; changes undone", feedback_until);
+  } else if (result == FZERO_PANEL_FULLSCREEN_FAILED) {
+    set_title_message(window, "Settings saved, but fullscreen is off; turn it on in the launcher",
+                      feedback_until);
   }
   fprintf(stderr, "[fzero-overlay] settings panel CLOSED%s - guest resuming\n",
-          !count ? "" : saved ? " (changes saved)" : " (save failed; changes undone)");
+          !edited ? "" : result == FZERO_PANEL_SAVED ? " (changes saved)" :
+          result == FZERO_PANEL_SAVE_FAILED ? " (save failed; changes undone)" :
+          " (settings saved; fullscreen could not be turned on)");
   return changed;
 }
 
@@ -3457,8 +3447,7 @@ int main(int argc, char **argv) {
         savestate_menu_loop(&presenter, &running, &pad);
       else if (panel == 2)
         rewind_loop(&presenter, &running, &pad);
-      else if (mod_panel_loop(&presenter, &running, &pad, window, &state_feedback_until,
-                              launcher_settings.fullscreen))
+      else if (mod_panel_loop(&presenter, &running, &pad, window, &state_feedback_until))
         next_display_check = 0; /* re-read the presentation rate, as Ctrl+F7 does */
       FzeroDiagnosticsEvent("menu_close", panel);
       if (FzeroStateGuardTripped())

@@ -36,3 +36,18 @@ bool FzeroPanelNextStart(int row);
 enum { FZERO_PANEL_MAX_KEYS = 2 };
 int FzeroPanelKeys(const FzeroVideoSettings *s, int row,
                    const char *keys[FZERO_PANEL_MAX_KEYS], char values[FZERO_PANEL_MAX_KEYS][16]);
+
+/* The launcher's config.ini reader (FzeroIniReadInt): 1 when [section] key was found. */
+typedef int (*FzeroIniIntReader)(const char *path, const char *section, const char *key, int *out);
+typedef enum FzeroPanelSaveResult {
+  FZERO_PANEL_SAVED,
+  FZERO_PANEL_SAVE_FAILED,       /* nothing written */
+  FZERO_PANEL_FULLSCREEN_FAILED  /* video settings saved; fullscreen still reads off */
+} FzeroPanelSaveResult;
+/* Writes the keys of the rows in `edited` (bit per FzeroPanelRow) to
+ * video_path in one replacement. When triple screens were turned on, it then
+ * makes [Graphics] Fullscreen read on through read_int (the reader the game
+ * uses), writing it only when it does not, and checks it afterwards. */
+FzeroPanelSaveResult FzeroPanelSave(const FzeroVideoSettings *s, unsigned edited,
+                                    const char *video_path, const char *config_path,
+                                    FzeroIniIntReader read_int);
