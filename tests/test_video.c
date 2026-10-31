@@ -169,6 +169,16 @@ static void config_tests(void) {
        "[FZeroVideo]\r\nTripleCompareView=3\r\nAspect=Fit\r\n"},
       {"; no section", "; no section\n[FZeroVideo]\nTripleCompareView=2\n",
        "; no section\n[FZeroVideo]\nTripleCompareView=3\n"},
+      /* An empty section right before another gets the key, not a second section. */
+      {"[FZeroVideo]\n[Other]\nX=1\n", "[FZeroVideo]\nTripleCompareView=2\n[Other]\nX=1\n",
+       "[FZeroVideo]\nTripleCompareView=3\n[Other]\nX=1\n"},
+      /* Duplicates: the reader takes the last, so the writer replaces the last. */
+      {"[FZeroVideo]\nTripleCompareView=1\nTripleCompareView=1\n",
+       "[FZeroVideo]\nTripleCompareView=1\nTripleCompareView=2\n",
+       "[FZeroVideo]\nTripleCompareView=1\nTripleCompareView=3\n"},
+      /* A legacy sectionless key is read; the new line after it wins. */
+      {"TripleCompareView=1\n", "TripleCompareView=1\n[FZeroVideo]\nTripleCompareView=2\n",
+       "TripleCompareView=1\n[FZeroVideo]\nTripleCompareView=3\n"},
     };
     for (unsigned i = 0; i < sizeof(cases) / sizeof(*cases); ++i) {
       char text[512];
@@ -178,10 +188,12 @@ static void config_tests(void) {
       f = fopen("test-video-key.ini", "rb"); CHECK(f);
       size_t n = fread(text, 1, sizeof(text) - 1, f); fclose(f); text[n] = 0;
       CHECK(!strcmp(text, cases[i].after2));
+      CHECK(FzeroVideoLoad(&b, "test-video-key.ini") && b.triple_compare_view == 2);
       CHECK(FzeroVideoSaveKey("test-video-key.ini", "TripleCompareView", "3"));
       f = fopen("test-video-key.ini", "rb"); CHECK(f);
       n = fread(text, 1, sizeof(text) - 1, f); fclose(f); text[n] = 0;
       CHECK(!strcmp(text, cases[i].after3));
+      CHECK(FzeroVideoLoad(&b, "test-video-key.ini") && b.triple_compare_view == 3);
     }
     remove("test-video-key.ini");
     CHECK(FzeroVideoSaveKey("test-video-key.ini", "TripleCompareView", "1"));

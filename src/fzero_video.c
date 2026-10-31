@@ -153,7 +153,12 @@ bool FzeroVideoLoad(FzeroVideoSettings *s, const char *path) {
   char line[256], key[64], value[64], tail;
   bool valid = true;
   bool has_fps_toggle = false;
+  bool other_section = false; /* keys before any header (legacy files) count; other sections do not */
   while (fgets(line, sizeof(line), f)) {
+    const char *t = line;
+    while (*t == ' ' || *t == '\t') ++t;
+    if (*t == '[') { other_section = strncmp(t, "[FZeroVideo]", 12) != 0; continue; }
+    if (other_section) continue;
     int fields = sscanf(line, " %63[^= \t] = %63s", key, value);
     if (fields != 2) {
       if (fields == 1 && !strcmp(key, "HDMode7Scale")) valid = false;
@@ -282,7 +287,7 @@ bool FzeroVideoSaveKey(const char *path, const char *key, const char *value) {
     fclose(in);
     if (bad) { free(text); return false; }
   } else if (errno != ENOENT) { free(text); return false; }
-  /* Find the key's line, else the end of the [FZeroVideo] section. */
+  /* Find the key's last line in [FZeroVideo], else the end of that section. */
   size_t key_length = strlen(key), found = (size_t)-1, found_end = 0, section_end = (size_t)-1;
   bool in_section = false;
   for (size_t line = 0; line < length;) {
@@ -292,17 +297,18 @@ bool FzeroVideoSaveKey(const char *path, const char *key, const char *value) {
     while (p < end && (text[p] == ' ' || text[p] == '\t')) ++p;
     if (p < end && text[p] == '[') {
       in_section = end - p >= 12 && !strncmp(text + p, "[FZeroVideo]", 12);
+      if (in_section) section_end = next;
     } else if (in_section) {
       section_end = next;
       if (end - p > key_length && !strncmp(text + p, key, key_length)) {
         size_t q = p + key_length;
         while (q < end && (text[q] == ' ' || text[q] == '\t')) ++q;
-        if (q < end && text[q] == '=') { found = line; found_end = end; break; }
+        /* The last one, as FzeroVideoLoad reads the last one. */
+        if (q < end && text[q] == '=') { found = line; found_end = end; }
       }
     }
     line = next;
   }
-  if (in_section && section_end == (size_t)-1) section_end = length;
   const char *eol = memchr(text, '\r', length) ? "\r\n" : "\n";
   FILE *f = fopen(temporary, "wb");
   if (!f) { free(text); return false; }
