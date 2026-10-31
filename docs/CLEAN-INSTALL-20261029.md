@@ -59,3 +59,21 @@ Rig block (one guna slot, ~25 min, game closed beforehand, force Off throughout)
    those remain separate checks against an exact prior package.
 Input only to the launcher/game window when it is the verified foreground (or through the launcher's own
 automation if it has one); no Steam involvement. Pass/fail per step goes in this file with capture paths.
+
+## Rig run without desktop input — 2026-10-30 23:39-23:41 (vemi, guna GO 484371)
+
+Candidate `05299de` stock-only static-runtime ZIP SHA-256 `871EC38E81A02DCF92F8CE0C8CC3EF7A8FBE2C73930F40FA730DAAA96C713723`
+(verify pass). Lease vemi, force never configured (no config.ini). Only processes this run started were stopped; no
+clicks or keys. Evidence: `E:\Source	empzero\clean-20261030\evidence` (result.json, captures, stdout/stderr).
+
+| Step | Result |
+|---|---|
+| 1 Extract to a fresh path | PASS: 64 files, no ROM/ini/cfg |
+| 2 Setup.cmd, no ROM | PASS: "F-Zero — Launcher" opens (`--launcher`), "No ROM loaded", Browse For ROM, Skip launcher on boot visible (launcher-no-rom.png). Writes only `keybinds.ini` in the game folder. |
+| 3 Wrong file | PASS via the command-line path: "A verified F-Zero (USA) ROM is required: <path>", exits, writes nothing. The launcher's Browse refusal is not exercised (needs input). |
+| 4 Supported ROM | PASS via the command line (ROM read in place, unchanged): game window reaches the F-Zero title (stock-rom.png); writes nothing. `rom.cfg` via Browse not exercised. |
+| 5 Restart / Skip launcher recovery | NOT RUN: needs a ROM picked and Skip set in the launcher (input). |
+| 6 Controls/screens in the launcher | NOT RUN (input). |
+| 7 Removal | PASS for the portable folder: only the test root was written; no files in LOCALAPPDATA/APPDATA changed; the owner install (LaunchBox Racing F-Zero folder) is byte-identical; disposable copy removed, evidence kept. Update/rollback not covered. |
+
+Remaining: steps 3-6 through the launcher UI need a person (or an approved input tool) for about 10 minutes.
