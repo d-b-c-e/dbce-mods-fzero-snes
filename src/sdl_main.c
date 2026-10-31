@@ -13,6 +13,7 @@
 #include "fzero_inject.h"
 #include "fzero_shim.h"
 #include "fzero_shim_map.h"
+#include "fzero_panel.h"
 #include "fzero_telemetry.h"
 #include "fzero_ffb.h"
 #include "fzero_msu.h"
@@ -1152,6 +1153,11 @@ static FzeroHotkey g_hotkey_rewind;
  * menu). g_compare_view is the step this session shows; the saved pick is
  * g_video.triple_compare_view, which follows only a successful save. */
 static FzeroHotkey g_hotkey_compare;
+/* The F6 settings panel ([KeyMap] ModMenu, F6 by default; Shift+F6 still saves
+ * slot 6 and the browser still loads it). */
+static FzeroHotkey g_hotkey_panel;
+static const uint32_t *g_panel_pixels;
+static int g_panel_w, g_panel_h;
 static unsigned g_compare_view;
 /* The curve step needs the center warp, which only the SDL_Renderer span path
  * draws; elsewhere the cycle has no curve step and a saved curve pick shows
@@ -1522,6 +1528,18 @@ static void compare_press(void) {
           next == 3 ? g_video.triple_curve_radius_mm : 0u);
 }
 
+/* The F6 panel image, centred on the game picture at its own aspect. */
+static void mod_panel_draw(const FzeroPresenter *p) {
+  if (!g_panel_pixels) return;
+  FzeroRect game = overlay_rect(p, 1);
+  int draw_w = game.w * 3 / 5, draw_h = g_panel_h * draw_w / g_panel_w;
+  if (draw_h > game.h * 9 / 10) { draw_h = game.h * 9 / 10; draw_w = g_panel_w * draw_h / g_panel_h; }
+  if (draw_w < 1 || draw_h < 1) return;
+  FzeroRect rect = {game.x + (game.w - draw_w) / 2, game.y + (game.h - draw_h) / 2, draw_w, draw_h};
+  if (p->gl) fzero_gl_draw_overlay(p->gl, g_panel_pixels, g_panel_w, g_panel_h, rect, p->drawable_height);
+  else overlay_draw_sdl_rect(p, g_panel_pixels, g_panel_w, g_panel_h, rect);
+}
+
 static void session_status_draw(const FzeroPresenter *p) {
   enum { w = 448, max_h = 51 };
   const bool limited_shared = FzeroShimOrdinary();
@@ -1800,6 +1818,7 @@ static void present_frame(FzeroPresenter *p, const uint32_t *panel,
     }
     session_status_draw(p);
     compare_notice_draw(p);
+    mod_panel_draw(p);
     frame_stats_draw(p);
     uint64_t diagnostic_start = FzeroDiagnosticsBegin();
     output_probe(p->gl->window, "center", pixels, width, height,
@@ -1880,6 +1899,7 @@ static void present_frame(FzeroPresenter *p, const uint32_t *panel,
   if (panel) overlay_dump(p, is_menu);
   session_status_draw(p);
   compare_notice_draw(p);
+  mod_panel_draw(p);
   frame_stats_draw(p);
   FzeroDiagnosticsEnd(FZERO_DIAG_DRAW, diagnostic_start);
   diagnostic_start = FzeroDiagnosticsBegin();
@@ -2288,6 +2308,90 @@ static void rewind_loop(FzeroPresenter *p, int *running,
   g_overlay_release_mask |= overlay_nav_inputs(*pad);
 }
 
+static int g_panel_move, g_panel_change;
+static bool g_panel_close;
+
+static void panel_key_down(int key, int repeat) {
+  switch (key) {
+    case SDLK_UP: g_panel_move = -1; break;
+    case SDLK_DOWN: g_panel_move = +1; break;
+    case SDLK_LEFT: g_panel_change = -1; break;
+    case SDLK_RIGHT: case SDLK_RETURN: case SDLK_SPACE: g_panel_change = +1; break;
+    case SDLK_ESCAPE: case SDLK_BACKSPACE: g_panel_close = true; break;
+    default:
+      if (!repeat && g_hotkey_panel.bound && key == (int)g_hotkey_panel.key) g_panel_close = true;
+      break;
+  }
+}
+
+/* The F6 settings panel: the guest is frozen while it is open, like the
+ * save-state browser. Changes edit g_video directly (most apply at once, as
+ * Ctrl+F6 does) and are saved through the launcher's own fzero-video.ini
+ * writer when the panel closes. Returns true when anything changed. */
+static bool mod_panel_loop(FzeroPresenter *p, int *running, SDL_GameController **pad,
+                           SDL_Window *window, Uint64 *feedback_until) {
+  enum { w = 448, line = 14, top = 28, rows = FZERO_PANEL_ROWS, h = top + rows * line + 36 };
+  static uint32_t pixels[w * h];
+  static int row;
+  bool changed = false;
+  uint32_t prev_pad = overlay_nav_inputs(*pad);
+  g_panel_move = g_panel_change = 0;
+  g_panel_close = false;
+  fprintf(stderr, "[fzero-overlay] settings panel OPEN - guest frozen until it closes\n");
+  while (*running && !g_panel_close) {
+    overlay_pump_events(running, pad, &panel_key_down);
+    uint32_t nav = overlay_nav_inputs(*pad), pressed = nav & ~prev_pad;
+    prev_pad = nav;
+    if (pressed & SNES_PAD_UP) g_panel_move = -1;
+    if (pressed & SNES_PAD_DOWN) g_panel_move = +1;
+    if (pressed & SNES_PAD_LEFT) g_panel_change = -1;
+    if (pressed & (SNES_PAD_RIGHT | SNES_PAD_A)) g_panel_change = +1;
+    if (pressed & SNES_PAD_B) g_panel_close = true;
+    if (g_panel_move) { row = (row + g_panel_move + rows) % rows; g_panel_move = 0; }
+    if (g_panel_change) {
+      if (FzeroPanelAdjust(&g_video, row, g_panel_change)) {
+        changed = true;
+        char value[48];
+        FzeroPanelValue(&g_video, row, value, sizeof(value));
+        fprintf(stderr, "[fzero-panel] %s: %s%s\n", FzeroPanelLabel(row), value,
+                FzeroPanelNextStart(row) ? " (next start)" : "");
+      }
+      g_panel_change = 0;
+    }
+    const uint32_t accent = 0xff6ed88fu;
+    snes_ovl_fill_rect(pixels, w, h, 0, 0, w, h, 0xf010151au);
+    snes_ovl_stroke_rect(pixels, w, h, 0, 0, w, h, accent);
+    snes_ovl_draw_text(pixels, w, h, 10, 9, "F-Zero settings", accent, 1);
+    for (int i = 0; i < rows; ++i) {
+      int y = top + i * line;
+      char label[64], value[48], shown[56];
+      if (i == row) snes_ovl_fill_rect(pixels, w, h, 4, y - 3, w - 8, line, 0xff2a3a48u);
+      snprintf(label, sizeof(label), "%s%s", FzeroPanelLabel(i), FzeroPanelNextStart(i) ? " *" : "");
+      FzeroPanelValue(&g_video, i, value, sizeof(value));
+      snprintf(shown, sizeof(shown), i == row ? "< %s >" : "%s", value);
+      snes_ovl_draw_text(pixels, w, h, 12, y, label, 0xffffffffu, 1);
+      snes_ovl_draw_text(pixels, w, h, w - 12 - (int)strlen(shown) * 8, y, shown,
+                         i == row ? accent : 0xffd0d0d0u, 1);
+    }
+    snes_ovl_draw_text(pixels, w, h, 12, top + rows * line + 6,
+                       "Up/Down select, Left/Right change", 0xffa0a0a0u, 1);
+    snes_ovl_draw_text(pixels, w, h, 12, top + rows * line + 20,
+                       "* next start          F6 or Esc: close", 0xffa0a0a0u, 1);
+    g_panel_pixels = pixels; g_panel_w = w; g_panel_h = h;
+    present_frame(p, NULL, 0, 0, 1);
+    SDL_Delay(8);
+  }
+  g_panel_pixels = NULL;
+  g_overlay_release_mask |= overlay_nav_inputs(*pad);
+  if (changed && !FzeroVideoSave(&g_video, kVideoConfig)) {
+    fprintf(stderr, "[fzero-panel] Unable to save video settings\n");
+    set_title_message(window, "Couldn't save settings", feedback_until);
+  }
+  fprintf(stderr, "[fzero-overlay] settings panel CLOSED%s - guest resuming\n",
+          changed ? " (changes saved)" : "");
+  return changed;
+}
+
 /* The rewind ring reads its size and cadence from the environment
  * (SNESRECOMP_REWIND, _DEPTH, _INTERVAL) because that is the contract every
  * SNES port shares with it. The launcher's Settings page is this host's way
@@ -2475,6 +2579,7 @@ int main(int argc, char **argv) {
   g_hotkey_menu = resolve_hotkey("SaveStateMenu", "F7");
   g_hotkey_rewind = resolve_hotkey("Rewind", "F8");
   g_hotkey_compare = resolve_hotkey("TripleCompare", "F9");
+  g_hotkey_panel = resolve_hotkey("ModMenu", "F6");
   configure_rewind(&launcher_settings);
   size_t rom_size = 0;
   uint8_t *rom = read_rom(rom_path, &rom_size);
@@ -2936,6 +3041,7 @@ int main(int argc, char **argv) {
    * that only presents — which at 165 Hz is two out of three, and is what
    * made F7 look intermittent on the high-refresh presentation path. */
   int open_savestate_menu = 0;
+  int open_mod_panel = 0;
   int open_rewind = 0;
   uint32_t held_wheel_host_buttons = 0;
   FzeroDiagnosticFrame diagnostic_frame = {0};
@@ -3001,6 +3107,13 @@ int main(int argc, char **argv) {
           hotkey_matches(&g_hotkey_compare, SNESRECOMP_SDL_EVENT_KEY(event),
                          (Uint16)SNESRECOMP_SDL_EVENT_MOD(event))) {
         compare_press();
+        continue;
+      }
+      if (!g_isolated_owner_state && g_playthrough.mode != 2 &&
+          event.type == SDL_KEYDOWN && !event.key.repeat &&
+          hotkey_matches(&g_hotkey_panel, SNESRECOMP_SDL_EVENT_KEY(event),
+                         (Uint16)SNESRECOMP_SDL_EVENT_MOD(event))) {
+        open_mod_panel = 1;
         continue;
       }
       if ((g_isolated_owner_state || g_playthrough.mode == 2 || FzeroShimRequested()) && event.type == SDL_KEYDOWN) {
@@ -3159,6 +3272,8 @@ int main(int argc, char **argv) {
     }
     if (!recorded_replay && snes_savestate_menu_is_open()) panel = 1;
     else if (!recorded_replay && snes_rewind_is_open()) panel = 2;
+    else if (open_mod_panel && !recorded_replay && !g_isolated_owner_state) panel = 3;
+    open_mod_panel = 0;
 
     /* Viewport policy and input sampling change only at simulation boundaries. */
     for (unsigned batch = 0; !panel && batch < 4 &&
@@ -3316,8 +3431,10 @@ int main(int argc, char **argv) {
       FzeroDiagnosticsEvent("menu_open", panel);
       if (panel == 1)
         savestate_menu_loop(&presenter, &running, &pad);
-      else
+      else if (panel == 2)
         rewind_loop(&presenter, &running, &pad);
+      else if (mod_panel_loop(&presenter, &running, &pad, window, &state_feedback_until))
+        next_display_check = 0; /* re-read the presentation rate, as Ctrl+F7 does */
       FzeroDiagnosticsEvent("menu_close", panel);
       if (FzeroStateGuardTripped())
         set_title_message(window, "State refused: taken on the other cartridge",
