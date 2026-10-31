@@ -374,6 +374,28 @@ int main(void) {
     CHECK(FzeroTripleGroundHorizon(&ground, &arc[side], 128, 512, 288, &horizon) &&
           isfinite(horizon));
   }
+  /* Center warp: chord ends and the middle stay put, the cylinder bows the
+   * rest inward (the glass sits behind the chord), mirror-symmetric, in range. */
+  {
+    enum { C = 8, R = 4 };
+    float uv[(C + 1) * (R + 1) * 2];
+    CHECK(!FzeroTripleCenterWarp(&flat_rig, C, R, uv));
+    CHECK(FzeroTripleCenterWarp(&curved, C, R, uv));
+#define U(c, r) uv[2 * ((r) * (C + 1) + (c))]
+#define V(c, r) uv[2 * ((r) * (C + 1) + (c)) + 1]
+    CHECK(fabs(U(0, 0)) < 1e-6 && fabs(V(0, 0)) < 1e-6 && fabs(U(C, R) - 1) < 1e-6 &&
+          fabs(V(C, R) - 1) < 1e-6 && fabs(U(C / 2, R / 2) - .5) < 1e-6 &&
+          fabs(V(C / 2, R / 2) - .5) < 1e-6);
+    CHECK(V(C / 2, 0) > 1e-3 && V(C / 2, R) < 1 - 1e-3);   /* the middle top edge is farther, so smaller */
+    for (int r = 0; r <= R; ++r)
+      for (int c = 0; c <= C; ++c) {
+        CHECK(U(c, r) >= -1e-6 && U(c, r) <= 1 + 1e-6 && V(c, r) >= -1e-6 && V(c, r) <= 1 + 1e-6);
+        CHECK(fabs(U(c, r) + U(C - c, r) - 1) < 1e-5 && fabs(V(c, r) - V(C - c, r)) < 1e-5);
+        if (c > 0) CHECK(U(c, r) > U(c - 1, r));
+      }
+#undef U
+#undef V
+  }
   curved.curve_radius_mm = 300;   /* chord 708 needs at least 354.2 */
   CHECK(!FzeroTripleBuild(&curved, arc));
   puts("F-Zero triple-screen physical rays passed");

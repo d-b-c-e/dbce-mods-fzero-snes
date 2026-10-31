@@ -155,6 +155,7 @@ void NORETURN Die(const char *error) {
 
 /* Fixed internal projection resolution; panel geometry uses physical size. */
 enum { kTriplePanelWidth = 512, kTriplePanelHeight = 288 };
+enum { kCenterWarpColumns = 32, kCenterWarpRows = 18 };
 
 typedef struct FzeroGlRenderer {
   SDL_Window *window;
@@ -1209,7 +1210,61 @@ typedef struct FzeroPresenter {
   bool triple_active;
   bool triple_separate;
   FzeroTripleRig triple_rig;
+  /* TripleCurveRadiusMm: where each center grid vertex samples the game
+   * picture (FzeroTripleCenterWarp); center_warped is false when flat. */
+  float center_warp[(kCenterWarpColumns + 1) * (kCenterWarpRows + 1) * 2];
+  bool center_warped;
 } FzeroPresenter;
+
+/* The curved center: the game picture drawn through the center warp grid.
+ * False when the renderer refuses geometry; the caller then draws it flat. */
+static bool draw_center_warped(FzeroPresenter *p, const SDL_Rect *source,
+                               const SDL_Rect *destination) {
+  enum { C = kCenterWarpColumns, R = kCenterWarpRows };
+  static SDL_Vertex vertices[(C + 1) * (R + 1)];
+  static int indices[C * R * 6];
+  static bool indexed;
+  int texture_width, texture_height;
+  if (!snesrecomp_sdl_get_texture_size(p->texture, &texture_width, &texture_height) ||
+      texture_width <= 0 || texture_height <= 0) return false;
+  if (!indexed) {
+    int n = 0;
+    for (int row = 0; row < R; ++row)
+      for (int column = 0; column < C; ++column) {
+        int a = row * (C + 1) + column, b = a + 1, c = a + C + 1, d = c + 1;
+        indices[n++] = a; indices[n++] = c; indices[n++] = b;
+        indices[n++] = b; indices[n++] = c; indices[n++] = d;
+      }
+    indexed = true;
+  }
+  for (int row = 0; row <= R; ++row)
+    for (int column = 0; column <= C; ++column) {
+      int i = row * (C + 1) + column;
+      SDL_Vertex *v = &vertices[i];
+      v->position.x = destination->x + destination->w * (float)column / C;
+      v->position.y = destination->y + destination->h * (float)row / R;
+      v->tex_coord.x = (source->x + p->center_warp[2 * i] * source->w) / texture_width;
+      v->tex_coord.y = (source->y + p->center_warp[2 * i + 1] * source->h) / texture_height;
+#if SNESRECOMP_SDL3
+      v->color = (SDL_FColor){1.0f, 1.0f, 1.0f, 1.0f};
+#else
+      v->color = (SDL_Color){255, 255, 255, 255};
+#endif
+    }
+#if SNESRECOMP_SDL3
+  return SDL_RenderGeometry(p->renderer, p->texture, vertices, (C + 1) * (R + 1),
+                            indices, C * R * 6);
+#else
+  return SDL_RenderGeometry(p->renderer, p->texture, vertices, (C + 1) * (R + 1),
+                            indices, C * R * 6) == 0;
+#endif
+}
+
+static void presenter_set_rig(FzeroPresenter *p, FzeroTripleRig rig) {
+  p->triple_rig = rig;
+  p->center_warped = FzeroTripleCenterWarp(&rig, kCenterWarpColumns,
+                                           kCenterWarpRows, p->center_warp);
+}
 
 typedef struct FzeroTripleWindows {
   SDL_Window *window[2];
@@ -1674,6 +1729,11 @@ static void present_frame(FzeroPresenter *p, const uint32_t *panel,
       Die("Unable to restore center OpenGL context");
 #endif
     FzeroDiagnosticsEnd(FZERO_DIAG_CENTER_RESTORE, restore_start);
+    if (p->center_warped && triple_ready && !p->triple_separate) {
+      /* shortcut: the shader-preset (GL) path keeps the center flat; add the warp grid there when presets meet curved rigs. */
+      static bool warned;
+      if (!warned) { fprintf(stderr, "[fzero-triple] curved center not drawn with a shader preset; center flat\n"); warned = true; }
+    }
     fzero_gl_render(p->gl, pixels, width, height, p->viewport,
                     p->drawable_width, p->drawable_height,
                     p->triple_active && !p->triple_separate, triple_ready);
@@ -1746,7 +1806,19 @@ static void present_frame(FzeroPresenter *p, const uint32_t *panel,
   if (p->triple_active && !p->triple_separate)
     rect.x += p->drawable_width / 3;
   SDL_Rect destination = {rect.x, rect.y, rect.w, rect.h};
-  snesrecomp_sdl_render_texture(p->renderer, p->texture, &source, &destination);
+  /* Curved glass: warp the center only while the side panels draw (racing);
+   * menus and other screens keep the game's flat picture. */
+  static int center_logged = -1;
+  bool center_curved = triple_ready && !p->triple_separate && p->center_warped &&
+                       draw_center_warped(p, &source, &destination);
+  if (!center_curved)
+    snesrecomp_sdl_render_texture(p->renderer, p->texture, &source, &destination);
+  if (triple_ready && p->center_warped && !p->triple_separate && center_logged != center_curved) {
+    center_logged = center_curved;
+    fprintf(stderr, center_curved ? "[fzero-triple] curved center drawn (%.0f mm radius)\n"
+                                  : "[fzero-triple] curved center refused by the renderer; center flat (%.0f mm radius)\n",
+            p->triple_rig.curve_radius_mm);
+  }
   overlay_draw_sdl(p, panel, pw, ph, is_menu);
   if (panel) overlay_dump(p, is_menu);
   session_status_draw(p);
@@ -2766,8 +2838,8 @@ int main(int argc, char **argv) {
   presenter.triple_separate = triple_separate;
   presenter.triple_windows = triple_separate ? &separate_windows : NULL;
   if (triple_active)
-    presenter.triple_rig = triple_rig_for_span(&g_video,
-        triple_separate ? drawable_width * 3 : drawable_width, drawable_height);
+    presenter_set_rig(&presenter, triple_rig_for_span(&g_video,
+        triple_separate ? drawable_width * 3 : drawable_width, drawable_height));
   if (triple_requested) {
     presenter.triple_pixels = calloc((size_t)2 * kTriplePanelWidth * kTriplePanelHeight,
                                      sizeof(*presenter.triple_pixels));
@@ -3036,9 +3108,9 @@ int main(int argc, char **argv) {
           (triple_requested && FzeroTripleSpanSupported(drawable_width,
                                                          drawable_height));
       if (triple_active)
-        presenter.triple_rig = triple_rig_for_span(&g_video,
+        presenter_set_rig(&presenter, triple_rig_for_span(&g_video,
             triple_separate ? drawable_width * 3 : drawable_width,
-            drawable_height);
+            drawable_height));
       FzeroViewport next = FzeroCalculateViewport(&g_video,
           triple_active && !triple_separate ? drawable_width / 3 : drawable_width,
           drawable_height);

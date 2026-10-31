@@ -172,3 +172,24 @@ bool FzeroTripleProjectDirection(const FzeroTripleSurface *panel,
   *pixel_y = (1.0 - v) * height - 0.5;
   return isfinite(*pixel_x) && isfinite(*pixel_y);
 }
+
+bool FzeroTripleCenterWarp(const FzeroTripleRig *rig, int columns, int rows,
+                           float *uv) {
+  FzeroTripleSurface panels[3];
+  if (!rig || !uv || columns < 1 || rows < 1 || !(rig->curve_radius_mm > 0) ||
+      !FzeroTripleBuild(rig, panels)) return false;
+  FzeroTripleSurface glass = panels[1];
+  glass.curve_radius_mm = rig->curve_radius_mm;
+  for (int row = 0; row <= rows; ++row)
+    for (int column = 0; column <= columns; ++column) {
+      FzeroTripleVec3 point;
+      double x, y;
+      if (!FzeroTriplePanelPoint(&glass, (double)column / columns,
+                                 1.0 - (double)row / rows, &point) ||
+          !FzeroTripleProjectDirection(&panels[1], point, 1, 1, &x, &y))
+        return false;
+      uv[2 * (row * (columns + 1) + column)] = (float)(x + 0.5);
+      uv[2 * (row * (columns + 1) + column) + 1] = (float)(y + 0.5);
+    }
+  return true;
+}

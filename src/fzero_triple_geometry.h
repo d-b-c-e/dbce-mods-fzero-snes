@@ -39,3 +39,10 @@ bool FzeroTripleProjectDirection(const FzeroTripleSurface *panel,
                                   FzeroTripleVec3 direction,
                                   int width, int height,
                                   double *pixel_x, double *pixel_y);
+/* The center's curve as a presentation warp: for each vertex of a
+ * (columns+1) x (rows+1) grid over the curved center glass (u left..right
+ * along the arc, rows top..bottom), the point of the game's planar center
+ * picture the eye sees through it, as uv pairs (0..1, y down). False for a
+ * flat or invalid rig (draw the picture unchanged). */
+bool FzeroTripleCenterWarp(const FzeroTripleRig *rig, int columns, int rows,
+                           float *uv);
