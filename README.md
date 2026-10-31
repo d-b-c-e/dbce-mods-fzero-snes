@@ -205,6 +205,18 @@ Both keys are rebindable in the launcher's **Controls** page, as
 executable and take effect the next time you start the game. The rewind
 switch, depth and interval are remembered in the same file.
 
+### Switching the triple-screen view
+
+With triple screens on, press **F9** while racing to switch between
+**Original game view**, **Angle correction** and, when a screen curve radius is
+set, **Angle + curve correction**. The view's name shows on the center screen
+for a moment, and your choice is kept for the next start (`TripleCompareView`
+in `fzero-video.ini`); the curve radius and screen sizes are not changed. In
+menus the key only says that switching works while driving. F9 was picked
+because **F7** is the save-state menu here; to use another key, set
+`TripleCompare=` under `[KeyMap]` in `config.ini` (the launcher's Controls page
+does not list it yet). With triple screens off, F9 is quick slot 9 as before.
+
 ### Racing-wheel setup in the launcher
 
 The launcher opens before Play when started with `--launcher`. On its **Mods**
