@@ -210,10 +210,13 @@ switch, depth and interval are remembered in the same file.
 Press **F6** during play to open the settings panel; the game pauses while it
 is open. Up/Down picks a row, Left/Right (or Enter) changes it, and **F6** or
 **Escape** closes it (on a gamepad: D-pad, A to change, B to close). It covers
-triple screens and their output, the screen curve, widescreen and aspect,
-presentation FPS, the FPS readout and crash-flash reduction. Rows marked `*`
-apply at the next start; the rest apply straight away. Changes are saved to
-`fzero-video.ini` when the panel closes, the same file the launcher uses.
+triple screens (Off, Surround or Separate monitors), the screen curve,
+widescreen and aspect, presentation FPS, the FPS readout and crash-flash
+reduction. Rows marked `*` apply at the next start; the rest apply straight
+away. When the panel closes, only the settings you changed are written to
+`fzero-video.ini` (turning triple screens on also sets fullscreen in
+`config.ini`, which they need); if that fails, the changes are undone and the
+title bar says so.
 F6 used to load quick slot 6: Shift+F6 still saves slot 6, and slot 6 still
 loads from the save-state menu. To use another key, set `ModMenu=` under
 `[KeyMap]` in `config.ini`.

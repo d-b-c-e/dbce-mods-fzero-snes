@@ -8,12 +8,11 @@
 /*
  * The in-game F6 settings panel's model (STD-030): the launcher's video and
  * triple-screen choices a player changes while playing, as rows. No SDL here,
- * so it is tested without a window; sdl_main.c draws it and saves through the
- * existing fzero-video.ini writer when the panel closes.
+ * so it is tested without a window; sdl_main.c draws it and, when it closes,
+ * writes only the edited rows' keys (FzeroPanelKeys, FzeroIniSaveKeys).
  */
 typedef enum FzeroPanelRow {
-  FZERO_PANEL_TRIPLE,      /* triple screens on/off (next start) */
-  FZERO_PANEL_OUTPUT,      /* Surround / Separate monitors (next start) */
+  FZERO_PANEL_TRIPLE,      /* Off / Surround / Separate monitors (STD-022; next start) */
   FZERO_PANEL_CURVE,       /* Flat, 1000R, 1500R, 1800R; any other saved radius shows as Custom */
   FZERO_PANEL_WIDESCREEN,
   FZERO_PANEL_ASPECT,
@@ -31,3 +30,9 @@ void FzeroPanelValue(const FzeroVideoSettings *s, int row, char *out, size_t siz
 bool FzeroPanelAdjust(FzeroVideoSettings *s, int row, int direction);
 /* True for rows whose change takes effect at the next game start. */
 bool FzeroPanelNextStart(int row);
+/* The fzero-video.ini keys a changed row owns, with their values as
+ * FzeroVideoLoad reads them; returns how many (at most 2). Only these are
+ * written when the panel closes, so untouched settings stay as they are. */
+enum { FZERO_PANEL_MAX_KEYS = 2 };
+int FzeroPanelKeys(const FzeroVideoSettings *s, int row,
+                   const char *keys[FZERO_PANEL_MAX_KEYS], char values[FZERO_PANEL_MAX_KEYS][16]);

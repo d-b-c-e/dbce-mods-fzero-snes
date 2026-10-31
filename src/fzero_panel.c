@@ -3,7 +3,7 @@
 #include <stdio.h>
 
 static const char *const labels[FZERO_PANEL_ROWS] = {
-    "Triple screens", "Triple screen output", "Screen curve", "Widescreen",
+    "Triple screens", "Screen curve", "Widescreen",
     "Aspect", "Presentation FPS", "Show FPS", "Reduce crash flashes"};
 static const unsigned curves[] = {0, 1000, 1500, 1800};
 static const unsigned rates[] = {0, 60, 90, 120, 144, 165, 240, 360};
@@ -14,16 +14,15 @@ const char *FzeroPanelLabel(int row) {
 }
 
 bool FzeroPanelNextStart(int row) {
-  return row == FZERO_PANEL_TRIPLE || row == FZERO_PANEL_OUTPUT || row == FZERO_PANEL_FLASH;
+  return row == FZERO_PANEL_TRIPLE || row == FZERO_PANEL_FLASH;
 }
 
 void FzeroPanelValue(const FzeroVideoSettings *s, int row, char *out, size_t size) {
   const char *on = "On", *off = "Off";
   switch (row) {
-  case FZERO_PANEL_TRIPLE: snprintf(out, size, "%s", s->triple_screen ? on : off); break;
-  case FZERO_PANEL_OUTPUT:
-    snprintf(out, size, "%s", s->triple_output_mode == FZERO_TRIPLE_OUTPUT_SEPARATE ?
-             "Separate monitors" : "Surround");
+  case FZERO_PANEL_TRIPLE:
+    snprintf(out, size, "%s", !s->triple_screen ? off :
+             s->triple_output_mode == FZERO_TRIPLE_OUTPUT_SEPARATE ? "Separate monitors" : "Surround");
     break;
   case FZERO_PANEL_CURVE: {
     unsigned r = s->triple_curve_radius_mm;
@@ -61,11 +60,14 @@ static unsigned next_curve(unsigned current, int direction) {
 bool FzeroPanelAdjust(FzeroVideoSettings *s, int row, int direction) {
   if (direction == 0) return false;
   switch (row) {
-  case FZERO_PANEL_TRIPLE: s->triple_screen = !s->triple_screen; return true;
-  case FZERO_PANEL_OUTPUT:
-    s->triple_output_mode = s->triple_output_mode == FZERO_TRIPLE_OUTPUT_SEPARATE ?
-        FZERO_TRIPLE_OUTPUT_SPAN : FZERO_TRIPLE_OUTPUT_SEPARATE;
+  case FZERO_PANEL_TRIPLE: {
+    /* Off, Surround, Separate monitors; Off keeps the saved output for next time. */
+    int at = !s->triple_screen ? 0 : s->triple_output_mode == FZERO_TRIPLE_OUTPUT_SEPARATE ? 2 : 1;
+    at = (at + (direction > 0 ? 1 : 2)) % 3;
+    s->triple_screen = at != 0;
+    if (at) s->triple_output_mode = at == 2 ? FZERO_TRIPLE_OUTPUT_SEPARATE : FZERO_TRIPLE_OUTPUT_SPAN;
     return true;
+  }
   case FZERO_PANEL_CURVE: {
     /* The next preset this rig can use (flat always can); none left keeps the radius. */
     unsigned before = s->triple_curve_radius_mm, r = before;
@@ -100,4 +102,32 @@ bool FzeroPanelAdjust(FzeroVideoSettings *s, int row, int direction) {
   case FZERO_PANEL_FLASH: s->reduce_crash_flash = !s->reduce_crash_flash; return true;
   default: return false;
   }
+}
+
+int FzeroPanelKeys(const FzeroVideoSettings *s, int row,
+                   const char *keys[FZERO_PANEL_MAX_KEYS], char values[FZERO_PANEL_MAX_KEYS][16]) {
+  int n = 0;
+#define PUT(key, ...) do { keys[n] = key; snprintf(values[n], sizeof(values[n]), __VA_ARGS__); ++n; } while (0)
+  switch (row) {
+  case FZERO_PANEL_TRIPLE:
+    PUT("TripleScreen", "%d", s->triple_screen ? 1 : 0);
+    if (s->triple_screen)
+      PUT("TripleOutputMode", "%s", s->triple_output_mode == FZERO_TRIPLE_OUTPUT_SEPARATE ? "Separate" : "Span");
+    break;
+  case FZERO_PANEL_CURVE: PUT("TripleCurveRadiusMm", "%u", s->triple_curve_radius_mm); break;
+  case FZERO_PANEL_WIDESCREEN:
+    PUT("EnhancedRenderer", "%d", s->enhanced ? 1 : 0);
+    PUT("Aspect", "%s", FzeroAspectName(s->aspect));
+    break;
+  case FZERO_PANEL_ASPECT: PUT("Aspect", "%s", FzeroAspectName(s->aspect)); break;
+  case FZERO_PANEL_FPS:
+    if (s->fps) PUT("PresentationFPS", "%u", s->fps); else PUT("PresentationFPS", "Auto");
+    PUT("PresentationEnabled", "%d", s->fps_enabled ? 1 : 0);
+    break;
+  case FZERO_PANEL_SHOW_FPS: PUT("ShowFPS", "%d", s->show_fps ? 1 : 0); break;
+  case FZERO_PANEL_FLASH: PUT("ReduceCrashFlash", "%d", s->reduce_crash_flash ? 1 : 0); break;
+  default: break;
+  }
+#undef PUT
+  return n;
 }

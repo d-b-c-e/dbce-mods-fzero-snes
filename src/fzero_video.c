@@ -272,10 +272,69 @@ const char *FzeroCompareName(unsigned step) {
                                                        : "Angle + curve correction";
 }
 
-bool FzeroVideoSaveKey(const char *path, const char *key, const char *value) {
+/* Replace or add one Key=value in the buffer: the key's last line in
+ * [section] (the one FzeroVideoLoad reads), else the end of that section,
+ * else a new section at the end. Frees text and returns NULL on failure. */
+static char *ini_put(char *text, size_t *length, const char *section,
+                     const char *key, const char *value) {
+  char header[80], line[256];
+  int header_length = snprintf(header, sizeof(header), "[%s]", section);
+  size_t key_length = strlen(key), found = (size_t)-1, found_end = 0, section_end = (size_t)-1;
+  if (header_length <= 0 || header_length >= (int)sizeof(header) || !key_length ||
+      strchr(value, '\n') || strchr(value, '\r')) { free(text); return NULL; }
+  bool in_section = false;
+  for (size_t at = 0; at < *length;) {
+    size_t end = at;
+    while (end < *length && text[end] != '\n') ++end;
+    size_t next = end < *length ? end + 1 : end, p = at;
+    while (p < end && (text[p] == ' ' || text[p] == '\t')) ++p;
+    if (p < end && text[p] == '[') {
+      in_section = end - p >= (size_t)header_length && !strncmp(text + p, header, (size_t)header_length);
+      if (in_section) section_end = next;
+    } else if (in_section) {
+      section_end = next;
+      if (end - p > key_length && !strncmp(text + p, key, key_length)) {
+        size_t q = p + key_length;
+        while (q < end && (text[q] == ' ' || text[q] == '\t')) ++q;
+        if (q < end && text[q] == '=') { found = at; found_end = end; }
+      }
+    }
+    at = next;
+  }
+  const char *eol = memchr(text, '\r', *length) ? "\r\n" : "\n";
+  size_t at, cut;
+  int written;
+  if (found != (size_t)-1) {
+    if (found_end > found && text[found_end - 1] == '\r') --found_end;
+    at = found; cut = found_end;
+    written = snprintf(line, sizeof(line), "%s=%s", key, value);
+  } else if (section_end != (size_t)-1) {
+    at = cut = section_end;
+    written = snprintf(line, sizeof(line), "%s%s=%s%s",
+                       section_end > 0 && text[section_end - 1] != '\n' ? eol : "", key, value, eol);
+  } else {
+    at = cut = *length;
+    written = snprintf(line, sizeof(line), "%s%s%s%s=%s%s",
+                       *length > 0 && text[*length - 1] != '\n' ? eol : "", header, eol, key, value, eol);
+  }
+  if (written <= 0 || written >= (int)sizeof(line)) { free(text); return NULL; }
+  size_t size = *length - (cut - at) + (size_t)written;
+  char *out = malloc(size + 1);
+  if (!out) { free(text); return NULL; }
+  memcpy(out, text, at);
+  memcpy(out + at, line, (size_t)written);
+  memcpy(out + at + written, text + cut, *length - cut);
+  out[size] = 0;
+  free(text);
+  *length = size;
+  return out;
+}
+
+bool FzeroIniSaveKeys(const char *path, const char *section, int count,
+                      const char *const *keys, const char *const *values) {
   enum { kMaxFile = 1 << 16 };
   char temporary[1024];
-  if (!path || !key || !value || strchr(value, '\n') ||
+  if (!path || !section || count < 1 || !keys || !values ||
       snprintf(temporary, sizeof(temporary), "%s.tmp", path) >= (int)sizeof(temporary)) return false;
   char *text = calloc(1, kMaxFile + 1);
   if (!text) return false;
@@ -287,46 +346,12 @@ bool FzeroVideoSaveKey(const char *path, const char *key, const char *value) {
     fclose(in);
     if (bad) { free(text); return false; }
   } else if (errno != ENOENT) { free(text); return false; }
-  /* Find the key's last line in [FZeroVideo], else the end of that section. */
-  size_t key_length = strlen(key), found = (size_t)-1, found_end = 0, section_end = (size_t)-1;
-  bool in_section = false;
-  for (size_t line = 0; line < length;) {
-    size_t end = line;
-    while (end < length && text[end] != '\n') ++end;
-    size_t next = end < length ? end + 1 : end, p = line;
-    while (p < end && (text[p] == ' ' || text[p] == '\t')) ++p;
-    if (p < end && text[p] == '[') {
-      in_section = end - p >= 12 && !strncmp(text + p, "[FZeroVideo]", 12);
-      if (in_section) section_end = next;
-    } else if (in_section) {
-      section_end = next;
-      if (end - p > key_length && !strncmp(text + p, key, key_length)) {
-        size_t q = p + key_length;
-        while (q < end && (text[q] == ' ' || text[q] == '\t')) ++q;
-        /* The last one, as FzeroVideoLoad reads the last one. */
-        if (q < end && text[q] == '=') { found = line; found_end = end; }
-      }
-    }
-    line = next;
-  }
-  const char *eol = memchr(text, '\r', length) ? "\r\n" : "\n";
+  for (int i = 0; i < count; ++i)
+    if (!keys[i] || !values[i] || !(text = ini_put(text, &length, section, keys[i], values[i])))
+      { free(text); return false; }
   FILE *f = fopen(temporary, "wb");
   if (!f) { free(text); return false; }
-  bool ok;
-  if (found != (size_t)-1) {
-    if (found_end > found && text[found_end - 1] == '\r') --found_end;
-    ok = fwrite(text, 1, found, f) == found && fprintf(f, "%s=%s", key, value) > 0 &&
-         fwrite(text + found_end, 1, length - found_end, f) == length - found_end;
-  } else if (section_end != (size_t)-1) {
-    bool needs_break = section_end > 0 && text[section_end - 1] != '\n';
-    ok = fwrite(text, 1, section_end, f) == section_end &&
-         fprintf(f, "%s%s=%s%s", needs_break ? eol : "", key, value, eol) > 0 &&
-         fwrite(text + section_end, 1, length - section_end, f) == length - section_end;
-  } else {
-    bool needs_break = length > 0 && text[length - 1] != '\n';
-    ok = fwrite(text, 1, length, f) == length &&
-         fprintf(f, "%s[FZeroVideo]%s%s=%s%s", needs_break ? eol : "", eol, key, value, eol) > 0;
-  }
+  bool ok = fwrite(text, 1, length, f) == length;
   free(text);
   if (fclose(f)) ok = false;
   if (ok) {
@@ -338,6 +363,10 @@ bool FzeroVideoSaveKey(const char *path, const char *key, const char *value) {
   }
   if (!ok) remove(temporary);
   return ok;
+}
+
+bool FzeroVideoSaveKey(const char *path, const char *key, const char *value) {
+  return FzeroIniSaveKeys(path, "FZeroVideo", 1, &key, &value);
 }
 
 void FzeroClockReset(FzeroClock *c, double now, double hz) {

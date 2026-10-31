@@ -93,5 +93,9 @@ unsigned FzeroCompareCurrent(unsigned pick, bool curve);
  * line, comment, unknown key and section stays as it is; a missing key goes at
  * the end of [FZeroVideo] (created when absent). False leaves the file as it was. */
 bool FzeroVideoSaveKey(const char *path, const char *key, const char *value);
+/* The same in-place edit for several keys of one [section], written in one
+ * replacement: all of them or none. */
+bool FzeroIniSaveKeys(const char *path, const char *section, int count,
+                      const char *const *keys, const char *const *values);
 unsigned FzeroCompareNext(unsigned pick, bool curve);
 const char *FzeroCompareName(unsigned step);
