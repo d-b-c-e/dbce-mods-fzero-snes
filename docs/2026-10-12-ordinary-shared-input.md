@@ -170,7 +170,7 @@ SDL_DINPUT_JoystickOpen+0x379`. The original executable's return address
 the relevant return addresses match the privately relinked symbol-map binary.
 The entire relink is not hash-identical (13 data-reference bytes differ), so it
 is supporting symbol evidence, not a replacement runtime. Files are under
-`E:/fz-ordinary-research/{map.rsp,fzero.map,map-hang.py,inspect-hang.py}`.
+`E:/Source/games/dbce-mods-fzero-snes/artifacts/recovered-20261027/fz-ordinary-research/{map.rsp,fzero.map,map-hang.py,inspect-hang.py}`.
 
 Two source defects are now explicit:
 
@@ -260,7 +260,7 @@ individual inspected images establish only the displayed states. They are not
 presentation/performance measurements. Ctrl+F11 key routing remains untested;
 these sessions used the existing frame-bounded normal-close path.
 
-The wrapper is `E:/fz-ordinary-research/Invoke-OrdinaryCopy02.ps1`, SHA256
+The wrapper is `E:/Source/games/dbce-mods-fzero-snes/artifacts/recovered-20261027/fz-ordinary-research/Invoke-OrdinaryCopy02.ps1`, SHA256
 `8b31b28b90e5da196bdfe116b93e01ea1c04c213020534edfb654128add034ad`.
 It preserves logs continuously rather than buffering until process exit. A dummy
 waiting child proved that stdout and stderr are readable while it is still alive;

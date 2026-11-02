@@ -111,7 +111,7 @@ dbce_shim.dll      9b8a036f664cf8f45cccf82b98e5e4376f93215b60eac50b6db965bf49801
 WheelFfb.dll       3f6cc51444879d01feb900098b2de94242594d093f523e3c34bd511d69c0d946
 ```
 
-The wrapper `E:/fz-cli-research/Invoke-CliCopy.ps1` uses the actual CLI, the shared
+The wrapper `E:/Source/games/dbce-mods-fzero-snes/artifacts/recovered-20261027/fz-cli-research/Invoke-CliCopy.ps1` uses the actual CLI, the shared
 lease and idle check, an exact owned child, copied game/assets/config and read-only
 owner pins. Every game exited normally with code 0, its active recorders resolved,
 77 owner file/absence pins unchanged and the lease released. Preview/replay use
@@ -142,7 +142,7 @@ all initial states 18bda07046cd36c3dceca4ca26d38fa0d7317ed325ff29390af34c54dc804
 preview-02 source  92d0d23e1347b3d3f46e16f0eddbbb82150aeff20ff451cba9b3c68a4e4db706
 ```
 
-The independent retained `E:/fz-cli-research/verify-cli-evidence.py` verifies the
+The independent retained `E:/Source/games/dbce-mods-fzero-snes/artifacts/recovered-20261027/fz-cli-research/verify-cli-evidence.py` verifies the
 old 2,351 and both fresh 900 consumed-word sequences plus all five results.
 Its report is `cli-evidence.json`, SHA256
 `62ba33e306b8c9a96b92c829498b9b1dfc50a76b6de0788d3c744060de05535e`.
@@ -162,7 +162,7 @@ Inspected game-window frames (private, retained at these paths):
 The first preview and old-replay burst helper rejected `--duration`: the toolkit's
 existing built executable was older than its source. Those failed helper receipts
 remain. The old replay's one-shot frame succeeded. Later copies use the current
-read-only source built privately at `E:/fz-cli-research/wgc`; their PNGs are valid,
+read-only source built privately at `E:/Source/games/dbce-mods-fzero-snes/artifacts/recovered-20261027/fz-cli-research/wgc`; their PNGs are valid,
 but WGC exit 4 means the target closed before the requested burst ended. That is
 partial image evidence, not a successful full-duration capture. Final wrapper SHA:
 `6738bf0fc5916b4d64bede0f0920fb37c0dac035d3167730b83b2521ebc620ec`.
