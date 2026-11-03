@@ -229,4 +229,60 @@ consumer. All17 checks pass, including identity/schema/mute/ROM/range refusals,
 pending startup and phase-regression refusal. Evidence:
 `.local/session-status-01`; no SDL, ROM, game, hooks or physical device.
 Candidate binaries, complete package and all passing build/headless evidence
-remain unchanged. Corrected preparation/rehearsal is the next offline step.
+remain unchanged. Corrected preparation/rehearsal passed at
+`.local/current-readback-02` with3,600 checkpoints, exit0 and empty job.
+
+## GO501973: exact current candidate graphical replay/capture passed
+
+`PASS` for the exact recorded stock case through the current private graphical
+candidate. Compiler input ddc03155/gameAD65602D, ZIP3FC4F66A and build receipt
+CCDA453A remain unchanged. Runner source88e8c59, SHA256
+`E7EBDF9CD7EC2EC64D5E1F02D93A1EF3678FB60C8F30DE1490B54790BFCE5E14`;
+prepared `.local/current-readback-02/prepared.json`, SHA256
+`012274F8BD2130443CEBAFED1CD9EC532870826A7A958D22DF1E9A75732B4429`.
+Pure status admission SHA256
+`596CEFE7782F03F9C99508944CD465BA099DB9902A15640BF8EA52F74DEA7086`.
+
+Owned game PID31460, birth639293045704477514
+(2026-11-03T12:09:30.4477514Z), SDL HWND56822938, request
+`f374e0b09a64458181400b74719f2b0c`. The initial `starting` status was actually
+observed and retained: exact request/PID/FILETIME, muted=true, frames0,total0,
+empty ROM. It admitted no capture. Later identity-bound `playing` supplied the
+stock ROM and3,600 total, with strictly advancing frames. Terminal `verified`
+3,600/3,600 at12:10:30.9005618Z, followed by normal exit0.
+
+Two exact-target770x608 WGC images were requested at600/1800. Reviewed after
+release, they show the menu with REPLAY630/3600 and the track/craft/opponents
+with REPLAY1824/3600; both say FORCES OFF. Original VS Code foreground stayed
+unchanged throughout. No activation, OS input or ordinary physical consumer.
+
+| Artifact under `live/` | SHA256 |
+| --- | --- |
+| `capture-0.png` | `FF5F921B05DE917E8A14B61FEDD98D164ED4CAC192C6AC2F62183D9B8ABE1237` |
+| `capture-1.png` | `5315AE1B3FB41AE7A43C1614E6EACC6F6EB3D39DA2FEF7AE30D8957F4FE48CA9` |
+| `final.bmp` | `5981061532FB3A215272D30B3BB296A35AE6C2BEAE82DE0AC8BEFDA4C7449ED7` |
+| `final.wram` | `5D41D90DB02E54D1FD1E222C8228C18232F57D5FD5A7F0CA38011377FE7DC7E8` |
+
+Final guest BMP and WRAM match the earlier qualified stock binary's corresponding
+hashes; current headless WRAM matches too. The sampled native glyph property is
+therefore recorded as candidate/game behavior in this case, not attributed to a
+mod defect or WGC scaling. The menu capture is four simulation frames later than
+the626 native reference and shows a later transition; these are not exact scanout
+timestamps or a clean-layout/owner-acceptance verdict.
+
+Cleanup passed: physical0/injected0/startup-resets0, abort=null,61 hook-pump and
+1,982 monitor heartbeats; hooks released/thread joined, original foreground/raw
+tick and all4 displays unchanged; owned job empty. Both restoration readers pass
+all5 original owner files' SHA/exact UTC ticks/attributes plus root/presence
+checks. Named lease42f973cdfb414157baa396ab08e6f66f entered12:09:30.274Z;
+release receipt12:10:33.014Z, about62.7s total and2.1s from last assertion to
+release, inside the80s+15s bounds. FINAL-release sent to remi, soba, kole; no
+custody remains. No Steam, owner installation or public push.
+
+Evidence: `.local/current-readback-02/live/{result,status,starting-status,
+observations,process,guard,images,owner-restore,owner-independent}.json`, capture
+identity receipts/PNGs, final BMP/WRAM, original snapshot, logs and release receipt.
+The current-source private candidate and recorded-case graphical route are now
+qualified at that scope. Ordinary cardinal-controls/Apply/F6/live UDP, physical
+wheel/force/seat and owner acceptance remain separate future gates; this replay
+intentionally bypasses those consumers. No more live action under this GO.
