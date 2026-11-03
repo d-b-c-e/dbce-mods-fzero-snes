@@ -10,6 +10,7 @@ $ErrorActionPreference='Stop'
 . "$PSScriptRoot/Readback-Contract.ps1"
 . "$PSScriptRoot/Replay-Invocation.ps1"
 . "$PSScriptRoot/Candidate-Admission.ps1"
+. "$PSScriptRoot/Session-Readback.ps1"
 function Json($p){Get-Content -LiteralPath $p -Raw|ConvertFrom-Json -DateKind String}
 function WriteJson($p,$o){$o|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $p}
 function Quote([string]$s){if($s.Contains('"') -or $s.EndsWith('\')){throw 'Unsupported command argument'};'"'+$s+'"'}
@@ -83,9 +84,11 @@ try{
    if(-not $guard.hooksActive -or $guard.heartbeat -lt 1){throw 'LL recorder not healthy'}
    if(Test-Path $statusPath){
     $s=Json $statusPath
-    if($s.requestId -cne $request -or $s.processId -ne $owned.pid -or [long]$s.processCreationFileTime -ne ($owned.birth-504911232000000000) -or $s.outputMuted -ne $true -or $s.effectiveRomSha256 -cne $plan.rom -or $s.total -ne $plan.frames -or $s.action -cne 'replay' -or $s.state -notin @('starting','playing','verified')){throw 'Session identity/mute/status mismatch'}
-    if($s.frames -lt $seenFrames){throw 'Session frame regressed'}
-    if($s.frames -gt $seenFrames){$seenFrames=$s.frames;$lastAdvance=[DateTime]::UtcNow;$observations+=@{utc=$lastAdvance.ToString('o');frames=$s.frames;state=$s.state;foreground=$guard.current}}
+    try{$admission=Get-FzeroReplayAdmission $s $request $owned $plan.rom $plan.frames ($seenFrames -ge 0)}catch{WriteJson "$run/rejected-status.json" @{received=$s;expectedRequest=$request;expectedIdentity=$owned;expectedRom=$plan.rom;expectedTotal=$plan.frames;error=$_.Exception.Message};throw}
+    if($admission.ready){
+     if($s.frames -lt $seenFrames){throw 'Session frame regressed'}
+     if($s.frames -gt $seenFrames){$seenFrames=$s.frames;$lastAdvance=[DateTime]::UtcNow;$observations+=@{utc=$lastAdvance.ToString('o');frames=$s.frames;state=$s.state;foreground=$guard.current}}
+    }elseif(-not(Test-Path "$run/starting-status.json")){WriteJson "$run/starting-status.json" $s}
    }
    if(([DateTime]::UtcNow-$lastAdvance).TotalSeconds -gt 10){throw 'Replay status stalled'}
    if(-not $hwnd){$hwnd=[FzeroLive]::Window($owned.pid,$owned.birth)}
@@ -104,7 +107,7 @@ try{
  if($p.ExitCode -ne 0){throw 'Game exit failed'}
  $log=Get-Content "$run/stderr.txt" -Raw
  if($Mode -eq 'Live'){
-  $s=Json $statusPath;if($s.state -cne 'verified' -or $s.frames -ne $plan.frames -or -not $s.outputMuted -or $captures -ne 2 -or $capture){throw 'Replay/capture incomplete'}
+  $s=Json $statusPath;$terminal=Get-FzeroReplayAdmission $s $request $owned $plan.rom $plan.frames $true;if(-not $terminal.ready -or $s.state -cne 'verified' -or $s.frames -ne $plan.frames -or $captures -ne 2 -or $capture){throw 'Replay/capture incomplete'}
   if(-not(Test-Path "$run/final.bmp") -or -not(Test-Path "$run/final.wram")){throw 'Game-owned final frame/state absent'}
   if((Get-ReadbackSha "$run/final.wram") -cne (Get-ReadbackSha "$Evidence/rehearse/final.wram")){throw 'Graphical/headless final WRAM differs'}
   $images=@();foreach($i in 0..1){$png=Join-Path $run "capture-$i.png";$bytes=[IO.File]::ReadAllBytes($png);if($bytes.Length -lt 1000 -or [Convert]::ToHexString($bytes[0..7]) -cne '89504E470D0A1A0A'){throw 'R2 PNG invalid'};$w=[uint32]$bytes[16]*16777216+[uint32]$bytes[17]*65536+[uint32]$bytes[18]*256+$bytes[19];$h=[uint32]$bytes[20]*16777216+[uint32]$bytes[21]*65536+[uint32]$bytes[22]*256+$bytes[23];if($w -lt 100 -or $h -lt 100 -or $w -gt 8192 -or $h -gt 4096){throw 'R2 dimensions invalid'};$images+=@{path=$png;sha256=Get-ReadbackSha $png;width=$w;height=$h}}

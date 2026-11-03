@@ -172,10 +172,11 @@ stock image. Wide results are342x224. Private PPMs, logs and format-only PNG
 copies are at `.local/glyph-analysis-01`; PNG conversion used ffmpeg without
 resizing/filtering. The images were inspected after rendering, with no game open.
 
-**Finding:** glyph/menu/HUD overlap is visible in the current candidate's
+**Finding:** glyph/menu/HUD overlap is an observed candidate/game rendering
+property in this recorded case, visible in the current candidate's
 pre-window images, including the exact256x224 PPU stock pixels. The same menu
 state appears in the earlier WGC770x608 frame. Thus this is a native/guest
-rendering issue in the qualified recorded16:9 case, not one introduced by WGC or
+rendering property in the qualified recorded16:9 case, not one introduced by WGC or
 its770x608 target scale. This does not prove that a fresh ordinary4:3 simulation
 has the same problem: the4:3 reference above renders a snapshot produced during
 the recorded16:9 simulation. Guest viewport/state versus PPU producer/composition
@@ -188,3 +189,44 @@ binary can then support later ordinary cardinal-controls/Apply/F6/UDP routes;
 this replay deliberately bypasses those consumers, so their live gates remain
 unqualified. Owner installation, physical forces and public publication stay out
 of scope.
+
+## GO501895: initial status readiness refusal and offline correction
+
+The new binary launched as owned PID44708, birth639293040520288819, then the
+wrapper refused `Session identity/mute/status mismatch` before any accepted
+frame/capture assertion. It requested owned closure, waited5s and stopped only
+its remaining job. The last retained producer status is still `playing`,
+frame240/3600, stock ROM, `outputMuted=true`, request
+`a407901aedc94a438a99e6ac0d829372`, exact PID/FILETIME. That is simulation progress,
+not a completed/released replay or renderer pass. No live retry followed.
+
+Zero LL physical/injected/reset events; hooks released/thread joined; original
+VS Code foreground and all4 display identities unchanged. Both restore checks
+passed all5 original owner files (independent child uses numeric UTC ticks) and
+root/presence checks passed. Named lease9700b6138cf744548ae6127ceeda2c5c released;
+FINAL-release sent to remi, soba, kole. Raw evidence:
+`.local/current-readback-01/live`. No custody remains.
+
+The old wrapper did not journal the rejected status record, so its exact bytes
+are unavailable. Production `FzeroSessionControlOpen` deterministically publishes
+an identity-bound `starting` record before loading the ROM/playthrough: replay
+muted=true, frames0,total0, empty ROM. The wrapper incorrectly required the final
+ROM and total3600 even for that early state. The source behavior and later valid
+status make this the supported diagnosis; do not invent a bad-ROM/mute failure
+or relabel the failed run as passing.
+
+`Session-Readback.ps1` now validates schema, request, exact PID/birth, replay mode
+and mute immediately. Only the exact initial zero-shape may be pending within
+the existing10s readiness bound; it never admits capture or progress. Playing /
+verified must supply the exact ROM/total, valid frame range and monotonic progress;
+a later return to starting refuses. Rejected received/expected status is saved,
+and the initial pending record is retained for the next interval. No deadline,
+output, identity or owner-return guard was relaxed.
+
+`tests/Test-SessionReadback.ps1` compiles a console-only probe using the real
+production status writer and feeds its starting/playing JSON to the actual
+consumer. All17 checks pass, including identity/schema/mute/ROM/range refusals,
+pending startup and phase-regression refusal. Evidence:
+`.local/session-status-01`; no SDL, ROM, game, hooks or physical device.
+Candidate binaries, complete package and all passing build/headless evidence
+remain unchanged. Corrected preparation/rehearsal is the next offline step.
