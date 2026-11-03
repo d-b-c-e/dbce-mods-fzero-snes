@@ -348,6 +348,14 @@ add_executable(FZeroSNESRecomp
     src/fzero_playthrough.c
     src/fzero_runtime.c)
 target_compile_definitions(FZeroSNESRecomp PRIVATE FZERO_RENDER_TIMINGS=1)
+option(FZERO_ENABLE_ORDINARY_R1 "Private Windows ordinary raw/Apply/F6/loopback diagnostic; no physical input" OFF)
+if(FZERO_ENABLE_ORDINARY_R1)
+    if(NOT WIN32)
+        message(FATAL_ERROR "The private ordinary R1 route is Windows-only")
+    endif()
+    target_compile_definitions(FZeroSNESRecomp PRIVATE FZERO_ORDINARY_R1=1)
+    target_sources(FZeroSNESRecomp PRIVATE src/fzero_ordinary_r1.c)
+endif()
 target_compile_features(FZeroSNESRecomp PRIVATE cxx_std_17) # fzero_controls.cpp: the toolkit's C++17 header
 
 function(configure_fzero_target target)
@@ -405,6 +413,16 @@ if(BUILD_TESTING AND SNESRECOMP_SDL_BACKEND STREQUAL "SDL3")
         target_link_libraries(fzero_controls_tests PRIVATE m)
     endif()
     add_test(NAME fzero_controls COMMAND fzero_controls_tests)
+    if(FZERO_ENABLE_ORDINARY_R1)
+        add_executable(fzero_ordinary_input_tests tests/test_ordinary_input.c src/fzero_gamepad.c
+            src/fzero_analog.c src/fzero_hotkeys.c src/fzero_controls.cpp src/fzero_inject.cpp src/fzero_output_latch.c)
+        target_compile_features(fzero_ordinary_input_tests PRIVATE cxx_std_17)
+        target_compile_definitions(fzero_ordinary_input_tests PRIVATE FZERO_ORDINARY_R1=1)
+        target_include_directories(fzero_ordinary_input_tests PRIVATE "${CMAKE_SOURCE_DIR}/src"
+            "${RECOMP_UI_ROOT}/src/common" ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
+        snesrecomp_target_sdl(fzero_ordinary_input_tests)
+        add_test(NAME fzero_ordinary_input COMMAND fzero_ordinary_input_tests)
+    endif()
 
     add_executable(fzero_analog_tests tests/test_analog.c src/fzero_analog.c)
     target_include_directories(fzero_analog_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
@@ -468,6 +486,12 @@ if(BUILD_TESTING)
         target_link_libraries(fzero_telemetry_tests PRIVATE ws2_32)
     endif()
     add_test(NAME fzero_telemetry COMMAND fzero_telemetry_tests)
+    if(FZERO_ENABLE_ORDINARY_R1)
+        add_executable(fzero_ordinary_udp_tests tests/test_ordinary_udp.cpp src/fzero_telemetry.cpp src/fzero_hotkeys.c)
+        target_include_directories(fzero_ordinary_udp_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+        target_link_libraries(fzero_ordinary_udp_tests PRIVATE ws2_32)
+        add_test(NAME fzero_ordinary_udp COMMAND fzero_ordinary_udp_tests)
+    endif()
 
     add_executable(fzero_ffb_tests tests/test_ffb.cpp src/fzero_ffb.cpp
         src/fzero_hotkeys.c)

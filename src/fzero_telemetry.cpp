@@ -31,6 +31,9 @@ FzeroSocket s_socket = kInvalidSocket;
 sockaddr_storage s_destination{};
 socklen_t s_destination_size = 0;
 FzeroTelemetryState s_state{};
+unsigned s_loopback_port, s_source_port;
+uint8_t s_last_sent[324]{};
+size_t s_last_sent_size;
 #ifdef _WIN32
 bool s_winsock_started = false;
 #endif
@@ -174,15 +177,30 @@ int FzeroTelemetryLatchNoDelivery(void) {
   return 1;
 }
 int FzeroTelemetryDeliveryBlocked(void) { return s_no_delivery && s_socket == kInvalidSocket; }
+int FzeroTelemetryRestrictLoopback(unsigned port) {
+  if(port<1024 || port>65535 || port==8000 || s_socket!=kInvalidSocket || s_no_delivery ||
+     (s_loopback_port && s_loopback_port!=port)) return 0;
+  s_loopback_port=port;return 1;
+}
+size_t FzeroTelemetryLastSent(uint8_t out[324],unsigned *source_port){
+  if(!s_loopback_port || !out)return 0;
+  if(source_port)*source_port=s_source_port;
+  if(s_last_sent_size)std::memcpy(out,s_last_sent,s_last_sent_size);
+  return s_last_sent_size;
+}
 void FzeroTelemetryInit(const char *config_path) {
   if (s_no_delivery) return;
   FzeroTelemetryShutdown();
+  if(s_loopback_port){s_last_sent_size=0;s_source_port=0;}
   int enabled = 0, port = 8000;
   char host[256] = "127.0.0.1";
   if (!FzeroIniReadInt(config_path, "Telemetry", "Enabled", &enabled) ||
       !enabled) return;
   FzeroIniReadInt(config_path, "Telemetry", "Port", &port);
   FzeroIniReadString(config_path, "Telemetry", "Host", host, sizeof(host));
+  if(s_loopback_port && (std::strcmp(host,"127.0.0.1") || port!=(int)s_loopback_port)){
+    std::fprintf(stderr,"[fzero-telemetry] restricted destination refused\n");return;
+  }
   if (port < 1 || port > 65535) {
     std::fprintf(stderr, "[fzero-telemetry] invalid port %d; disabled\n", port);
     return;
@@ -196,6 +214,7 @@ void FzeroTelemetryInit(const char *config_path) {
   addrinfo hints{}, *result = nullptr;
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_DGRAM;
+  if(s_loopback_port){hints.ai_family=AF_INET;hints.ai_flags=AI_NUMERICHOST|AI_NUMERICSERV;}
   char service[16];
   std::snprintf(service, sizeof(service), "%d", port);
   if (getaddrinfo(host, service, &hints, &result) != 0 || !result) {
@@ -213,6 +232,13 @@ void FzeroTelemetryInit(const char *config_path) {
     close_socket();
   }
   freeaddrinfo(result);
+  if(s_loopback_port && s_socket!=kInvalidSocket){
+    sockaddr_in local{};local.sin_family=AF_INET;local.sin_addr.s_addr=htonl(INADDR_LOOPBACK);
+    if(bind(s_socket,(sockaddr*)&local,sizeof(local))!=0){FzeroTelemetryShutdown();return;}
+    socklen_t size=sizeof(local);
+    if(getsockname(s_socket,(sockaddr*)&local,&size)!=0){FzeroTelemetryShutdown();return;}
+    s_source_port=ntohs(local.sin_port);
+  }
   if (s_socket != kInvalidSocket)
     std::fprintf(stderr, "[fzero-telemetry] Forza Horizon 324 -> %s:%d\n",
                  host, port);
@@ -224,9 +250,11 @@ void FzeroTelemetryFrame(const uint8_t *ram, size_t ram_size, uint32_t input) {
   if (s_no_delivery || s_socket == kInvalidSocket) return;
   uint8_t packet[324];
   size_t size = FzeroTelemetryBuild(&s_state, ram, ram_size, input, packet);
-  if (size)
-    (void)sendto(s_socket, (const char *)packet, (int)size, 0,
-                 (const sockaddr *)&s_destination, s_destination_size);
+  if (size) {
+    int sent=sendto(s_socket, (const char *)packet, (int)size, 0,
+                   (const sockaddr *)&s_destination, s_destination_size);
+    if(s_loopback_port && sent==(int)size){std::memcpy(s_last_sent,packet,size);s_last_sent_size=size;}
+  }
 }
 
 void FzeroTelemetryShutdown(void) {
@@ -235,9 +263,11 @@ void FzeroTelemetryShutdown(void) {
      * Publish an explicit idle state before closing the UDP transport. */
     uint8_t idle_ram[0x0be2]{};
     uint8_t packet[324]{};
-    if (FzeroTelemetryBuild(&s_state, idle_ram, sizeof(idle_ram), 0, packet))
-      (void)sendto(s_socket, (const char *)packet, (int)sizeof(packet), 0,
-                   (const sockaddr *)&s_destination, s_destination_size);
+    if (FzeroTelemetryBuild(&s_state, idle_ram, sizeof(idle_ram), 0, packet)) {
+      int sent=sendto(s_socket, (const char *)packet, (int)sizeof(packet), 0,
+                     (const sockaddr *)&s_destination, s_destination_size);
+      if(s_loopback_port && sent==(int)sizeof(packet)){std::memcpy(s_last_sent,packet,sizeof(packet));s_last_sent_size=sizeof(packet);}
+    }
   }
   close_socket();
   std::memset(&s_state, 0, sizeof(s_state));

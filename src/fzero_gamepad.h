@@ -29,3 +29,9 @@ uint32_t FzeroGamepadReadOverlay(SDL_GameController *pad);
 uint32_t FzeroGamepadReadSupplemental(SDL_GameController *pad, uint32_t mask);
 /* Host-only wheel buttons, outside the guest's 12-bit SNES word. */
 void FzeroGamepadShutdown(SDL_GameController **pad);
+#ifdef FZERO_ORDINARY_R1
+/* Explicit synthetic raw source; no SDL device is created/opened. Private diagnostic only. */
+int FzeroGamepadDiagnosticStart(const char *config, const char *guid);
+void FzeroGamepadDiagnosticSample(const int16_t axes[8], uint32_t buttons);
+void FzeroGamepadDiagnosticObserved(double values[3], int canonical[3]);
+#endif

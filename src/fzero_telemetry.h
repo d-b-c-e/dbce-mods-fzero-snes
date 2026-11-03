@@ -30,6 +30,10 @@ void FzeroTelemetryShutdown(void);
  * Pure FzeroTelemetryBuild remains available for captured software signals. */
 int FzeroTelemetryLatchNoDelivery(void);
 int FzeroTelemetryDeliveryBlocked(void);
+/* Irreversible per-process diagnostic destination restriction. Rejects 8000. */
+int FzeroTelemetryRestrictLoopback(unsigned port);
+/* Actual last successfully sent packet and bound source port, only on restricted transport. */
+size_t FzeroTelemetryLastSent(uint8_t out[324], unsigned *source_port);
 
 #ifdef __cplusplus
 }

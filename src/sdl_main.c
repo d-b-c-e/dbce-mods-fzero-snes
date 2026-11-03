@@ -22,6 +22,7 @@
 #include "fzero_session_ui.h"
 #include "fzero_session_control.h"
 #include "fzero_output_latch.h"
+#include "fzero_ordinary_r1.h"
 #include "fzero_triple_display.h"
 #include "fzero_state_mode.h"
 #include "fzero_diagnostics.h"
@@ -900,9 +901,9 @@ static bool session_live_input(void *context, uint32_t *word) {
      * Keyboard SNES extras remain available outside a latched diagnostic. */
     input = (FzeroShimLatched() ? 0 : keyboard_input()) | shim_word | (1u << 30);
   } else {
-    input = keyboard_input() | controller_input(ctx->pad) |
-            debug_server_get_controller_inputs() | (1u << 30) |
-            debug_server_get_controller_active_mask();
+    input = FzeroOrdinaryActive() ? (controller_input(NULL) | (1u << 30)) :
+        (keyboard_input() | controller_input(ctx->pad) | debug_server_get_controller_inputs() |
+         (1u << 30) | debug_server_get_controller_active_mask());
   }
   uint32_t wheel_host_pressed = 0;
   input = FzeroHostButtonsTake(input, ctx->held_wheel_host_buttons,
@@ -2009,6 +2010,7 @@ static uint32_t overlay_filter_guest_input(uint32_t inputs) {
 }
 
 static uint32_t overlay_nav_inputs(SDL_GameController *pad) {
+  if(FzeroOrdinaryActive())return FzeroGamepadReadOverlay(NULL);
   if (FzeroShimOrdinary()) {
     uint32_t shared = 0;
     if (!FzeroShimOverlayInput(&shared)) return keyboard_input();
@@ -2350,7 +2352,10 @@ static bool mod_panel_loop(FzeroPresenter *p, int *running, SDL_GameController *
   g_panel_move = g_panel_change = 0;
   g_panel_close = false;
   fprintf(stderr, "[fzero-overlay] settings panel OPEN - guest frozen until it closes\n");
+  FzeroOrdinaryPanelState(1,g_video.show_fps,0);
   while (*running && !g_panel_close) {
+    if(FzeroOrdinaryActive()){int key=FzeroOrdinaryPanelKey((unsigned)row);
+      if(key)selftest_push_key(key==1?SDLK_DOWN:key==2?SDLK_RIGHT:g_hotkey_panel.key);}
     overlay_pump_events(running, pad, &panel_key_down);
     uint32_t nav = overlay_nav_inputs(*pad), pressed = nav & ~prev_pad;
     prev_pad = nav;
@@ -2390,6 +2395,7 @@ static bool mod_panel_loop(FzeroPresenter *p, int *running, SDL_GameController *
                        "Up/Down select, Left/Right change", 0xffa0a0a0u, 1);
     snes_ovl_draw_text(pixels, w, h, 12, top + rows * line + 20,
                        "* next start          F6 or Esc: close", 0xffa0a0a0u, 1);
+    FzeroOrdinaryPanelState(1,g_video.show_fps,0);
     g_panel_pixels = pixels; g_panel_w = w; g_panel_h = h;
     present_frame(p, NULL, 0, 0, 1);
     SDL_Delay(8);
@@ -2399,6 +2405,7 @@ static bool mod_panel_loop(FzeroPresenter *p, int *running, SDL_GameController *
   /* Only the keys of the edited rows are written, in one replacement; turning
    * triple screens on also needs fullscreen, the launcher's own setting (Off
    * leaves it alone). A failed save undoes this opening's changes in memory. */
+  if(FzeroOrdinaryActive() && !FzeroOrdinaryAlive()){g_video=before;edited=0;}
   FzeroPanelSaveResult result = edited ?
       FzeroPanelSave(&g_video, edited, kVideoConfig, g_config_path, FzeroIniReadInt) : FZERO_PANEL_SAVED;
   if (result == FZERO_PANEL_SAVE_FAILED) {
@@ -2409,6 +2416,7 @@ static bool mod_panel_loop(FzeroPresenter *p, int *running, SDL_GameController *
     set_title_message(window, "Settings saved, but fullscreen is off; turn it on in the launcher",
                       feedback_until);
   }
+  FzeroOrdinaryPanelState(0,g_video.show_fps,edited && result==FZERO_PANEL_SAVED);
   fprintf(stderr, "[fzero-overlay] settings panel CLOSED%s - guest resuming\n",
           !edited ? "" : result == FZERO_PANEL_SAVED ? " (changes saved)" :
           result == FZERO_PANEL_SAVE_FAILED ? " (save failed; changes undone)" :
@@ -2545,6 +2553,15 @@ int main(int argc, char **argv) {
     fprintf(stderr, "[fzero] Invalid validation replay\n");
     return 2;
   }
+  const char *ordinary_request=getenv("FZERO_ORDINARY_R1_REQUEST");
+#ifndef FZERO_ORDINARY_R1
+  if(ordinary_request && *ordinary_request)Die("Private ordinary R1 seam is not enabled in this build");
+#endif
+  if(ordinary_request && *ordinary_request &&
+      (options.mode!=FZERO_SESSION_NONE || FzeroReplayHasInput() || getenv("FZERO_REPLAY_PLAYTHROUGH") ||
+       getenv("FZERO_RECORD_PLAYTHROUGH") || getenv("FZERO_OVERLAY_SELFTEST")))
+    Die("Ordinary R1 cannot combine with replay, recording or virtual-pad selftest");
+  if(FzeroOrdinaryOpen(g_config_path)<0)Die("Ordinary R1 request or fences refused");
   /* STD-033: a rig profile's [Controls] become the raw-wheel keys before the launcher shows or the game reads them.
    * Validation replays stay device-free. */
   const char *early_replay = getenv("FZERO_REPLAY_PLAYTHROUGH");
@@ -2579,7 +2596,8 @@ int main(int argc, char **argv) {
     return 2;
   }
   FzeroTelemetryInit(g_config_path); // preview/replay delivery latch is already held.
-  if (!g_isolated_owner_state && FzeroControlsStartupMayWrite(FzeroReplayHasInput(), recorded_replay, FzeroShimUsingInput())) {
+  if(FzeroOrdinaryActive()){if(!FzeroOrdinaryConfigure(g_config_path))Die("Ordinary R1 native profile consumption failed");}
+  else if (!g_isolated_owner_state && FzeroControlsStartupMayWrite(FzeroReplayHasInput(), recorded_replay, FzeroShimUsingInput())) {
     FzeroControlsApplyAtStartup(g_config_path);
     FzeroInjectInit(g_config_path);   /* dev only: inject.on, no force, applied profile */
   }
@@ -2648,7 +2666,7 @@ int main(int argc, char **argv) {
   /* SDL_Init flipped to true-on-success in SDL3 and inverts silently in its
    * old `!= 0` form, so it must route through the shim. */
   if (!snesrecomp_sdl_init(SDL_INIT_VIDEO | SDL_INIT_AUDIO |
-                           ((FzeroShimUsingInput() || recorded_replay) ? 0 : SDL_INIT_GAMECONTROLLER))) {
+                           ((FzeroOrdinaryActive() || FzeroShimUsingInput() || recorded_replay) ? 0 : SDL_INIT_GAMECONTROLLER))) {
     fprintf(stderr, "SDL initialization failed: %s\n", SDL_GetError());
     free(rom);
     return 3;
@@ -2676,7 +2694,7 @@ int main(int argc, char **argv) {
     Die("SNESRecomp rejected the F-Zero cartridge");
   cpu_trace_init();
   debug_server_set_ram(g_snes->ram, 0x20000);
-  if (!g_isolated_owner_state && !FzeroShimRequested() && !recorded_replay) {
+  if (!FzeroOrdinaryActive() && !g_isolated_owner_state && !FzeroShimRequested() && !recorded_replay) {
     int debug_port = 4385;
     const char *port_value = getenv("SNESRECOMP_DEBUG_PORT");
     if (port_value && port_value[0]) {
@@ -2691,6 +2709,7 @@ int main(int argc, char **argv) {
   }
   const char *save_root = getenv("SNESRECOMP_SAVE_ROOT");
   if (g_isolated_owner_state) save_root = options.isolated_save_root;
+  if(FzeroOrdinaryActive())save_root=FzeroOrdinaryRoot();
   if (FzeroShimRequested()) save_root = FzeroShimSaveRoot();
   if (save_root && *save_root) RtlSetSaveRoot(save_root);
   if (!FzeroDeluxeSelectSaveRoot()) Die(FzeroDeluxeError());
@@ -2929,11 +2948,11 @@ int main(int argc, char **argv) {
   snesrecomp_sdl_pause_audio_device(audio, launcher_settings.enable_audio == 0);
 
   /* Before the pad scan below, so the virtual pad is the one player 1 gets. */
-  if (!FzeroShimUsingInput() && !recorded_replay) selftest_attach();
+  if (!FzeroOrdinaryActive() && !FzeroShimUsingInput() && !recorded_replay) selftest_attach();
 
   SDL_GameController *pad = NULL;
   FzeroGamepadIdentity force_input = {0};
-  if (g_playthrough.mode != 2 && !FzeroShimUsingInput()) {
+  if (!FzeroOrdinaryActive() && g_playthrough.mode != 2 && !FzeroShimUsingInput()) {
     FzeroGamepadConfigure(g_config_path, g_selftest_pad ? g_selftest_guid : launcher_settings.player_gamepad_guid[0],
                          launcher_settings.deadzone[0]);
     FzeroGamepadRefresh(&pad);
@@ -2944,7 +2963,7 @@ int main(int argc, char **argv) {
    * drivers accepting updates to effects that are no longer playing until a
    * menu calls ZeroForces. Start after the window settles, then clear the
    * initial effect state so the first nonzero update explicitly starts it. */
-  if (g_playthrough.mode != 2 && !FzeroShimUsingInput()) {
+  if (!FzeroOrdinaryActive() && g_playthrough.mode != 2 && !FzeroShimUsingInput()) {
     FzeroGamepadGetIdentity(pad, &force_input);
     FzeroFfbInitSelected(g_config_path, native_window, force_input.path);
     FzeroFfbSilence();
@@ -3084,6 +3103,8 @@ int main(int argc, char **argv) {
 
   double preview_started = monotonic_seconds();
   while (running) {
+    if(FzeroOrdinaryActive() && (!FzeroOrdinaryAlive() || frames>=3300)){running=0;break;}
+    if(FzeroOrdinaryHostKey((unsigned)frames))selftest_push_key(g_hotkey_panel.key);
     int session_stop = FzeroSessionControlStop(&g_session_control, &g_session_ui);
     if (session_stop < 0) {
       if (!g_session_stop_refused)
@@ -3155,7 +3176,7 @@ int main(int argc, char **argv) {
         if (SNESRECOMP_SDL_EVENT_KEY(event) == SDLK_ESCAPE) running = 0;
         continue; /* SNES keyboard state still passes through; no mutating host hotkeys */
       }
-      if (g_playthrough.mode != 2 && !FzeroShimUsingInput()) FzeroGamepadEvent(&pad, &event);
+      if (!FzeroOrdinaryActive() && g_playthrough.mode != 2 && !FzeroShimUsingInput()) FzeroGamepadEvent(&pad, &event);
       if (event.type == SDL_KEYDOWN && !event.key.repeat) {
         /* Hotkeys are tested before the quick slots, so a binding on an
          * F-key takes that key from the slot behind it. */
@@ -3346,6 +3367,7 @@ int main(int argc, char **argv) {
         FzeroBeginDrawing(pixels, (size_t)logical_width * kBytesPerPixel);
       }
       uint32_t input;
+      FzeroOrdinaryInput((unsigned)frames);
       FzeroLiveInputContext live_input = {pad, &held_wheel_host_buttons};
       if (!FzeroSessionReadInput(&g_playthrough, session_live_input, &live_input, &input)) {
         abort_playthrough("live input or recorded input failed");
@@ -3403,7 +3425,9 @@ int main(int argc, char **argv) {
             force_input.path[0] = 0;
           }
         }
-        FzeroFfbFrame(g_ram, sizeof(g_ram), input);
+        if(!FzeroOrdinaryActive())FzeroFfbFrame(g_ram, sizeof(g_ram), input);
+        FzeroOrdinaryObserve((unsigned)frames,input,g_ram,sizeof(g_ram),
+            SDL_WasInit(SDL_INIT_JOYSTICK|SDL_INIT_GAMECONTROLLER|SDL_INIT_HAPTIC));
       }
       FzeroDiagnosticsEnd(FZERO_DIAG_SIMULATION, diagnostic_start);
       if (g_fail || !FzeroLastLleResult()) {
@@ -3623,6 +3647,7 @@ int main(int argc, char **argv) {
   }
   FzeroTelemetryShutdown();
   SDL_DestroyWindow(window);
+  FzeroOrdinaryFinish();
   SDL_DestroyMutex(g_audio_mutex);
   g_audio_mutex = NULL;
   SDL_Quit();

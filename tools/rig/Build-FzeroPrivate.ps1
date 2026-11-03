@@ -1,5 +1,5 @@
 #Requires -Version 7.0
-param([Parameter(Mandatory)][string]$Evidence,[switch]$Execute,[string]$Go,[string]$ReusePreparation)
+param([Parameter(Mandatory)][string]$Evidence,[switch]$Execute,[string]$Go,[string]$ReusePreparation,[switch]$OrdinaryDiagnostic)
 $ErrorActionPreference='Stop'
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 . "$PSScriptRoot/Readback-Contract.ps1"
@@ -41,7 +41,7 @@ if(-not $Execute){
  }
  $pins=@($paths|Select-Object -Unique|ForEach-Object{Assert-ReadbackPlain $_;@{path=$_;sha256=Sha $_}})
  [void][IO.Directory]::CreateDirectory($Evidence)
- WriteJson "$Evidence/inputs.json" @{schema='fzero-private-build@1';heads=$heads;pins=$pins;hostImage=$hostImage;reuse=$reuse;maxSeconds=1200;source=$heads[$root];helper=$heads[$helper];archive=$archive;root=$root;helperRoot=$helper;canonical=$canonical;shim=$shim;vcvars=$vcvars}
+ WriteJson "$Evidence/inputs.json" @{schema='fzero-private-build@1';heads=$heads;pins=$pins;hostImage=$hostImage;reuse=$reuse;ordinaryDiagnostic=[bool]$OrdinaryDiagnostic;maxSeconds=1200;source=$heads[$root];helper=$heads[$helper];archive=$archive;root=$root;helperRoot=$helper;canonical=$canonical;shim=$shim;vcvars=$vcvars}
  Write-Output 'Prepared clean source/dependency/generated-input pins; no build/lease/game.';return
 }
 if(-not $Go){throw 'CPU GO required'}
@@ -83,11 +83,19 @@ try{
  Assert-FzeroCmakePath $sdl;Assert-FzeroCmakePath $bundle
  $build=Join-Path $run build
  $config=@('-S',$root,'-B',$build,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_TRY_COMPILE_CONFIGURATION=Release','-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded','-DCMAKE_C_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /Z7','-DCMAKE_CXX_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /Z7',"-DSNESRECOMP_ROOT=$canonical/snesrecomp","-DRECOMP_UI_ROOT=$canonical/recomp-ui","-DFZERO_GEN_DIR=$canonical/src/gen","-DFZERO_DELUXE_GEN_DIR=$canonical/captures/bs-deluxe/gen","-DFZERO_DELUXE_DATA_FILE=$canonical/captures/bs-deluxe/mods/bs-deluxe.dat","-DFZERO_SHIM_DLL=$shim","-DFZERO_SETUP_BUNDLE=$bundle","-DSNESRECOMP_SDL3_SOURCE_DIR=$sdl",'-DBUILD_TESTING=ON')
+ if($plan.ordinaryDiagnostic){$config+='-DFZERO_ENABLE_ORDINARY_R1=ON'}
  Step configure $cmake $config 180 -Msvc
  $probes=Get-Content "$build/CMakeFiles/CMakeConfigureLog.yaml" -Raw;if($probes -match 'cl\.exe"[^\r\n]*\s/Zi\s'){throw 'Debug compiler probe created PDB custody risk'}
  $targets=@('FZeroSNESRecomp','FZeroSNESRecompHeadless','FZeroRenderCapture','fzero_controls_contract_tests','fzero_gamepad_tests','fzero_controls_tests','fzero_telemetry_tests','fzero_panel_tests','fzero_hotkeys_tests','fzero_renderer_tests')
+ $testPattern='^fzero_(controls_contract|gamepad|controls|telemetry|panel|hotkeys|renderer)$'
+ if($plan.ordinaryDiagnostic){
+  # The ordinary route forbids virtual pads. Keep prior virtual fixture evidence,
+  # and run the new same-mapper device-free fixture plus owned UDP transport.
+  $targets=@($targets|Where-Object {$_ -notin @('fzero_gamepad_tests','fzero_controls_tests')})+@('fzero_ordinary_input_tests','fzero_ordinary_udp_tests')
+  $testPattern='^fzero_(controls_contract|ordinary_input|ordinary_udp|telemetry|panel|hotkeys|renderer)$'
+ }
  Step product-build $cmake (@('--build',$build,'--parallel','2','--target')+$targets) 600 -Msvc
- Step focused-tests $ctest @('--test-dir',$build,'--output-on-failure','-R','^fzero_(controls_contract|gamepad|controls|telemetry|panel|hotkeys|renderer)$') 120
+ Step focused-tests $ctest @('--test-dir',$build,'--output-on-failure','-R',$testPattern) 120
  $scratch=Join-Path $run scratch;[void][IO.Directory]::CreateDirectory($scratch)
  Step scratch-install $pwsh @('-NoProfile','-File',"$root/tools/Install-StreamDeck.ps1",'-BuildDir',$build,'-Target',$scratch,'-Label','napo-current-20261103','-PrivateSharedInput','-PrivateControlsSetup','-PrivateHostControls','-PrivatePackageScratch') 120
  Step private-stage $python @("$root/tools/stage_unified.py",'--build',$build,'--output',"$run/stage",'--private-shared-input','--private-controls-setup','--private-host-controls','--private-deluxe-install',$scratch) 120
