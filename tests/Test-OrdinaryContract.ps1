@@ -27,7 +27,7 @@ try{
   $bytes=[Text.Encoding]::UTF8.GetBytes("writer=$i`n");$stream.Write($bytes);$stream.Flush()
   [IO.File]::WriteAllText("$root/status.new",('{"seq":'+$i+'}'))
   $until=[Environment]::TickCount64+1000
-  while($true){try{[IO.File]::Move("$root/status.new","$root/status.json",$true);break}catch [IO.IOException], [UnauthorizedAccessException]{if([Environment]::TickCount64 -ge $until){throw};Start-Sleep -Milliseconds 2}}
+  while($true){try{if([IO.File]::Exists("$root/status.json")){[IO.File]::Replace("$root/status.new","$root/status.json",$null)}else{[IO.File]::Move("$root/status.new","$root/status.json")};break}catch [IO.IOException], [UnauthorizedAccessException]{if([Environment]::TickCount64 -ge $until){throw};Start-Sleep -Milliseconds 2}}
   Start-Sleep -Milliseconds 4
  }
 }finally{$stream.Dispose()}
