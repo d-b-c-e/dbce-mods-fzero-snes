@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.20)
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" FZERO_VERSION LIMIT_COUNT 1)
 project(FZeroSNESRecomp VERSION ${FZERO_VERSION} LANGUAGES C)
 set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(CTest)
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/FzeroSharedForceDependencies.cmake")
@@ -92,7 +94,7 @@ if(BUILD_TESTING)
         add_test(NAME fzero_shared_ffb_legacy COMMAND fzero_shared_ffb_tests)
         # Keep the fake DLL away from the game's real vendored runtime.
         add_library(fzero_shim_fake SHARED tests/fake_shim.cpp)
-        set_target_properties(fzero_shim_fake PROPERTIES OUTPUT_NAME dbce_shim
+        set_target_properties(fzero_shim_fake PROPERTIES OUTPUT_NAME dbce_shim PREFIX ""
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/shim-fixture")
         target_compile_features(fzero_shim_fake PRIVATE cxx_std_17)
         add_executable(fzero_shim_host_tests tests/test_shim_host.cpp src/fzero_shim.cpp

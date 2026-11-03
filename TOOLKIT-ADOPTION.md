@@ -475,3 +475,7 @@ The current ledger contains STD-038 through STD-040, which were absent from the 
 | STD-040 | Standalone configuration and one complete package | partial | Stock-only Setup.cmd/launcher package path exists; docs/CLEAN-INSTALL-20261029.md covers the intended ordinary flow. Real package dependency closure, ROM pick, configuration, restart and F6 parity remain unqualified. |
 
 This refresh records gaps only. No build, public push, install or hardware action; existing pending physical/FFB and F6 parity gates remain.
+
+## November 2 local branch reconciliation
+
+The retained egon/lamo source deltas are bounded-ported locally; dine is artifact-only and remains unmerged. ROM-free native 77/77, controls 207 vectors/1,534 checks and inert Python packaging 51/51 pass. No public push, player package, install, runtime/device or owner acceptance. See [reconciliation evidence](docs/LOCAL-RECONCILIATION-20261102.md).
