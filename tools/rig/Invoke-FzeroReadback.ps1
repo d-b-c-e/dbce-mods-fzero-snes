@@ -8,6 +8,7 @@ param(
 )
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot/Readback-Contract.ps1"
+. "$PSScriptRoot/Replay-Invocation.ps1"
 function Json($p){Get-Content -LiteralPath $p -Raw|ConvertFrom-Json -DateKind String}
 function WriteJson($p,$o){$o|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $p}
 function Quote([string]$s){if($s.Contains('"') -or $s.EndsWith('\')){throw 'Unsupported command argument'};'"'+$s+'"'}
@@ -46,10 +47,12 @@ $run=Join-Path $Evidence $Mode.ToLowerInvariant();if(Test-Path $run){throw 'One 
 $app=$plan.app;$exe=Join-Path $app $(if($Mode -eq 'Live'){'FZeroSNESRecomp.exe'}else{'FZeroSNESRecompHeadless.exe'})
 $save=Join-Path $plan.saveRoot $Mode.ToLowerInvariant();[void][IO.Directory]::CreateDirectory($save)
 $envBefore=@{};foreach($e in Get-ChildItem Env:){if($e.Name -match '^(FZERO_|SNESRECOMP_|SDL_)'){$envBefore[$e.Name]=$e.Value;[Environment]::SetEnvironmentVariable($e.Name,$null,'Process')}}
-$env:SNESRECOMP_SAVE_ROOT=$save;$env:SDL_AUDIODRIVER='dummy';$env:FZERO_ASPECT='16:9';$env:FZERO_REPLAY_PLAYTHROUGH=Join-Path $app diagnostic.fzpt
+$env:SNESRECOMP_SAVE_ROOT=$save;$env:SDL_AUDIODRIVER='dummy';$env:FZERO_ASPECT='16:9'
 $env:SNESRECOMP_FRAME_BMP=Join-Path $run final.bmp;$env:SNESRECOMP_WRAM_DUMP=Join-Path $run final.wram
 $lease=$false;$hooks=$false;$snapshot=$null;$owned=$null;$result=@{mode=$Mode;pass=$false;leaseReleased=$false;error=$null;source=$plan.source;frames=0}
 $request=[guid]::NewGuid().ToString('N');$statusPath=Join-Path $run status.json
+$invocation=Get-FzeroReplayInvocation $Mode $app $request $statusPath
+[Environment]::SetEnvironmentVariable('FZERO_REPLAY_PLAYTHROUGH',$invocation.replayEnvironment,'Process')
 try{
  if($Mode -eq 'Live'){
   if(-not $Go -or -not $OwnerRoot -or -not(Test-Path -LiteralPath $OwnerRoot -PathType Container)){throw 'Live requires GO and exact owner root'}
@@ -66,7 +69,7 @@ try{
   $hooks=$true;[FzeroLive]::Start($exe)
   if([FzeroLive]::IdleSeconds() -lt 180){throw 'Owner returned before launch'}
  }
- $args=if($Mode -eq 'Live'){@('--replay',(Join-Path $app diagnostic.fzpt),'--session-id',$request,'--session-status',$statusPath,(Join-Path $app fzero.sfc))}else{@((Join-Path $app fzero.sfc))}
+ $args=$invocation.arguments
  $command=(@($exe)+$args|ForEach-Object{Quote $_}) -join ' '
  $owned=[FzeroLive]::Launch($exe,$app,$command,"$run/stdout.txt","$run/stderr.txt",($Mode -eq 'Live'))
  $p=Get-Process -Id $owned.pid;$null=$p.Handle

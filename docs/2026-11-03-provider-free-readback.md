@@ -60,6 +60,39 @@ before restoration. Cleanup uncertainty retains custody. No Steam action is used
 First rehearsal `.local/readback-01/rehearse/result.json`: all 3,600 WRAM
 checkpoints, exit 0, empty job. No window/device. Focused fixtures: 14 policy,
 22 snapshot/restore (independent child included), and 51 existing companion checks
-pass. Final preparation/rehearsal: `.local/readback-03`. Send one GO request with
-exact prepared-manifest/runner hashes. Live rendering/capture remains unverified
-until execution; no lease is currently held.
+pass. The requested single GO was sent and approved as 501445.
+
+## GO501445 result and corrected ingress
+
+`FAIL_HARNESS`, no rendered/gameplay assertion. The initial admission refused
+the historical owner path because `E:/Source/toolkits/launchbox` is a junction.
+Zero processes or owner writes; that refusal and release remain at
+`.local/readback-03/admission-refused-junction`. The canonical owner directory is
+`E:/Source/tools/launchbox/Launchbox-Racing/Games/Windows/F-Zero (SNES Recomp)`.
+Its relevant bytes matched through both paths before continuing admission.
+
+The owned game PID41304, birth UTC ticks639293015959616592, started
+2026-11-03T11:19:55.9616592Z, then exited2 during option parsing:
+`Explicit session conflicts with existing recording/replay/test environment`.
+The runner had incorrectly combined explicit `--replay` with the headless-only
+`FZERO_REPLAY_PLAYTHROUGH` environment. No SDL window, session frame, capture,
+controller or output assertion followed. This is a runner failure, not product
+failure or successful replay. No live retry followed this result.
+
+The named lease30e0479283ce497999c9c3f14124d1e6 was released. Job empty;
+LL physical0/injected0/startup-resets0, hook heartbeat1 and monitor heartbeat4,
+hooks released/thread joined. Foreground remained VS Code PID26220, birth
+639292453274157775, HWND460684, with four-display topology unchanged.
+Type-aware restore/presence enumeration passed; independent numeric verifier
+passed all5 original owner files (SHA, exact UTC ticks, attributes). Local F-Zero
+state directory presence was unchanged. Evidence: `.local/readback-03/live`.
+FINAL-release was sent to remi, soba and kole; no custody remains.
+
+`Replay-Invocation.ps1` now gives graphical playback only explicit CLI arguments,
+and headless only the legacy replay environment. A small console-only probe calls
+the real production `FzeroSessionParse` with the actual invocation returned to
+the runner: corrected live accepted (mode2/env0), headless accepted (mode0/env1),
+and the original mixed request reproduced/refused (exit2). All3 checks pass at
+`.local/ingress-01/result.json`, without SDL, game launch, hooks or devices.
+Corrected preparation/rehearsal is `.local/readback-04`. Graphical capture remains
+unverified; a new coordinator disposition is needed before another live attempt.
