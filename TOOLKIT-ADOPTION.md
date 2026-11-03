@@ -478,4 +478,4 @@ This refresh records gaps only. No build, public push, install or hardware actio
 
 ## November 2 local branch reconciliation
 
-The retained egon/lamo source deltas are bounded-ported locally; dine is artifact-only and remains unmerged. ROM-free native 77/77, controls 207 vectors/1,534 checks and inert Python packaging 51/51 pass. No public push, player package, install, runtime/device or owner acceptance. See [reconciliation evidence](docs/LOCAL-RECONCILIATION-20261102.md).
+The retained egon/lamo source deltas are bounded-ported locally; dine is artifact-only and remains unmerged. ROM-free native 77/77, controls 207 vectors/1,534 checks and inert Python packaging 51/51 pass. Owner-approved public source push after explicit fork visibility check; no player package, install, runtime/device or owner acceptance. See [reconciliation evidence](docs/LOCAL-RECONCILIATION-20261102.md).

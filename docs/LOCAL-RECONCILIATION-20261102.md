@@ -2,8 +2,12 @@
 
 Local source baseline: main `6950c26`; isolated worktree
 `E:\Source\_work\soba-fzero-reconcile` (`soba/fzero-reconcile`).
-Public origin remains untouched. No game, owner files, ROM, device, or installation
-was opened or changed. This is source/fixture evidence, not a playable release.
+Initial validation held public origin untouched. Coordinator #497993 then relayed
+owner authorization to push this source reconciliation. The explicit origin fork
+`d-b-c-e/dbce-mods-fzero-snes` was checked PUBLIC with ADMIN permission (the cwd
+GitHub default resolves the upstream project). Remote main was verified at
+`c2b63db4c5226a99060a127ef4e19c99c8f27730`; only source/docs were published.
+No game, owner files, ROM, device, or installation was opened or changed. This is source/fixture evidence, not a playable release.
 
 ## Retained branches and disposition
 
