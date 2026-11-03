@@ -91,8 +91,8 @@ try{
  if($plan.ordinaryDiagnostic){
   # The ordinary route forbids virtual pads. Keep prior virtual fixture evidence,
   # and run the new same-mapper device-free fixture plus owned UDP transport.
-  $targets=@($targets|Where-Object {$_ -notin @('fzero_gamepad_tests','fzero_controls_tests')})+@('fzero_ordinary_input_tests','fzero_ordinary_udp_tests')
-  $testPattern='^fzero_(controls_contract|ordinary_input|ordinary_udp|telemetry|panel|hotkeys|renderer)$'
+  $targets=@($targets|Where-Object {$_ -notin @('fzero_gamepad_tests','fzero_controls_tests')})+@('fzero_ordinary_input_tests','fzero_ordinary_request_tests','fzero_ordinary_udp_tests')
+  $testPattern='^fzero_(controls_contract|ordinary_input|ordinary_request|ordinary_udp|telemetry|panel|hotkeys|renderer)$'
  }
  Step product-build $cmake (@('--build',$build,'--parallel','2','--target')+$targets) 600 -Msvc
  Step focused-tests $ctest @('--test-dir',$build,'--output-on-failure','-R',$testPattern) 120

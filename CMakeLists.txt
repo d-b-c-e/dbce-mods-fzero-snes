@@ -354,7 +354,7 @@ if(FZERO_ENABLE_ORDINARY_R1)
         message(FATAL_ERROR "The private ordinary R1 route is Windows-only")
     endif()
     target_compile_definitions(FZeroSNESRecomp PRIVATE FZERO_ORDINARY_R1=1)
-    target_sources(FZeroSNESRecomp PRIVATE src/fzero_ordinary_r1.c)
+    target_sources(FZeroSNESRecomp PRIVATE src/fzero_ordinary_r1.c src/fzero_ordinary_request.c)
 endif()
 target_compile_features(FZeroSNESRecomp PRIVATE cxx_std_17) # fzero_controls.cpp: the toolkit's C++17 header
 
@@ -422,6 +422,9 @@ if(BUILD_TESTING AND SNESRECOMP_SDL_BACKEND STREQUAL "SDL3")
             "${RECOMP_UI_ROOT}/src/common" ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
         snesrecomp_target_sdl(fzero_ordinary_input_tests)
         add_test(NAME fzero_ordinary_input COMMAND fzero_ordinary_input_tests)
+        add_executable(fzero_ordinary_request_tests tests/test_ordinary_request.c src/fzero_ordinary_request.c)
+        target_include_directories(fzero_ordinary_request_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+        add_test(NAME fzero_ordinary_request COMMAND fzero_ordinary_request_tests)
     endif()
 
     add_executable(fzero_analog_tests tests/test_analog.c src/fzero_analog.c)
