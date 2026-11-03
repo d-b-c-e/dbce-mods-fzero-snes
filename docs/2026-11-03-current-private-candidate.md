@@ -76,3 +76,25 @@ Execution re-queries it and first rehearses suspended launch, exact PID/birth/
 image/job membership and normal exit of a windowless700ms host before publication.
 No fallback detaches a process from custody. Corrected source/plan are prepared
 offline; request a fresh per-build CPU GO only after remi's OutRun live release.
+
+## CPU501707: preparation passed, generated CMake path refused
+
+The real-image PID/birth/job rehearsal passed, pristine SDL extraction passed,
+and fresh helper d0f333c publication passed (530 bundle files; private ZIP SHA256
+`A80D560E16045156188CCADC4E7B844E3862B736B97EB03EFFB1E2A1688E1023`).
+Configure failed before product compilation because FetchContent inserted the
+backslash-form custom SDL source path into generated CMake source, where `\S`
+was an invalid escape. No failed step was retried. Retain all successful helper
+and SDL inputs at `.local/current-private-02/run`.
+
+All38 pinned inputs and source HEADs rechecked unchanged. The build job retained
+a child after the10s cleanup wait; only that enforced job's members were stopped,
+then an empty census was verified. Named lease released at11:42:54.907Z;
+FINAL-release sent to remi, soba, kole. No game, UI, fixture, installer or owner
+action ran. The exact lingering identity was not emitted by the old wrapper;
+the next wrapper retains the job-member identities before any forced cleanup.
+
+Normalize custom SDL/helper paths to forward slashes before CMake. The next
+fresh CPU plan may reuse these successfully published/extracted inputs, only
+after pinning every source/bundle file and the successful-step/release receipt.
+Do not repeat unchanged publication merely because configuration failed.

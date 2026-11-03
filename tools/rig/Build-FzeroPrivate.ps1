@@ -1,5 +1,5 @@
 #Requires -Version 7.0
-param([Parameter(Mandatory)][string]$Evidence,[switch]$Execute,[string]$Go)
+param([Parameter(Mandatory)][string]$Evidence,[switch]$Execute,[string]$Go,[string]$ReusePreparation)
 $ErrorActionPreference='Stop'
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 . "$PSScriptRoot/Readback-Contract.ps1"
@@ -27,9 +27,20 @@ if(-not $Execute){
  $paths=@($archive,$shim,$vcvars,$hostImage,"$root/lib/toolkit/native/WheelFfb.dll","$root/lib/toolkit/source-to-binary-manifest.json","$root/vendor/dbce-shim/PIN.json","$canonical/captures/bs-deluxe/mods/bs-deluxe.dat","$canonical/captures/bs-deluxe/gen/deluxe_namespace.h","$PSScriptRoot/FzeroLive.cs",$PSCommandPath)
  $paths+=@(Get-ChildItem "$canonical/src/gen" -File|ForEach-Object FullName)
  $paths+=@(Get-ChildItem "$canonical/captures/bs-deluxe/gen" -File -Filter '*.c'|ForEach-Object FullName)
+ $reuse=$null
+ if($ReusePreparation){
+  $previous=[IO.Path]::GetFullPath($ReusePreparation);Assert-ReadbackPlain $previous
+  $prior=ReadJson "$previous/result.json"
+  if($prior.helper -cne $heads[$helper] -or -not $prior.jobEmpty -or -not $prior.leaseReleased -or @($prior.steps|Where-Object {$_.name -eq 'helper-publish' -and $_.exitCode -eq 0}).Count -ne 1 -or @($prior.steps|Where-Object {$_.name -eq 'extract' -and $_.exitCode -eq 0}).Count -ne 1){throw 'Previous preparation lacks successful publication/extraction and release'}
+  $bundle=Join-Path $previous 'helper-publish/standalone-build-d0f333c60892/stage'
+  $sdl=Join-Path $previous 'sdl-source/SDL3-3.4.10'
+  $paths+=@("$previous/result.json","$previous/helper-publish/StandaloneModSetup-private-d0f333c60892-win-x64.zip")
+  $paths+=@(Get-ChildItem $bundle,$sdl -Recurse -File|ForEach-Object FullName)
+  $reuse=@{previous=$previous;bundle=$bundle;sdl=$sdl;helper=$heads[$helper]}
+ }
  $pins=@($paths|Select-Object -Unique|ForEach-Object{Assert-ReadbackPlain $_;@{path=$_;sha256=Sha $_}})
  [void][IO.Directory]::CreateDirectory($Evidence)
- WriteJson "$Evidence/inputs.json" @{schema='fzero-private-build@1';heads=$heads;pins=$pins;hostImage=$hostImage;maxSeconds=1200;source=$heads[$root];helper=$heads[$helper];archive=$archive;root=$root;helperRoot=$helper;canonical=$canonical;shim=$shim;vcvars=$vcvars}
+ WriteJson "$Evidence/inputs.json" @{schema='fzero-private-build@1';heads=$heads;pins=$pins;hostImage=$hostImage;reuse=$reuse;maxSeconds=1200;source=$heads[$root];helper=$heads[$helper];archive=$archive;root=$root;helperRoot=$helper;canonical=$canonical;shim=$shim;vcvars=$vcvars}
  Write-Output 'Prepared clean source/dependency/generated-input pins; no build/lease/game.';return
 }
 if(-not $Go){throw 'CPU GO required'}
@@ -57,11 +68,17 @@ try{
  $python=(Get-Command python).Source;$cmake=(Get-Command cmake).Source;$pwsh=[FzeroLive]::ProcessIdentity($PID).image;$ctest=(Get-Command ctest).Source
  if($pwsh -ine $plan.hostImage){throw 'Current host image differs from prepared query witness'}
  Step host-probe $pwsh @('-NoLogo','-NoProfile','-NonInteractive','-Command','[Threading.Thread]::Sleep(700)') 10
- $sourceDir=Join-Path $run sdl-source;[void][IO.Directory]::CreateDirectory($sourceDir)
- Step extract $python @('-c',"import sys,tarfile; t=tarfile.open(sys.argv[1]); t.extractall(sys.argv[2],filter='data')",$archive,$sourceDir) 60
- $sdl=Join-Path $sourceDir 'SDL3-3.4.10'
- Step helper-publish $pwsh @('-NoProfile','-File',"$helper/tools/Publish-StandaloneSetup.ps1",'-Artifacts',"$run/helper-publish") 300
- $bundle=Join-Path $run 'helper-publish/standalone-build-d0f333c60892/stage'
+ if($plan.reuse){$sdl=$plan.reuse.sdl;$bundle=$plan.reuse.bundle;$result.retainedPreparation=$plan.reuse}
+ else{
+  $sourceDir=Join-Path $run sdl-source;[void][IO.Directory]::CreateDirectory($sourceDir)
+  Step extract $python @('-c',"import sys,tarfile; t=tarfile.open(sys.argv[1]); t.extractall(sys.argv[2],filter='data')",$archive,$sourceDir) 60
+  $sdl=Join-Path $sourceDir 'SDL3-3.4.10'
+  Step helper-publish $pwsh @('-NoProfile','-File',"$helper/tools/Publish-StandaloneSetup.ps1",'-Artifacts',"$run/helper-publish") 300
+  $bundle=Join-Path $run 'helper-publish/standalone-build-d0f333c60892/stage'
+ }
+ # FetchContent writes these values into generated CMake source, where a
+ # literal Windows backslash is an escape. Normalize both custom paths once.
+ $sdl=$sdl.Replace('\','/');$bundle=$bundle.Replace('\','/')
  $build=Join-Path $run build
  $config=@('-S',$root,'-B',$build,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_TRY_COMPILE_CONFIGURATION=Release','-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded','-DCMAKE_C_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /Z7','-DCMAKE_CXX_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /Z7',"-DSNESRECOMP_ROOT=$canonical/snesrecomp","-DRECOMP_UI_ROOT=$canonical/recomp-ui","-DFZERO_GEN_DIR=$canonical/src/gen","-DFZERO_DELUXE_GEN_DIR=$canonical/captures/bs-deluxe/gen","-DFZERO_DELUXE_DATA_FILE=$canonical/captures/bs-deluxe/mods/bs-deluxe.dat","-DFZERO_SHIM_DLL=$shim","-DFZERO_SETUP_BUNDLE=$bundle","-DSNESRECOMP_SDL3_SOURCE_DIR=$sdl",'-DBUILD_TESTING=ON')
  Step configure $cmake $config 180 -Msvc
@@ -84,7 +101,7 @@ try{
 finally{
  try{
   $until=[DateTime]::UtcNow.AddSeconds(10);while(@([FzeroLive]::JobPids()).Count -and [DateTime]::UtcNow -lt $until){Start-Sleep -Milliseconds 100}
-  if(@([FzeroLive]::JobPids()).Count){$result.forcedOwnChildCleanup=$true;$result.pass=$false;[FzeroLive]::KillOwned();$until=[DateTime]::UtcNow.AddSeconds(5);while(@([FzeroLive]::JobPids()).Count -and [DateTime]::UtcNow -lt $until){Start-Sleep -Milliseconds 50}}
+  if(@([FzeroLive]::JobPids()).Count){$result.remainingBeforeCleanup=@([FzeroLive]::JobPids()|ForEach-Object{[FzeroLive]::ProcessIdentity($_)});WriteJson "$run/owned-before-stop.json" $result.remainingBeforeCleanup;$result.forcedOwnChildCleanup=$true;$result.pass=$false;[FzeroLive]::KillOwned();$until=[DateTime]::UtcNow.AddSeconds(5);while(@([FzeroLive]::JobPids()).Count -and [DateTime]::UtcNow -lt $until){Start-Sleep -Milliseconds 50}}
   [FzeroLive]::ReleaseJob();$result.jobEmpty=$true
   if($lease){$r=& E:/Source/dbce-project-mgmt/tools/Rig-Lease.ps1 -Exit -Name napo-fzero-build;$r|Set-Content "$run/release.txt";if($r -notcontains 'lease released'){throw 'Lease release not confirmed'};$result.leaseReleased=$true}
  }catch{$result.cleanupError=$_.Exception.Message;$result.pass=$false;$result.retainCustody=$lease}
