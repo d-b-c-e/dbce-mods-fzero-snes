@@ -57,10 +57,10 @@ $profile=New-FzeroOrdinaryProfile;Check ($profile.Profiles[0].Profile.Bindings.s
 & {
  $rows=[Collections.Generic.List[object]]::new();$packets=[Collections.Generic.List[object]]::new()
  for($frame=0;$frame -lt 3300;$frame++){
-  $left=$frame -ge 1500 -and $frame -le 1530;$right=$frame -ge 1800 -and $frame -le 1830
+  $left=$frame -ge 1650 -and $frame -le 1680;$right=$frame -ge 1800 -and $frame -le 1830
   $gas=($frame -ge 1100 -and $frame -lt 2000) -or ($frame -ge 2200 -and $frame -lt 3000);$brake=$frame -ge 2100 -and $frame -lt 2160
   $word=1073741824L;if($left){$word=$word -bor 0x40};if($right){$word=$word -bor 0x80};if($gas){$word=$word -bor 1};if($brake){$word=$word -bor 2}
-  $x=$frame;$y=100;$race=$frame -ge 900;$bytes=[byte[]]::new(324)
+  $x=$frame;$y=100;$race=$frame -ge 1563;$bytes=[byte[]]::new(324)
   [BitConverter]::GetBytes([int]$race).CopyTo($bytes,0);[BitConverter]::GetBytes([int]($frame*17)).CopyTo($bytes,4)
   [BitConverter]::GetBytes([single]($x*0.25)).CopyTo($bytes,244);[BitConverter]::GetBytes([single]($y*0.25)).CopyTo($bytes,252)
   $bytes[315]=if($gas){255}else{0};$bytes[316]=if($brake){255}else{0};$bytes[320]=if($left){129}elseif($right){127}else{0}

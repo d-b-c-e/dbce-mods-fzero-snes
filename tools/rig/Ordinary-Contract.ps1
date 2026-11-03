@@ -56,7 +56,7 @@ function Get-FzeroOrdinaryRows($Rows,$Packets,[int]$SourcePort){
   if([BitConverter]::ToInt32($packet,0) -ne [int]$isRace){throw 'Packet/guest state mismatch'}
   if([BitConverter]::ToSingle($packet,244) -ne $r.x*0.25 -or [BitConverter]::ToSingle($packet,252) -ne $r.y*0.25){throw 'Packet/coherent guest position mismatch'}
   if($isRace){$race++;$current="$($r.x):$($r.y)";if($position -and $current -cne $position){$moved=$true};$position=$current}
-  if($previous -ge 1500 -and $previous -le 1530 -and $isRace -and $r.raw[0] -eq -28672 -and $r.normalized[0] -le -0.99 -and ($word -band 0x40)){$left++}
+  if($previous -ge 1650 -and $previous -le 1680 -and $isRace -and $r.raw[0] -eq -28672 -and $r.normalized[0] -le -0.99 -and ($word -band 0x40)){$left++}
   if($previous -ge 1800 -and $previous -le 1830 -and $isRace -and $r.raw[0] -eq 28672 -and $r.normalized[0] -ge 0.99 -and ($word -band 0x80)){$right++}
   if($previous -ge 1100 -and $previous -lt 2000 -and $isRace -and $r.normalized[1] -ge 0.99 -and ($word -band 1)){$gas++}
   if($previous -ge 2100 -and $previous -lt 2160 -and $isRace -and $r.normalized[2] -ge 0.99 -and ($word -band 2)){$brake++}

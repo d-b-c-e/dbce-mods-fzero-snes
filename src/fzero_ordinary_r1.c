@@ -87,7 +87,8 @@ void FzeroOrdinaryInput(unsigned frame){
   if(frame==240)buttons=1u<<2; /* real mapped Start */
   if(frame==400||frame==600||frame==800)buttons=1u; /* mapped Confirm */
   if(frame>=1100&&frame<2000)raw[1]=32767;
-  if(frame>=1500&&frame<=1530)raw[0]=-28672;
+  /* Stock GP countdown admits steering at frame1563; exercise left after it. */
+  if(frame>=1650&&frame<=1680)raw[0]=-28672;
   if(frame>=1800&&frame<=1830)raw[0]=28672;
   if(frame>=2100&&frame<2160)raw[2]=32767;
   if(frame>=2200&&frame<3000)raw[1]=32767;
