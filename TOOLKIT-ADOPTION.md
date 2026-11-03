@@ -479,3 +479,23 @@ This refresh records gaps only. No build, public push, install or hardware actio
 ## November 2 local branch reconciliation
 
 The retained egon/lamo source deltas are bounded-ported locally; dine is artifact-only and remains unmerged. ROM-free native 77/77, controls 207 vectors/1,534 checks and inert Python packaging 51/51 pass. Owner-approved public source push after explicit fork visibility check; no player package, install, runtime/device or owner acceptance. See [reconciliation evidence](docs/LOCAL-RECONCILIATION-20261102.md).
+## November 3 provider-free readback standards refresh
+
+Compared the current shared ledger with this file before preparing the isolated
+runner. STD-019 remains unchecked; STD-021/031 physical normalization remain
+pending; STD-037 remains partial. Existing partial/pending rows stay open.
+
+| Standard | State | Scope in this change |
+| --- | --- | --- |
+| STD-041 | unchecked | Current corrected triple camera behavior needs fresh graphical qualification. Replay runner changes no product camera. |
+| STD-042 | unchecked | Per-camera saved framing/naming is outside this replay check. |
+| STD-043 | unchecked | Held-key/hotkey behavior needs ordinary input; replay bypasses it. |
+| STD-044 | partial | Runner snapshots preserve exact bytes, attributes and UTC ticks; product settings-writer adoption remains unqualified. |
+| STD-045 | pending | Saved owner force choice is preserved. New-install On migration is not implemented here; unattended replay latches output off. |
+| STD-046 | unchecked | Camera starting choices and offsets need separate implementation/qualification. |
+| STD-047 | partial | This scratch replay uses one window, without qualifying production triple-span policy or geometry. No separate-window test or owner layout change. |
+| STD-048 | unchecked | Ordinary numpad direction/custom-binding migration is outside replay. |
+| STD-049 | n/a | SNES 2D vehicle representation has no bonnet camera or cab-over mesh placement route. |
+
+See docs/2026-11-03-provider-free-readback.md for candidate identity and evidence
+boundaries. Public source/binary distribution and owner acceptance are unchanged.
