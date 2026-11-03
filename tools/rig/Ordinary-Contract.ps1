@@ -3,6 +3,19 @@ function Read-FzeroSharedText([string]$Path){
  $stream=[IO.FileStream]::new($Path,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete)
  try{$reader=[IO.StreamReader]::new($stream);try{$reader.ReadToEnd()}finally{$reader.Dispose()}}finally{$stream.Dispose()}
 }
+function Get-FzeroOrdinaryQuiescence($Identity){
+ $existing=Get-Process -Id $Identity.pid -ErrorAction SilentlyContinue
+ if(-not $existing){return @{pid=$Identity.pid;birth=$Identity.birth;originalAbsent=$true;proof='pid-absent'}}
+ try{
+  # An empty job can coexist briefly with an exited Process object whose handle
+  # another observer still holds. Kernel exit state is the decisive distinction.
+  $null=$existing.Handle
+  if($existing.HasExited){return @{pid=$Identity.pid;birth=$Identity.birth;originalAbsent=$true;proof='held-kernel-handle-exited';exitCode=$existing.ExitCode}}
+  $birth=$existing.StartTime.ToUniversalTime().Ticks
+  if($birth -ne $Identity.birth){return @{pid=$Identity.pid;birth=$Identity.birth;originalAbsent=$true;proof='later-birth-reuse';observedBirth=$birth}}
+  throw 'Owned exact identity remains running'
+ }finally{$existing.Dispose()}
+}
 function Get-FzeroOrdinaryAdmission($Status,[string]$Nonce,$Identity,[int]$Port,[string]$Revision,[int]$PreviousSequence=0){
  if($Status.schema -cne 'fzero.ordinary-r1@1' -or $Status.nonce -cne $Nonce -or
     [int]$Status.pid -ne $Identity.pid -or [long]$Status.birthFileTime -ne ([long]$Identity.birth-504911232000000000L) -or

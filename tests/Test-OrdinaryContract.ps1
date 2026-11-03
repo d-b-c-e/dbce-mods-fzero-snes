@@ -38,6 +38,8 @@ $start=[Diagnostics.ProcessStartInfo]::new((Get-Process -Id $PID).Path);$start.U
 $start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
 foreach($arg in @('-NoProfile','-NonInteractive','-File',"$Evidence/writer.ps1",$Evidence)){[void]$start.ArgumentList.Add($arg)}
 $p=[Diagnostics.Process]::new();$p.StartInfo=$start;[void]$p.Start();$stdout=$p.StandardOutput.ReadToEndAsync();$stderr=$p.StandardError.ReadToEndAsync();$deadline=[DateTime]::UtcNow.AddSeconds(10);$reads=0;$replaceReads=0
+$writerIdentity=@{pid=$p.Id;birth=$p.StartTime.ToUniversalTime().Ticks}
+Refused {Get-FzeroOrdinaryQuiescence $writerIdentity} 'Live exact writer mistaken for quiescent'
 try{
  while(-not $p.HasExited){
   if([DateTime]::UtcNow -gt $deadline){throw 'Concurrent writer timeout'}
@@ -46,6 +48,7 @@ try{
   Start-Sleep -Milliseconds 2
  }
  $p.WaitForExit();[IO.File]::WriteAllText("$Evidence/writer.stdout.txt",$stdout.GetAwaiter().GetResult());[IO.File]::WriteAllText("$Evidence/writer.stderr.txt",$stderr.GetAwaiter().GetResult());Check ($p.ExitCode -eq 0) 'Concurrent writer failed'
+ Check ((Get-FzeroOrdinaryQuiescence $writerIdentity).originalAbsent -eq $true) 'Exited held-handle writer mistaken for live'
 }finally{if(-not $p.HasExited){$p.Kill();$p.WaitForExit()};$p.Dispose()}
 Check ($reads -gt 20 -and $replaceReads -gt 20) 'Active shared reads not exercised'
 Check ((Read-FzeroSharedText "$Evidence/active.log").Contains('writer=149')) 'Writer incomplete'

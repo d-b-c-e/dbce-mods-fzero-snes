@@ -112,7 +112,7 @@ try{
    if($capture){if($capture.HasExited){if($capture.ExitCode){throw 'Exact HWND capture failed'};if(([FzeroLive]::Foreground()).Key -cne $before.Key){throw 'Capture changed foreground'};$capture.Dispose();$capture=$null}elseif([DateTime]::UtcNow -gt $captureUntil){throw 'Capture deadline'}}
    Start-Sleep -Milliseconds 40
   }
-  $p.WaitForExit();$result.exitCode=$p.ExitCode;$p.Dispose();ReceivePackets
+  $p.WaitForExit();$result.exitCode=$p.ExitCode;$p.Dispose();[FzeroLive]::BeginCleanup();ReceivePackets
   if($result.exitCode -ne 0){throw 'Ordinary host failed'}
   $s=Get-FzeroOrdinaryAdmission (Json $statusPath) $nonce $owned $port $ready.revision $seq
   if($s.phase -cne 'done' -or $s.frame -lt 3299 -or $s.frame -gt 3302 -or $s.panelSaved -ne 1 -or $s.showFps -ne 1 -or $s.panelOpen -ne 0 -or $capture -or 'race' -notin $captureNames -or 'panel' -notin $captureNames){throw 'Ordinary panel/capture/final state incomplete'}
@@ -135,7 +135,7 @@ finally{
    if(@([FzeroLive]::JobPids()).Count){$result.beforeStop=@([FzeroLive]::JobPids()|ForEach-Object{[FzeroLive]::ProcessIdentity($_)});[FzeroLive]::KillOwned();$result.forcedOwnCleanup=$true;$result.pass=$false;$until=[DateTime]::UtcNow.AddSeconds(5);while(@([FzeroLive]::JobPids()).Count -and [DateTime]::UtcNow -lt $until){Start-Sleep -Milliseconds 50}}
   }
   [FzeroLive]::ReleaseJob();$result.jobEmpty=$true
-  $result.processCensus=@(foreach($id in $known){$existing=Get-Process -Id $id.pid -ErrorAction SilentlyContinue;if($existing -and $existing.StartTime.ToUniversalTime().Ticks -eq $id.birth){throw 'Owned exact identity survives'};@{pid=$id.pid;birth=$id.birth;originalAbsent=$true}})
+  $result.processCensus=@(foreach($id in $known){Get-FzeroOrdinaryQuiescence $id})
   if($hooks){[FzeroLive]::Stop();$guard=[FzeroLive]::Snapshot();WriteJson "$run/guard.json" $guard;if($guard.abortReason){$result.pass=$false;$result.guardAbort=$guard.abortReason};[FzeroLive]::VerifyDisplay();$result.hooksReleased=$true}
   if($sink){ReceivePackets;$sink.Dispose();$sink=$null;$result.sinkClosed=$true}
   if($snapshot){Restore-ReadbackSnapshot $snapshot "$run/owner-after";$verified=Test-ReadbackRestored $snapshot;WriteJson "$run/owner-restore.json" $verified;if(-not $verified.pass){throw 'Owner restore mismatch'}
