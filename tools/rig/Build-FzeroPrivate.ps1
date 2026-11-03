@@ -17,15 +17,19 @@ $sdk='E:/Source/game-modding/_toolkits/dbce-wheel-mod-toolkit'
 $vcvars='C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Auxiliary/Build/vcvars64.bat'
 if(-not $Execute){
  if(Test-Path $Evidence){throw 'Fresh evidence directory required'}
+ Add-Type -Path "$PSScriptRoot/FzeroLive.cs"
+ # Get-Command resolves a packaged execution alias here. Reuse the qualified
+ # Truckful resolver: QueryFullProcessImageName on this already-running host.
+ $hostImage=[FzeroLive]::ProcessIdentity($PID).image
  $heads=@{};$heads[$root]=Head $root;$heads["$canonical/snesrecomp"]=Head "$canonical/snesrecomp";$heads["$canonical/recomp-ui"]=Head "$canonical/recomp-ui";$heads[$helper]=Head $helper
  if($heads[$helper] -cne 'd0f333c60892dc44beb36e277b19bd6a650507b7' -or $heads["$canonical/snesrecomp"] -cne '59d2966fa71d0346f92c43753e09b1ba7a1956f5' -or $heads["$canonical/recomp-ui"] -cne '6d9b71526f82c0182f85ec47610eb559303a77b8'){throw 'Dependency/helper pin differs'}
  if((Sha $archive) -cne '12B34280415EC8418C864408B93D008A20A6530687EE613D60BFBD20411F2785' -or (Sha $shim) -cne 'BF6455E63696A93B37C19DABF09B1E0606F26B0534BCE828417B1DF602DD8A7A' -or (Sha "$root/lib/toolkit/native/WheelFfb.dll") -cne '3F6CC51444879D01FEB900098B2DE94242594D093F523E3C34BD511D69C0D946'){throw 'Runtime/archive pin differs'}
- $paths=@($archive,$shim,$vcvars,"$root/lib/toolkit/native/WheelFfb.dll","$root/lib/toolkit/source-to-binary-manifest.json","$root/vendor/dbce-shim/PIN.json","$canonical/captures/bs-deluxe/mods/bs-deluxe.dat","$canonical/captures/bs-deluxe/gen/deluxe_namespace.h","$PSScriptRoot/FzeroLive.cs",$PSCommandPath)
+ $paths=@($archive,$shim,$vcvars,$hostImage,"$root/lib/toolkit/native/WheelFfb.dll","$root/lib/toolkit/source-to-binary-manifest.json","$root/vendor/dbce-shim/PIN.json","$canonical/captures/bs-deluxe/mods/bs-deluxe.dat","$canonical/captures/bs-deluxe/gen/deluxe_namespace.h","$PSScriptRoot/FzeroLive.cs",$PSCommandPath)
  $paths+=@(Get-ChildItem "$canonical/src/gen" -File|ForEach-Object FullName)
  $paths+=@(Get-ChildItem "$canonical/captures/bs-deluxe/gen" -File -Filter '*.c'|ForEach-Object FullName)
  $pins=@($paths|Select-Object -Unique|ForEach-Object{Assert-ReadbackPlain $_;@{path=$_;sha256=Sha $_}})
  [void][IO.Directory]::CreateDirectory($Evidence)
- WriteJson "$Evidence/inputs.json" @{schema='fzero-private-build@1';heads=$heads;pins=$pins;maxSeconds=1200;source=$heads[$root];helper=$heads[$helper];archive=$archive;root=$root;helperRoot=$helper;canonical=$canonical;shim=$shim;vcvars=$vcvars}
+ WriteJson "$Evidence/inputs.json" @{schema='fzero-private-build@1';heads=$heads;pins=$pins;hostImage=$hostImage;maxSeconds=1200;source=$heads[$root];helper=$heads[$helper];archive=$archive;root=$root;helperRoot=$helper;canonical=$canonical;shim=$shim;vcvars=$vcvars}
  Write-Output 'Prepared clean source/dependency/generated-input pins; no build/lease/game.';return
 }
 if(-not $Go){throw 'CPU GO required'}
@@ -41,6 +45,7 @@ function Step([string]$name,[string]$exe,[string[]]$argv,[int]$seconds=300,[swit
  $command=(@($exe)+$argv|ForEach-Object{Quote $_}) -join ' '
  if($Msvc){$cmd=Join-Path $run "$name.cmd";[IO.File]::WriteAllLines($cmd,@('@echo off','set VSCMD_SKIP_SENDTELEMETRY=1',('call '+(Quote $vcvars)+' >nul'),'if errorlevel 1 exit /b 1',$command,'exit /b %errorlevel%'));$exe=$env:ComSpec;$command='cmd.exe /d /c '+(Quote $cmd)}
  $id=[FzeroLive]::Launch($exe,$root,$command,"$run/$name.stdout.txt","$run/$name.stderr.txt",$false);$p=Get-Process -Id $id.pid;$null=$p.Handle
+ if($name -eq 'host-probe'){$actual=[FzeroLive]::ProcessIdentity($id.pid);$members=@([FzeroLive]::JobPids());WriteJson "$run/host-job.json" @{requested=$exe;expected=$id;actual=$actual;jobPids=$members};if($actual.birth -ne $id.birth -or $actual.image -ine $exe -or $id.pid -notin $members){throw 'Real host image/job rehearsal mismatch'}}
  $until=[DateTime]::UtcNow.AddSeconds($seconds);if($until -gt $deadline.AddSeconds(-60)){$until=$deadline.AddSeconds(-60)}
  while(-not $p.HasExited){if([DateTime]::UtcNow -gt $until){throw "Step timeout: $name"};Start-Sleep -Milliseconds 200}
  $p.WaitForExit();$result.steps+=@{name=$name;process=$id;exitCode=$p.ExitCode;utc=[DateTime]::UtcNow.ToString('o')};WriteJson "$run/result.json" $result
@@ -49,7 +54,9 @@ function Step([string]$name,[string]$exe,[string[]]$argv,[int]$seconds=300,[swit
 try{
  & E:/Source/dbce-project-mgmt/tools/Rig-Lease.ps1 -Enter -Name napo-fzero-build -Purpose "F-Zero private current build CPU GO$Go; no game/UI/hardware" -IdleMinutes 0|Set-Content "$run/lease.txt";$lease=$true
  $env:DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER='1';$env:DOTNET_GENERATE_ASPNET_CERTIFICATE='false'
- $python=(Get-Command python).Source;$cmake=(Get-Command cmake).Source;$pwsh=(Get-Command pwsh).Source;$ctest=(Get-Command ctest).Source
+ $python=(Get-Command python).Source;$cmake=(Get-Command cmake).Source;$pwsh=[FzeroLive]::ProcessIdentity($PID).image;$ctest=(Get-Command ctest).Source
+ if($pwsh -ine $plan.hostImage){throw 'Current host image differs from prepared query witness'}
+ Step host-probe $pwsh @('-NoLogo','-NoProfile','-NonInteractive','-Command','[Threading.Thread]::Sleep(700)') 10
  $sourceDir=Join-Path $run sdl-source;[void][IO.Directory]::CreateDirectory($sourceDir)
  Step extract $python @('-c',"import sys,tarfile; t=tarfile.open(sys.argv[1]); t.extractall(sys.argv[2],filter='data')",$archive,$sourceDir) 60
  $sdl=Join-Path $sourceDir 'SDL3-3.4.10'

@@ -55,3 +55,24 @@ exact candidate with the proven watcher/custody/UTC restore contract. That repla
 can establish current rendering/recorded simulation, not cardinal physical
 acquisition, actual Apply consumption, ordinary F6 or live UDP delivery. Their
 separate current candidate/consumer paths remain explicit future gates.
+
+## CPU501624: retained pre-build launch refusal
+
+First plan source69b1e06, `.local/current-private-01/inputs.json`, had37 input
+pins (the initial hcom release message's36 count was a typo). SDL extraction
+completed; starting the helper publisher then failed job assignment while its
+new process was still suspended. No helper publication, compiler, fixture,
+installer, game, UI or physical-device step ran. The owned job was empty and
+the named leasea8f1cccada2b43a5954333ec3f1fe7b8 released at11:37:55.649Z.
+All37 input pins and source HEADs rechecked unchanged; no remaining task publisher
+process. FINAL-release sent to remi, soba, kole, with no custody remaining.
+Retain `.local/current-private-01/run/result.json` and extracted input tree.
+
+`Get-Command pwsh` returns this host's WindowsApps execution alias. Reuse soba's
+qualified Truckful resolver, `ProcessIdentity($PID).image`, which queries
+`QueryFullProcessImageName` on the already-running host rather than inferring its
+binary from PATH or `$PSHOME`. Preparation pins that actual versioned image.
+Execution re-queries it and first rehearses suspended launch, exact PID/birth/
+image/job membership and normal exit of a windowless700ms host before publication.
+No fallback detaches a process from custody. Corrected source/plan are prepared
+offline; request a fresh per-build CPU GO only after remi's OutRun live release.
