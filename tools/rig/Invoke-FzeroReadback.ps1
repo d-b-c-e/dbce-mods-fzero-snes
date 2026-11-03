@@ -2,13 +2,14 @@
 param(
  [Parameter(Mandatory)][ValidateSet('Prepare','Rehearse','Live')][string]$Mode,
  [Parameter(Mandatory)][string]$Evidence,
- [string]$PackageRoot,[string]$CaseRoot,[string]$CaptureTool,
+ [string]$PackageRoot,[string]$CaseRoot,[string]$CaptureTool,[string]$BuildReceipt,[string]$ExpectedSource,
  [string]$SaveRoot,[string]$OwnerRoot,[string]$Go,
  [string]$Hub='E:/Source/dbce-project-mgmt'
 )
 $ErrorActionPreference='Stop'
 . "$PSScriptRoot/Readback-Contract.ps1"
 . "$PSScriptRoot/Replay-Invocation.ps1"
+. "$PSScriptRoot/Candidate-Admission.ps1"
 function Json($p){Get-Content -LiteralPath $p -Raw|ConvertFrom-Json -DateKind String}
 function WriteJson($p,$o){$o|ConvertTo-Json -Depth 12|Set-Content -LiteralPath $p}
 function Quote([string]$s){if($s.Contains('"') -or $s.EndsWith('\')){throw 'Unsupported command argument'};'"'+$s+'"'}
@@ -20,9 +21,7 @@ if($Mode -eq 'Prepare'){
  if(Test-Path -LiteralPath $Evidence){throw 'Fresh evidence root required'}
  foreach($p in @($PackageRoot,$CaseRoot,$CaptureTool,$SaveRoot)){if(-not $p -or -not [IO.Path]::IsPathFullyQualified($p)){throw 'Absolute package/case/capture/save paths required'};Assert-ReadbackPlain $p}
  if($SaveRoot.Length -gt 65 -or (Test-Path -LiteralPath $SaveRoot)){throw 'Fresh short save root required'}
- $manifest=Json "$PackageRoot/manifest.json"
- if($manifest.build.sourceRevision -cne '9dc40e99f5d3b5bc6d17f44c5ee2fbfd0dba2914' -or $manifest.build.bsDeluxe -ne $false -or $manifest.build.dirty -ne $false){throw 'Only receipted Oct30 stock candidate admitted'}
- foreach($m in $manifest.files.PSObject.Properties){$p=Join-Path $PackageRoot $m.Name;if(-not(Test-ReadbackWithin $p $PackageRoot) -or (Get-ReadbackSha $p) -ine $m.Value){throw "Package identity failed: $($m.Name)"}}
+ $candidate=Get-FzeroCandidate $PackageRoot $BuildReceipt $ExpectedSource
  $t=Tape "$CaseRoot/diagnostic.fzpt"
  if((Get-ReadbackSha "$CaseRoot/fzero.sfc").ToLowerInvariant() -cne $t.rom -or $t.rom -cne 'bf16c3c867c58e2ab061c70de9295b6930d63f29f81cc986f5ecae03e0ad18d2'){throw 'Stock ROM/tape mismatch'}
  [void][IO.Directory]::CreateDirectory($Evidence)
@@ -35,8 +34,9 @@ if($Mode -eq 'Prepare'){
  $verifier=Join-Path $PSScriptRoot '../../tests/Verify-ReadbackFiles.ps1'
  $sourceRows=@(Rows $PSScriptRoot)+@(Rows (Split-Path $CaptureTool))+@{path=[IO.Path]::GetFullPath($verifier);sha256=Get-ReadbackSha $verifier}
  $sources=@(Rows $PackageRoot)+@('diagnostic.fzpt','diagnostic.fzpt.state','fzero.sfc'|ForEach-Object{@{path=Join-Path $CaseRoot $_;sha256=Get-ReadbackSha (Join-Path $CaseRoot $_)}})
- WriteJson "$Evidence/prepared.json" @{schema='fzero-readback-prepared@1';app=$app;source=$manifest.build.sourceRevision;saveRoot=$SaveRoot;capture=$CaptureTool;captureRows=$sourceRows;sources=$sources;appRows=Rows $app;frames=$t.frames;rom=$t.rom}
- Write-Output 'Prepared exact stock package and sealed case; no executable launched.';return
+ if($BuildReceipt){$sources+=@{path=[IO.Path]::GetFullPath($BuildReceipt);sha256=Get-ReadbackSha $BuildReceipt}}
+ WriteJson "$Evidence/prepared.json" @{schema='fzero-readback-prepared@1';app=$app;source=$candidate.source;launcher=$candidate.launcher;candidate=$candidate;saveRoot=$SaveRoot;capture=$CaptureTool;captureRows=$sourceRows;sources=$sources;appRows=Rows $app;frames=$t.frames;rom=$t.rom}
+ Write-Output 'Prepared exact admitted candidate and sealed stock case; no executable launched.';return
 }
 $plan=Json "$Evidence/prepared.json"
 if($plan.schema -cne 'fzero-readback-prepared@1'){throw 'Wrong preparation schema'}
@@ -44,11 +44,12 @@ CheckRows $plan.appRows;CheckRows $plan.sources;CheckRows $plan.captureRows
 if(Get-Process|Where-Object ProcessName -Like 'FZeroSNESRecomp*'){throw 'Existing F-Zero process: refused'}
 Add-Type -Path "$PSScriptRoot/FzeroLive.cs"
 $run=Join-Path $Evidence $Mode.ToLowerInvariant();if(Test-Path $run){throw 'One invocation per mode/evidence'};[void][IO.Directory]::CreateDirectory($run)
-$app=$plan.app;$exe=Join-Path $app $(if($Mode -eq 'Live'){'FZeroSNESRecomp.exe'}else{'FZeroSNESRecompHeadless.exe'})
+$app=$plan.app;$exe=Join-Path $app $(if($Mode -eq 'Live'){if($plan.launcher){$plan.launcher}else{'FZeroSNESRecomp.exe'}}else{'FZeroSNESRecompHeadless.exe'})
 $save=Join-Path $plan.saveRoot $Mode.ToLowerInvariant();[void][IO.Directory]::CreateDirectory($save)
 $envBefore=@{};foreach($e in Get-ChildItem Env:){if($e.Name -match '^(FZERO_|SNESRECOMP_|SDL_)'){$envBefore[$e.Name]=$e.Value;[Environment]::SetEnvironmentVariable($e.Name,$null,'Process')}}
 $env:SNESRECOMP_SAVE_ROOT=$save;$env:SDL_AUDIODRIVER='dummy';$env:FZERO_ASPECT='16:9'
 $env:SNESRECOMP_FRAME_BMP=Join-Path $run final.bmp;$env:SNESRECOMP_WRAM_DUMP=Join-Path $run final.wram
+if($Mode -eq 'Rehearse'){$env:SNESRECOMP_FRAME_DUMP=Join-Path $run final.ppm;$env:FZERO_CAPTURE_FRAMES='626,1822,3600';$env:FZERO_CAPTURE_PREFIX=Join-Path $run native}
 $lease=$false;$hooks=$false;$snapshot=$null;$owned=$null;$result=@{mode=$Mode;pass=$false;leaseReleased=$false;error=$null;source=$plan.source;frames=0}
 $request=[guid]::NewGuid().ToString('N');$statusPath=Join-Path $run status.json
 $invocation=Get-FzeroReplayInvocation $Mode $app $request $statusPath

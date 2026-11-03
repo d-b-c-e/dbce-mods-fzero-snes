@@ -98,3 +98,54 @@ Normalize custom SDL/helper paths to forward slashes before CMake. The next
 fresh CPU plan may reuse these successfully published/extracted inputs, only
 after pinning every source/bundle file and the successful-step/release receipt.
 Do not repeat unchanged publication merely because configuration failed.
+
+## CPU501762: product checks passed; owned telemetry child stopped
+
+Compiler input `ddc03155a30f8be9bea82f58aa3870018d15bc79`, clean framework/UI
+gitlinks and all2,751 retained private-input pins verified before/after. No helper
+republish. Nine steps exited0: actual-host rehearsal, configuration, product build,
+focused tests, scratch install, private stage, private package, full ZIP verify,
+packaged helper PlanOnly. Both graphical/headless hosts and renderer built with
+two jobs. All7 focused CTests passed: controls contract, panel, hotkeys, renderer,
+gamepad, controls, telemetry. This is actual candidate/fixture evidence, not game,
+device, live Apply/F6/UDP or owner-install acceptance.
+
+The original wrapper result remains `pass=false`: after the10s cleanup wait, its
+job still contained Visual C++ telemetry `vctip.exe` PID31060, birth UTC ticks
+639293032427224693. The identity is retained in `owned-before-stop.json`. Only
+that owned job's members were stopped; a fresh job census was empty, original
+vctip PID absent, caller token absent and named lease
+`ac24bb48aeed4ab9941842585054c0fb` released at11:50:08.561Z.
+All product steps passed before this conservative cleanup failure label; preserve
+those results and do not rebuild an unchanged candidate to change that label.
+FINAL-release went to remi, soba and kole. No custody or game/Steam action.
+
+Evidence root: `.local/current-private-03/run`.
+
+| Artifact | Identity |
+| --- | --- |
+| `build/FZeroSNESRecomp.exe`, renamed in the private payload | SHA256 `AD65602D786C39F02DCBDC0EA37915FFE81B34E65E83CDAC99589A4D395D75DB` |
+| `stage/build-receipt.json` | SHA256 `CCDA453A24355F99D00DDCD7CD0C52F7FA407988FCA6113E04DFDF58C501DDBE` |
+| `delivery/DBCE-FZeroSNES-unified-preview-1.8.3-gddc03155a30f-windows-x64-private-deluxe-native2.zip` | 85,409,302 bytes; SHA256 `3FC4F66AC11999E8B59F3DEBD954FB0692A2C8E63A00D3E336EAF0B14D346E01` |
+| Native2 install receipt | source ddc03155, consumer `FZeroSNESRecomp-wheel-launcher.exe`, adapter `fzero-raw-wheel-2`; SHA256 `2B362480E2E9FBC27BA5CC688C6C55B0ED2442924E41C7EF30B1BC4099BF0E1E` |
+| Exact helper bundle | source d0f333c; manifest `482BFB8513BD934FDB3D1B6E072473F05060A16075D021373D193A91410A29CA`, apphost `B5FF0B2058A3E3AE2698265756A31D98D27A6CB5DD61F071BE94411E88694D97` |
+
+The complete private payload has573 receipt-owned files. Its private generated
+sources/data, rollback-absence provenance and helper inventory are bound by the
+existing receipt/package checks. Source changes after compilation do not relabel
+this binary's compiler input. Everything stays local/private.
+
+The requested path regression is now in `tests/Test-CmakePaths.ps1`: production
+conversion/guard plus the actual CMake `-P` parser. The original generated path
+is refused (exit1), normalized path parses (exit0), and the harness rejects an
+unconverted backslash path. All3 checks pass at
+`.local/cmake-path-regression-01/result.json`; no new build.
+
+The replay runner now admits this private build via its complete build receipt,
+Native2 consumer/source/helper linkage and every payload hash, refusing unlisted
+files and wrong expected source. The actual573-file candidate passed admission;
+an intentionally wrong source refused before any launch. The prior exact stock
+admission path remains explicit. Current headless rehearsal will additionally
+retain native renderer input snapshots at626/1822/3600 and its final guest PPM,
+to separate guest/compositor pixels from770x608 WGC scaling. Rehearsal/live remain
+pending until the peer rig interval releases; no second build is needed.

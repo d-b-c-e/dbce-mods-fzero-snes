@@ -3,6 +3,7 @@ param([Parameter(Mandatory)][string]$Evidence,[switch]$Execute,[string]$Go,[stri
 $ErrorActionPreference='Stop'
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 . "$PSScriptRoot/Readback-Contract.ps1"
+. "$PSScriptRoot/Cmake-Paths.ps1"
 function Sha($p){Get-ReadbackSha $p}
 function WriteJson($p,$v){$v|ConvertTo-Json -Depth 15|Set-Content -LiteralPath $p}
 function ReadJson($p){Get-Content -LiteralPath $p -Raw|ConvertFrom-Json -DateKind String}
@@ -24,7 +25,7 @@ if(-not $Execute){
  $heads=@{};$heads[$root]=Head $root;$heads["$canonical/snesrecomp"]=Head "$canonical/snesrecomp";$heads["$canonical/recomp-ui"]=Head "$canonical/recomp-ui";$heads[$helper]=Head $helper
  if($heads[$helper] -cne 'd0f333c60892dc44beb36e277b19bd6a650507b7' -or $heads["$canonical/snesrecomp"] -cne '59d2966fa71d0346f92c43753e09b1ba7a1956f5' -or $heads["$canonical/recomp-ui"] -cne '6d9b71526f82c0182f85ec47610eb559303a77b8'){throw 'Dependency/helper pin differs'}
  if((Sha $archive) -cne '12B34280415EC8418C864408B93D008A20A6530687EE613D60BFBD20411F2785' -or (Sha $shim) -cne 'BF6455E63696A93B37C19DABF09B1E0606F26B0534BCE828417B1DF602DD8A7A' -or (Sha "$root/lib/toolkit/native/WheelFfb.dll") -cne '3F6CC51444879D01FEB900098B2DE94242594D093F523E3C34BD511D69C0D946'){throw 'Runtime/archive pin differs'}
- $paths=@($archive,$shim,$vcvars,$hostImage,"$root/lib/toolkit/native/WheelFfb.dll","$root/lib/toolkit/source-to-binary-manifest.json","$root/vendor/dbce-shim/PIN.json","$canonical/captures/bs-deluxe/mods/bs-deluxe.dat","$canonical/captures/bs-deluxe/gen/deluxe_namespace.h","$PSScriptRoot/FzeroLive.cs",$PSCommandPath)
+ $paths=@($archive,$shim,$vcvars,$hostImage,"$root/lib/toolkit/native/WheelFfb.dll","$root/lib/toolkit/source-to-binary-manifest.json","$root/vendor/dbce-shim/PIN.json","$canonical/captures/bs-deluxe/mods/bs-deluxe.dat","$canonical/captures/bs-deluxe/gen/deluxe_namespace.h","$PSScriptRoot/FzeroLive.cs","$PSScriptRoot/Cmake-Paths.ps1",$PSCommandPath)
  $paths+=@(Get-ChildItem "$canonical/src/gen" -File|ForEach-Object FullName)
  $paths+=@(Get-ChildItem "$canonical/captures/bs-deluxe/gen" -File -Filter '*.c'|ForEach-Object FullName)
  $reuse=$null
@@ -78,7 +79,8 @@ try{
  }
  # FetchContent writes these values into generated CMake source, where a
  # literal Windows backslash is an escape. Normalize both custom paths once.
- $sdl=$sdl.Replace('\','/');$bundle=$bundle.Replace('\','/')
+ $sdl=Convert-FzeroCmakePath $sdl;$bundle=Convert-FzeroCmakePath $bundle
+ Assert-FzeroCmakePath $sdl;Assert-FzeroCmakePath $bundle
  $build=Join-Path $run build
  $config=@('-S',$root,'-B',$build,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_TRY_COMPILE_CONFIGURATION=Release','-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded','-DCMAKE_C_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /Z7','-DCMAKE_CXX_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /Z7',"-DSNESRECOMP_ROOT=$canonical/snesrecomp","-DRECOMP_UI_ROOT=$canonical/recomp-ui","-DFZERO_GEN_DIR=$canonical/src/gen","-DFZERO_DELUXE_GEN_DIR=$canonical/captures/bs-deluxe/gen","-DFZERO_DELUXE_DATA_FILE=$canonical/captures/bs-deluxe/mods/bs-deluxe.dat","-DFZERO_SHIM_DLL=$shim","-DFZERO_SETUP_BUNDLE=$bundle","-DSNESRECOMP_SDL3_SOURCE_DIR=$sdl",'-DBUILD_TESTING=ON')
  Step configure $cmake $config 180 -Msvc
