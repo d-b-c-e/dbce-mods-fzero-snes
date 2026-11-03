@@ -148,4 +148,43 @@ an intentionally wrong source refused before any launch. The prior exact stock
 admission path remains explicit. Current headless rehearsal will additionally
 retain native renderer input snapshots at626/1822/3600 and its final guest PPM,
 to separate guest/compositor pixels from770x608 WGC scaling. Rehearsal/live remain
-pending until the peer rig interval releases; no second build is needed.
+completed after the peer rig interval released; no second build was needed.
+
+## Current headless/native readback and glyph classification
+
+Runner source8b22645 admitted all573 payload files and the exact build/Native2
+receipt; wrong-source admission refused. Prepared
+`.local/current-readback-01/prepared.json` SHA256
+`F2A5BCE1599DC5D8A71E6CB7B1B52E08FA88E42A62B955D650CA4C11FEB8CFE2`;
+runner SHA256
+`C0C18ABC3FD681A2F42C15EC8CC83632DFC479DD6CFFF6F34114198B359C9BAC`.
+Current headless host passed all3,600 stock-tape WRAM checkpoints, exit0 and
+empty job. Final WRAM remains
+`5D41D90DB02E54D1FD1E222C8228C18232F57D5FD5A7F0CA38011377FE7DC7E8`.
+No game window, physical device, hook or owner-state mutation during rehearsal.
+
+Current native snapshots at simulation626,1822,3600 are retained in
+`.local/current-readback-01/rehearse/native-*.bin` and corresponding JSON.
+The newly built production `FZeroRenderCapture` rendered each snapshot at4:3
+and16:9: all6 invocations exit0, and all3 native4:3 results report
+`width=256 stock_diff_pixels=0`, meaning exact agreement with the captured PPU
+stock image. Wide results are342x224. Private PPMs, logs and format-only PNG
+copies are at `.local/glyph-analysis-01`; PNG conversion used ffmpeg without
+resizing/filtering. The images were inspected after rendering, with no game open.
+
+**Finding:** glyph/menu/HUD overlap is visible in the current candidate's
+pre-window images, including the exact256x224 PPU stock pixels. The same menu
+state appears in the earlier WGC770x608 frame. Thus this is a native/guest
+rendering issue in the qualified recorded16:9 case, not one introduced by WGC or
+its770x608 target scale. This does not prove that a fresh ordinary4:3 simulation
+has the same problem: the4:3 reference above renders a snapshot produced during
+the recorded16:9 simulation. Guest viewport/state versus PPU producer/composition
+remains an implementation investigation; do not claim clean layout or silently
+fix it by changing the recorded viewport and invalidating its state checkpoints.
+
+Next is one bounded graphical GO request for the exact new private game hash,
+using the proven replay/window-capture guard and restoration contract. The new
+binary can then support later ordinary cardinal-controls/Apply/F6/UDP routes;
+this replay deliberately bypasses those consumers, so their live gates remain
+unqualified. Owner installation, physical forces and public publication stay out
+of scope.
