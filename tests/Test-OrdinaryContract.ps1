@@ -48,5 +48,26 @@ Check ($reads -gt 20 -and $replaceReads -gt 20) 'Active shared reads not exercis
 Check ((Read-FzeroSharedText "$Evidence/active.log").Contains('writer=149')) 'Writer incomplete'
 Check ((Get-Content "$Evidence/writer-done.txt" -Raw) -ceq 'done') 'Writer release incomplete'
 $profile=New-FzeroOrdinaryProfile;Check ($profile.Profiles[0].Profile.Bindings.steer.CalCentre -eq 32768) 'Fixture shape malformed'
+& {
+ $rows=[Collections.Generic.List[object]]::new();$packets=[Collections.Generic.List[object]]::new()
+ for($frame=0;$frame -lt 3300;$frame++){
+  $left=$frame -ge 1500 -and $frame -le 1530;$right=$frame -ge 1800 -and $frame -le 1830
+  $gas=($frame -ge 1100 -and $frame -lt 2000) -or ($frame -ge 2200 -and $frame -lt 3000);$brake=$frame -ge 2100 -and $frame -lt 2160
+  $word=1073741824L;if($left){$word=$word -bor 0x40};if($right){$word=$word -bor 0x80};if($gas){$word=$word -bor 1};if($brake){$word=$word -bor 2}
+  $x=$frame;$y=100;$race=$frame -ge 900;$bytes=[byte[]]::new(324)
+  [BitConverter]::GetBytes([int]$race).CopyTo($bytes,0);[BitConverter]::GetBytes([int]($frame*17)).CopyTo($bytes,4)
+  [BitConverter]::GetBytes([single]($x*0.25)).CopyTo($bytes,244);[BitConverter]::GetBytes([single]($y*0.25)).CopyTo($bytes,252)
+  $bytes[315]=if($gas){255}else{0};$bytes[316]=if($brake){255}else{0};$bytes[320]=if($left){129}elseif($right){127}else{0}
+  $hash=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+  $packets.Add(@{address='127.0.0.1';sourcePort=49153;bytes=$bytes;sha256=$hash})
+  $rows.Add(@{frame=$frame;canonical=@(1,1,1);state=@($(if($race){2}else{0}),3,0);word=$word;x=$x;y=$y;yaw=0;sourcePort=49153;packetSha256=$hash;raw=@($(if($left){-28672}elseif($right){28672}else{0}),$(if($gas){32767}else{-32768}),$(if($brake){32767}else{-32768}));normalized=@($(if($left){-1}elseif($right){1}else{0}),[int]$gas,[int]$brake)})
+ }
+ $result=Get-FzeroOrdinaryRows $rows $packets 49153;Check ($result.frames -eq 3300 -and $result.matchedPackets -eq 3300) 'Coherent receiver trace refused'
+ $rows[1500].canonical[0]=0;Refused {Get-FzeroOrdinaryRows $rows $packets 49153} 'Unqualified calibration accepted';$rows[1500].canonical[0]=1
+ $packets[1500].bytes[315]=0;Refused {Get-FzeroOrdinaryRows $rows $packets 49153} 'Mismatched transport input accepted';$packets[1500].bytes[315]=255
+ $rows[1500].x++;Refused {Get-FzeroOrdinaryRows $rows $packets 49153} 'Incoherent guest position accepted';$rows[1500].x--
+ Refused {Get-FzeroOrdinaryRows $rows $packets 49154} 'Foreign source-port accepted'
+ Refused {Get-FzeroOrdinaryRows @($rows.ToArray()[1..3299]) $packets 49153} 'Incomplete frame trace accepted'
+}
 @{pass=$true;checks=$checks;sharedLogReads=$reads;sharedAtomicStatusReads=$replaceReads;gameStarted=$false;hooksStarted=$false;virtualController=$false;globalInput=$false}|ConvertTo-Json|Set-Content "$Evidence/result.json"
 "PASS ordinary parent contract $checks checks; $reads active log/$replaceReads atomic status reads"
