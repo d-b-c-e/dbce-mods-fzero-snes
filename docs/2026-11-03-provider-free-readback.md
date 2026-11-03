@@ -94,5 +94,64 @@ the real production `FzeroSessionParse` with the actual invocation returned to
 the runner: corrected live accepted (mode2/env0), headless accepted (mode0/env1),
 and the original mixed request reproduced/refused (exit2). All3 checks pass at
 `.local/ingress-01/result.json`, without SDL, game launch, hooks or devices.
-Corrected preparation/rehearsal is `.local/readback-04`. Graphical capture remains
-unverified; a new coordinator disposition is needed before another live attempt.
+Corrected preparation/rehearsal is `.local/readback-04`. The fresh disposition
+and bounded runtime result follow; the original failure is retained separately.
+
+## GO501486: stock replay and unfocused capture qualified
+
+`PASS` for this exact stock recorded case / candidate, not current-main controls,
+clean UI layout, physical input or owner acceptance. Corrected source runner
+`f744b0c`, SHA256 `315E1AEC74A2F6054AA555FA6BC134CB51405CD27A4526A9076B4A44E72D4F18`;
+prepared manifest `.local/readback-04/prepared.json` SHA256
+`CD883FC9062DA299D4BB53B2431A38C0DBEFDAB6D8323F97E35DA5E241610EE8`.
+Candidate game/source identity above is unchanged.
+
+The exact owned game PID26048, birth ticks639293018011846585
+(2026-11-03T11:23:21.1846585Z), request
+`a74d53fc034a47938e21320f776e1162`, SDL HWND38669466, verified3,600/3,600
+input/WRAM checkpoints and exited0 normally. First observed status0 at
+11:23:21.2917532Z; terminal `verified`3,600 at11:24:21.6047783Z.
+Final status says `outputMuted=true`; the reviewed replay consumer excludes
+controller acquisition, force and UDP delivery. No input keys/posts or activation
+request were sent. This is synthetic tape-driven response, not a fresh wheel run.
+
+R2 captured that same HWND/PID/birth twice while VS Code PID26220/HWND460684
+remained foreground throughout. Both images are770x608 and have different hashes:
+
+| Image | Status at request / visible replay overlay | SHA256 |
+| --- | --- | --- |
+| `live/capture-0.png` | 600 / 626, Blue Falcon selection/menu content | `9462A6FF911B0B20FA2F172E2EA95203651C026D054C046CB737C18FAE41BA2F` |
+| `live/capture-1.png` | 1800 / 1822, craft/opponents on the track | `CAC23A6F827691442B52379B029A3011747E52434481FC05DD6AD77004990634` |
+
+Both show REPLAY and FORCES OFF. These are fresh changing game-content captures,
+not an exact scanout timestamp, demonstrated occlusion recovery or clean-layout
+acceptance. Menu/HUD samples contain overlapping glyphs; that visual observation
+remains unresolved rather than being classified as correct rendering. No display
+or framing change was attempted to investigate it in this interval.
+
+The game wrote `live/final.bmp` and131,072-byte `live/final.wram`. Graphical and
+headless final WRAM SHA256 both
+`5D41D90DB02E54D1FD1E222C8228C18232F57D5FD5A7F0CA38011377FE7DC7E8`.
+Final game BMP SHA256
+`5981061532FB3A215272D30B3BB296A35AE6C2BEAE82DE0AC8BEFDA4C7449ED7`.
+The BMP is guest-renderer output; WGC proves window content separately. The
+presentation log (180Hz target,10,403 presentations) is not a pacing benchmark.
+
+Cleanup: LL physical0/injected0/startup-resets0; no abort,61 message-pump and1,980
+monitor heartbeats, hooks released/thread joined, original foreground/raw tick
+and all four display identities unchanged. Owned game/capture job empty.
+Snapshot/presence verifier passed, and the separate numeric-UTC child passed all5
+original files' SHA/ticks/attributes with zero errors. Lease
+`62dc950172364b538f63a8a3a1598b06` was acquired around11:23:21.015Z and release
+receipt written11:24:23.211Z (about62.2s total; about1.6s from final assertion to
+release, within the approved80s+15s bounds). FINAL-release sent to remi, soba,
+kole. No custody remains; no Steam actions or public push.
+
+Raw evidence is `.local/readback-04/live/`: `result.json`, `status.json`,
+`observations.json`, `process.json`, both capture identity receipts/PNGs,
+`images.json`, `guard.json`, `owner-snapshot/manifest.json`, `owner-restore.json`,
+`owner-independent.json`, `stderr.txt`, `lease.txt`, `release.txt`.
+Next actionable work: a current-main private graphical candidate is needed for
+cardinal controls/Apply/F6 qualification. Review the sampled menu/HUD overlap
+against that candidate before claiming clean layout; physical and owner gates
+stay separate. No further runtime run is queued by this document.
