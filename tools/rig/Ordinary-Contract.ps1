@@ -18,7 +18,7 @@ function Set-FzeroOrdinaryGate([string]$Path,[string]$Nonce,[long]$Until){
  # Native reader holds the old gate only for one small read. A sharing collision
  # is bounded; never interpret a failed replacement as a refreshed heartbeat.
  $deadline=[Environment]::TickCount64+100
- while($true){try{[IO.File]::Move($temp,$Path,$true);return}catch [IO.IOException]{if([Environment]::TickCount64 -ge $deadline){throw};Start-Sleep -Milliseconds 2}}
+ while($true){try{[IO.File]::Move($temp,$Path,$true);return}catch [IO.IOException], [UnauthorizedAccessException]{if([Environment]::TickCount64 -ge $deadline){throw};Start-Sleep -Milliseconds 2}}
 }
 function New-FzeroOrdinaryProfile{
  $bindings=[ordered]@{}
