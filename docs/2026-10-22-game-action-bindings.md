@@ -1,7 +1,9 @@
 # Game-action binding coverage: Native vs Shared (2026-10-22)
 
-Documentation only, read from source on `main` `799cdd3`. No source, default or
-installed file changed. Nothing here was run in game or on a physical device:
+Updated October 23 for the isolated integration of Native source `31e4303`
+with `main` `a03c722`. Native optional actions now follow the profile through
+the existing controller keys; installed copies retain their earlier capability.
+Nothing here was run in game or on a physical device:
 **in-game and physical delivery of every action below is unverified.**
 
 SNES bits: 0 B, 1 Y, 2 Select, 3 Start, 4 Up, 5 Down, 6 Left, 7 Right, 8 A, 9 X,
@@ -18,22 +20,25 @@ SNES bits: 0 B, 1 Y, 2 Select, 3 Start, 4 Up, 5 Down, 6 Left, 7 Right, 8 A, 9 X,
 | back | `ButtonB` | `ButtonB` -> B | slot 10 -> B |
 | start / select | `ButtonStart` / `ButtonSelect` | same keys | slots 11 / 12 |
 | navUp/Down/Left/Right | `ButtonUp`..`ButtonRight` | same keys (hat or button) | slots 13..16 |
-| SNES X / Y / L / R | not translated ("no F-Zero control") | `ButtonX`, `ButtonY`, `ButtonL`, `ButtonR` | declared `fzero-snes.x/y/l/r`, only with `[Input] SharedExtras=1` |
-| save-state browser / rewind | not translated | `ButtonSaveStateMenu`, `ButtonRewind` -> 24/25 | declared `fzero-snes.saveMenu/rewind`, only with `SharedExtras=1` + `SharedHostControls=1` |
+| SNES X / Y / L / R | `nativeX/nativeY/nativeL/nativeR` -> `ButtonX/Y/L/R` | `ButtonX`, `ButtonY`, `ButtonL`, `ButtonR` | declared `fzero-snes.x/y/l/r`, only with `[Input] SharedExtras=1` |
+| save-state browser / rewind | `saveStateMenu/rewind` -> `ButtonSaveStateMenu/ButtonRewind` | `ButtonSaveStateMenu`, `ButtonRewind` -> 24/25 | declared `fzero-snes.saveMenu/rewind`, only with `SharedExtras=1` + `SharedHostControls=1` |
 | clutch, handbrake, shiftUp/Down, neutral, reverse, gear1-8, camera, lookBack, reset, horn, modMenu, muteFfb | noted as "no F-Zero control" | none | declared unsupported with a reason |
 
 Native profile rules: every bound action must be on the steering device (F-Zero
 reads one controller), only the qualified MOZA R12 (`346E:0006`) is accepted, button
-pedals are refused, and explicit empty entries unbind (steer stays). So X/Y/L/R and
-save/rewind reach Native only through the launcher's direct keys, not a profile.
+pedals are refused, and explicit empty entries unbind (steer stays). Omitted
+optional actions preserve existing launcher bindings. Schema 2 additionally
+requires the whole plan to be representable and preserves measured axis endpoints.
+Native receipts declare the six optional actions only after checking their linked
+mapper strings; the adapter and default schema remain `fzero-raw-wheel-1` / 1.
 
 Shared rules: only `Status::Live` (12) values count; injected extras are refused;
 outside gameplay steer is neutral and only digital actions reach the overlay.
 
 ## Sources
 
-- Native profile translation: `src/fzero_controls.cpp:41-46` (digital table),
-  `:238-300` (`FzeroControlsPlanLines`: steer, pedals, digital, unbound).
+- Native profile translation: `src/fzero_controls.cpp`, `kDigital` and
+  `FzeroControlsPlanLines` (steer, pedals, digital, unbound).
 - Native raw reader: `src/fzero_gamepad.c:20-25` (key -> bit table),
   `:124-129` (axis keys), `:293-301` (pedals -> B/Y).
 - Shared mapping: `src/fzero_shim_map.c:5-38` (actions, unsupported reasons,

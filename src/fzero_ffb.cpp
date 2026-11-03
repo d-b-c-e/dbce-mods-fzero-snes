@@ -26,11 +26,14 @@ int s_impact_strength = 20;
 constexpr int kConstantImpactMs = 120;
 constexpr int kSineImpactMs = 140;
 constexpr int kCollisionMinEnergyLoss = 16;
+/* The telemetry producer's jump bound: about four times measured race movement. */
+constexpr int kMaxStepUnits = 32;
 
 #if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
 using CreateConstantBurstFn = int (__cdecl *)(int);
 using PlayConstantBurstFn = int (__cdecl *)(int, int);
 using ReleaseConstantBurstsFn = void (__cdecl *)();
+using InitCheckedFn = int (__cdecl *)(int, const void *, const char *);
 WheelFfbApi s_ffb{};
 int s_damper = -1;
 int s_spring = -1;
@@ -42,6 +45,7 @@ CreateConstantBurstFn s_create_constant_burst = nullptr;
 PlayConstantBurstFn s_play_constant_burst = nullptr;
 ReleaseConstantBurstsFn s_release_constant_bursts = nullptr;
 bool s_active = false;
+bool s_checked = false;
 unsigned s_trace_frames = 0;
 bool s_trace_enabled = false;
 /* Serialize every export-backed entry, including launcher discovery. Init
@@ -108,11 +112,18 @@ void FzeroFfbComputeSteering(FzeroFfbState *state, const uint8_t *ram,
   const bool racing = ram[0x54] == 2 && ram[0x55] >= 3;
   const uint16_t x = read16(ram + 0x0b70) & 0x1fff;
   const uint16_t y = read16(ram + 0x0b90) & 0x0fff;
+  bool jumped = false;
   if (racing && state->have_position) {
     const int dx = wrapped_delta(x, state->previous_x, 0x2000);
     const int dy = wrapped_delta(y, state->previous_y, 0x1000);
-    const float instantaneous = std::sqrt((float)(dx * dx + dy * dy));
-    state->speed += (instantaneous - state->speed) * 0.25f;
+    /* A save-state load or rewind moves the craft further in one frame than
+     * racing does (about 7 units): hold speed and skip that frame's energy
+     * comparison, so neither reads as speed or a collision. */
+    jumped = dx * dx + dy * dy > kMaxStepUnits * kMaxStepUnits;
+    if (!jumped) {
+      const float instantaneous = std::sqrt((float)(dx * dx + dy * dy));
+      state->speed += (instantaneous - state->speed) * 0.25f;
+    }
   } else {
     state->speed = 0.0f;
   }
@@ -126,7 +137,7 @@ void FzeroFfbComputeSteering(FzeroFfbState *state, const uint8_t *ram,
    * contacts while excluding the repeated five-unit drain. Boost can spend
    * power too, so it must not become a false collision cue. */
   const uint16_t energy = read16(ram + 0x00c9);
-  const int lost_energy = state->have_energy && state->previous_energy > energy ?
+  const int lost_energy = state->have_energy && !jumped && state->previous_energy > energy ?
       state->previous_energy - energy : 0;
   if (state->collision_cooldown > 0) --state->collision_cooldown;
   out->collision_pulse = racing && state->collision_cooldown == 0 &&
@@ -153,7 +164,7 @@ void FzeroFfbComputeSteering(FzeroFfbState *state, const uint8_t *ram,
   out->road_frequency_millihz = 18000 + (int)(speed_scale * 24000.0f);
 }
 
-void FzeroFfbInit(const char *config_path, void *native_window) {
+static void FzeroFfbInitImpl(const char *config_path, void *native_window, const char *sdl_path) {
 #if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
   std::lock_guard<std::recursive_mutex> call(s_call_gate);
 #endif
@@ -200,6 +211,15 @@ void FzeroFfbInit(const char *config_path, void *native_window) {
     WheelFfb_Unload(&s_ffb);
     return;
   }
+  InitCheckedFn init_checked = nullptr;
+  if (!s_shared_requested) {
+    init_checked = reinterpret_cast<InitCheckedFn>(GetProcAddress(s_ffb.module, "InitDirectInputChecked"));
+    if (!init_checked || !sdl_path || !sdl_path[0]) {
+      std::fprintf(stderr, "[fzero-ffb] checked SDL path or backend export unavailable; Native force disabled\n");
+      WheelFfb_Unload(&s_ffb);
+      return;
+    }
+  }
   if(s_shared_requested) {
     s_shared_api={s_ffb.EnumerateAllDevices,s_ffb.GetAnyDeviceGuid,s_ffb.OpenReadDevice,
       reinterpret_cast<decltype(s_shared_api.info)>(GetProcAddress(s_ffb.module,"GetReadDeviceInfoV1")),
@@ -234,7 +254,8 @@ void FzeroFfbInit(const char *config_path, void *native_window) {
   }
   std::memcpy(s_force_guid,guid,16);
   s_ffb.SetPreferredDeviceGuid(guid);
-  if (!s_ffb.InitDirectInput((int)(intptr_t)native_window)) {
+  if (!(s_shared_requested ? s_ffb.InitDirectInput((int)(intptr_t)native_window) :
+        init_checked((int)(intptr_t)native_window, guid, sdl_path))) {
     std::fprintf(stderr, "[fzero-ffb] could not open '%s'; disabled\n", requested);
     FzeroFfbShutdown();
     return;
@@ -274,6 +295,12 @@ void FzeroFfbInit(const char *config_path, void *native_window) {
   }
   if (!s_use_constant_impact)
     s_collision_sine = s_ffb.CreatePeriodicBurst(32, kSineImpactMs);
+  if (!s_shared_requested && !s_ffb.SetDeviceForcesXY(0, 0)) {
+    std::fprintf(stderr, "[fzero-ffb] checked force session lost during setup; disabled\n");
+    FzeroFfbShutdown();
+    return;
+  }
+  s_checked = !s_shared_requested;
   s_active = true;
   s_trace_frames = 0;
   s_trace_enabled = std::getenv("FZERO_FFB_TRACE") != nullptr;
@@ -288,6 +315,14 @@ void FzeroFfbInit(const char *config_path, void *native_window) {
 #endif
 }
 
+void FzeroFfbInit(const char *config_path, void *native_window) {
+  FzeroFfbInitImpl(config_path, native_window, nullptr);
+}
+
+void FzeroFfbInitSelected(const char *config_path, void *native_window, const char *sdl_path) {
+  FzeroFfbInitImpl(config_path, native_window, sdl_path);
+}
+
 void FzeroFfbFrame(const uint8_t *ram, size_t ram_size, uint32_t input) {
 #if defined(_WIN32) && !defined(FZERO_FFB_MODEL_ONLY)
   std::lock_guard<std::recursive_mutex> call(s_call_gate);
@@ -299,15 +334,21 @@ void FzeroFfbFrame(const uint8_t *ram, size_t ram_size, uint32_t input) {
    * pulses directly to constant force feels like a brief tick followed by
    * silence. Let the wheel's own position-sensitive spring hold a continuous
    * centering load; retain the digital force only when spring is unsupported. */
-  if (!s_ffb.SetDeviceForcesXY(s_spring >= 0 ? 0 : output.constant_force, 0))
+  if (!s_ffb.SetDeviceForcesXY(s_spring >= 0 ? 0 : output.constant_force, 0)) {
     std::fprintf(stderr, "[fzero-ffb] force update rejected (HRESULT %08x)\n",
                  (unsigned)s_ffb.GetLastHResult());
+    if (s_checked) { FzeroFfbShutdown(); return; }
+  }
   int spring_ok = s_spring < 0 ? -1 : s_ffb.UpdateConditionEffect(
       s_spring, output.spring_coefficient, 10000, 0, 0);
   int damper_ok = s_damper < 0 ? -1 : s_ffb.UpdateConditionEffect(
       s_damper, output.damper_coefficient, 10000, 0, 0);
   int road_ok = s_road < 0 ? -1 : s_ffb.UpdatePeriodicEffect(
       s_road, output.road_magnitude, output.road_frequency_millihz);
+  if (s_checked && (spring_ok == 0 || damper_ok == 0 || road_ok == 0)) {
+    FzeroFfbShutdown();
+    return;
+  }
   if (s_trace_enabled && (++s_trace_frames % 180 == 0 ||
                           (output.racing && s_trace_frames < 181)))
     std::fprintf(stderr, "[fzero-ffb-trace] frame=%u racing=%d speed=%.2f "
@@ -324,6 +365,7 @@ void FzeroFfbFrame(const uint8_t *ram, size_t ram_size, uint32_t input) {
             s_play_constant_burst(s_collision_constant, magnitude) : 0) :
         (s_collision_sine >= 0 ?
             s_ffb.PlayPeriodicBurst(s_collision_sine, magnitude, 32000) : 0);
+    if (s_checked && !accepted) { FzeroFfbShutdown(); return; }
     if (s_trace_enabled)
       std::fprintf(stderr, "[fzero-ffb-impact] frame=%u energy=%u type=%s "
                    "magnitude=%d duration_ms=%d accepted=%d slot=%d hr=%08x\n", s_trace_frames,
@@ -351,6 +393,7 @@ void FzeroFfbShutdown(void) {
   std::lock_guard<std::recursive_mutex> call(s_call_gate);
   s_closed = true;
   s_active = false; /* Reentrant/late frame and silence calls cannot emit exports. */
+  s_checked = false;
   s_shared_ready=s_shared_sample_ok=false;
   if(s_shared_core_live) {
     if(s_ffb.module)s_ffb.PanicStop();

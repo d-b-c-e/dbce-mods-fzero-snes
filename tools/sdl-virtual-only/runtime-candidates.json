@@ -1,0 +1,78 @@
+{
+  "schema": 1,
+  "runtimeAllowed": false,
+  "closure": "retained-static-non-system-imports-only",
+  "windowsBaseline": null,
+  "dynamicClosureEstablished": false,
+  "files": [
+    {
+      "name": "libgcc_s_seh-1.dll",
+      "sha256": "3974EAAB76D816A2011DC313A8470B3CCD4CA88CBD5BA00C25815F8187DFA7CC",
+      "imports": [
+        "KERNEL32.dll",
+        "api-ms-win-crt-heap-l1-1-0.dll",
+        "api-ms-win-crt-private-l1-1-0.dll",
+        "api-ms-win-crt-runtime-l1-1-0.dll",
+        "api-ms-win-crt-stdio-l1-1-0.dll",
+        "api-ms-win-crt-string-l1-1-0.dll",
+        "libwinpthread-1.dll"
+      ],
+      "delayImportDirectory": "Entry d 0000000000000000 00000000 Delay Import Directory",
+      "stagedName": "libgcc_s_seh-1.dll.disabled",
+      "loaderImports": [
+        "GetModuleHandleA",
+        "GetProcAddress",
+        "LoadLibraryA"
+      ]
+    },
+    {
+      "name": "libstdc++-6.dll",
+      "sha256": "0F6565D34F27F94F15DE75BF9DAB725BE93FECF9B5FBB23130EA598536E6995D",
+      "imports": [
+        "libgcc_s_seh-1.dll",
+        "KERNEL32.dll",
+        "api-ms-win-crt-convert-l1-1-0.dll",
+        "api-ms-win-crt-environment-l1-1-0.dll",
+        "api-ms-win-crt-filesystem-l1-1-0.dll",
+        "api-ms-win-crt-heap-l1-1-0.dll",
+        "api-ms-win-crt-locale-l1-1-0.dll",
+        "api-ms-win-crt-math-l1-1-0.dll",
+        "api-ms-win-crt-private-l1-1-0.dll",
+        "api-ms-win-crt-runtime-l1-1-0.dll",
+        "api-ms-win-crt-stdio-l1-1-0.dll",
+        "api-ms-win-crt-string-l1-1-0.dll",
+        "api-ms-win-crt-time-l1-1-0.dll",
+        "api-ms-win-crt-utility-l1-1-0.dll",
+        "libwinpthread-1.dll"
+      ],
+      "delayImportDirectory": "Entry d 0000000000000000 00000000 Delay Import Directory",
+      "stagedName": "libstdc++-6.dll.disabled",
+      "loaderImports": [
+        "GetModuleHandleA",
+        "GetModuleHandleExA",
+        "GetProcAddress",
+        "LoadLibraryA"
+      ]
+    },
+    {
+      "name": "libwinpthread-1.dll",
+      "sha256": "05C11CF29AA7A1720E42E7004203F15D07ED409885050F5B7190EF4EED9E746D",
+      "imports": [
+        "KERNEL32.dll",
+        "api-ms-win-crt-convert-l1-1-0.dll",
+        "api-ms-win-crt-heap-l1-1-0.dll",
+        "api-ms-win-crt-private-l1-1-0.dll",
+        "api-ms-win-crt-runtime-l1-1-0.dll",
+        "api-ms-win-crt-stdio-l1-1-0.dll",
+        "api-ms-win-crt-string-l1-1-0.dll"
+      ],
+      "delayImportDirectory": "Entry d 0000000000000000 00000000 Delay Import Directory",
+      "stagedName": "libwinpthread-1.dll.disabled",
+      "loaderImports": [
+        "GetModuleHandleA",
+        "GetProcAddress",
+        "LoadLibraryA"
+      ]
+    }
+  ]
+}

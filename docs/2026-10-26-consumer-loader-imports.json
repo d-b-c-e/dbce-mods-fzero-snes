@@ -1,0 +1,85 @@
+{
+  "runtimeAllowed": false,
+  "method": "Read-only GNU objdump -p; compiler path from retained CMakeCache.txt",
+  "toolSHA256": "1A0D1F1691C8F51F6F853FDFBEEDF3C729D803E09257A8F78CBDB2290812C776",
+  "artifacts": [
+    {
+      "name": "fzero_virtual_consumer.exe",
+      "sha256": "F07A2E5A2A2AD711C240A326DCDEBE995FF2994FFCACB9CED4214D24D23B489C",
+      "imports": [
+        "libgcc_s_seh-1.dll",
+        "libstdc++-6.dll",
+        "ADVAPI32.dll",
+        "GDI32.dll",
+        "KERNEL32.dll",
+        "api-ms-win-crt-convert-l1-1-0.dll",
+        "api-ms-win-crt-environment-l1-1-0.dll",
+        "api-ms-win-crt-filesystem-l1-1-0.dll",
+        "api-ms-win-crt-heap-l1-1-0.dll",
+        "api-ms-win-crt-locale-l1-1-0.dll",
+        "api-ms-win-crt-math-l1-1-0.dll",
+        "api-ms-win-crt-private-l1-1-0.dll",
+        "api-ms-win-crt-runtime-l1-1-0.dll",
+        "api-ms-win-crt-stdio-l1-1-0.dll",
+        "api-ms-win-crt-string-l1-1-0.dll",
+        "ole32.dll",
+        "libwinpthread-1.dll",
+        "SHELL32.dll",
+        "USER32.dll",
+        "WINMM.dll"
+      ],
+      "delayImportDirectory": "Entry d 0000000000000000 00000000 Delay Import Directory"
+    },
+    {
+      "name": "libgcc_s_seh-1.dll",
+      "sha256": "3974EAAB76D816A2011DC313A8470B3CCD4CA88CBD5BA00C25815F8187DFA7CC",
+      "imports": [
+        "KERNEL32.dll",
+        "api-ms-win-crt-heap-l1-1-0.dll",
+        "api-ms-win-crt-private-l1-1-0.dll",
+        "api-ms-win-crt-runtime-l1-1-0.dll",
+        "api-ms-win-crt-stdio-l1-1-0.dll",
+        "api-ms-win-crt-string-l1-1-0.dll",
+        "libwinpthread-1.dll"
+      ],
+      "delayImportDirectory": "Entry d 0000000000000000 00000000 Delay Import Directory"
+    },
+    {
+      "name": "libstdc++-6.dll",
+      "sha256": "0F6565D34F27F94F15DE75BF9DAB725BE93FECF9B5FBB23130EA598536E6995D",
+      "imports": [
+        "libgcc_s_seh-1.dll",
+        "KERNEL32.dll",
+        "api-ms-win-crt-convert-l1-1-0.dll",
+        "api-ms-win-crt-environment-l1-1-0.dll",
+        "api-ms-win-crt-filesystem-l1-1-0.dll",
+        "api-ms-win-crt-heap-l1-1-0.dll",
+        "api-ms-win-crt-locale-l1-1-0.dll",
+        "api-ms-win-crt-math-l1-1-0.dll",
+        "api-ms-win-crt-private-l1-1-0.dll",
+        "api-ms-win-crt-runtime-l1-1-0.dll",
+        "api-ms-win-crt-stdio-l1-1-0.dll",
+        "api-ms-win-crt-string-l1-1-0.dll",
+        "api-ms-win-crt-time-l1-1-0.dll",
+        "api-ms-win-crt-utility-l1-1-0.dll",
+        "libwinpthread-1.dll"
+      ],
+      "delayImportDirectory": "Entry d 0000000000000000 00000000 Delay Import Directory"
+    },
+    {
+      "name": "libwinpthread-1.dll",
+      "sha256": "05C11CF29AA7A1720E42E7004203F15D07ED409885050F5B7190EF4EED9E746D",
+      "imports": [
+        "KERNEL32.dll",
+        "api-ms-win-crt-convert-l1-1-0.dll",
+        "api-ms-win-crt-heap-l1-1-0.dll",
+        "api-ms-win-crt-private-l1-1-0.dll",
+        "api-ms-win-crt-runtime-l1-1-0.dll",
+        "api-ms-win-crt-stdio-l1-1-0.dll",
+        "api-ms-win-crt-string-l1-1-0.dll"
+      ],
+      "delayImportDirectory": "Entry d 0000000000000000 00000000 Delay Import Directory"
+    }
+  ],
+  "limitations": "Toolchain DLL candidates only, not a proven runtime resolution or Windows module closure. No execution."
+}

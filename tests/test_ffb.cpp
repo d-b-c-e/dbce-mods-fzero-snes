@@ -38,6 +38,28 @@ int main() {
     }
     CHECK(contacts == 1);
   }
+  /* A save-state load or rewind moves the craft and its energy in one frame.
+   * Below two units a frame forces scale with speed, so from a slow car the
+   * jump would read as full speed; it is neither speed nor a collision. */
+  {
+    uint8_t jump[0x20000]{};
+    FzeroFfbState s{};
+    FzeroFfbOutput held{}, o{};
+    jump[0x54] = 2; jump[0x55] = 3;
+    put16(jump + 0xc9, 2000);
+    for (int frame = 0; frame < 20; ++frame) { /* one unit a frame */
+      put16(jump + 0xb70, (uint16_t)(100 + frame));
+      FzeroFfbCompute(&s, jump, sizeof(jump), 0, 40, &held);
+    }
+    CHECK(held.spring_coefficient > 0 && held.spring_coefficient < 4000);
+    put16(jump + 0xb70, 100 + 19 + 1024);
+    put16(jump + 0xc9, 1800);
+    FzeroFfbCompute(&s, jump, sizeof(jump), 0, 40, &o);
+    CHECK(!std::memcmp(&o, &held, sizeof(o)));
+    put16(jump + 0xb70, 100 + 19 + 1024 + 1);
+    FzeroFfbCompute(&s, jump, sizeof(jump), 0, 40, &o);
+    CHECK(o.spring_coefficient > 0 && o.spring_coefficient < 4000 && !o.collision_pulse);
+  }
   uint8_t ram[0x20000]{};
   FzeroFfbState state{};
   FzeroFfbOutput out{};

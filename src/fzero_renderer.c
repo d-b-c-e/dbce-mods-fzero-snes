@@ -1312,6 +1312,14 @@ static bool draw_triple_sides(uint32_t *output, size_t capacity,
     preview_triple_vehicles(output, capacity, rig, logical_width, false,
                             &vehicle_pixels);
   }
+  /* Forced blank gates the whole scanline, including the extended sky and cars. */
+  for (int y = 0; y < ph; ++y) {
+    int source_y = (int)((y + 0.5) * 224 / ph);
+    if (f->lines[source_y].registers[offsetof(Ppu, inidisp)] & 128)
+      for (int side = 0; side < 2; ++side)
+        memset(output + (size_t)side * pw * ph + (size_t)y * pw, 0,
+               (size_t)pw * sizeof(*output));
+  }
   triple_cache.output = output;
   triple_cache.rig = *rig;
   triple_cache.logical_width = logical_width;

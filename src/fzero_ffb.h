@@ -35,6 +35,7 @@ void FzeroFfbComputeSteering(FzeroFfbState *state, const uint8_t *ram,
                             size_t ram_size, uint32_t input, int strength,
                             int steering_strength, FzeroFfbOutput *out);
 void FzeroFfbInit(const char *config_path, void *native_window);
+void FzeroFfbInitSelected(const char *config_path, void *native_window, const char *sdl_path);
 void FzeroFfbFrame(const uint8_t *ram, size_t ram_size, uint32_t input);
 void FzeroFfbShutdown(void);
 void FzeroFfbSilence(void);

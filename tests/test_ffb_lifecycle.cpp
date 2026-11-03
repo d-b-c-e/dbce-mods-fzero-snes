@@ -39,7 +39,7 @@ static std::mutex events_mutex;
 static std::condition_variable events_cv;
 static std::vector<std::string> events;
 static int loads, unloads;
-static bool missing_export, block_frame, frame_entered, release_frame;
+static bool missing_export, missing_checked, block_frame, frame_entered, release_frame;
 static bool shutdown_requested, free_entered, release_shutdown, worker_active;
 static bool shutdown_completed;
 static bool refuse_zero, refuse_init, strict_selected;
@@ -91,6 +91,12 @@ static void __cdecl strict_selection(int enabled) {
 static int __cdecl initialize(int) {
   note("InitDirectInput"); CHECK(strict_selected); return refuse_init ? 0 : 1;
 }
+static int __cdecl initialize_checked(int, const void *guid, const char *path) {
+  note("InitDirectInputChecked"); CHECK(strict_selected);
+  CHECK(guid && ((const unsigned char *)guid)[0]==1);
+  CHECK(path && !std::strcmp(path,"FAKE-PATH"));
+  return refuse_init ? 0 : 1;
+}
 static int __cdecl forces(int x, int y) {
   initial_x=x; initial_y=y; note("SetDeviceForcesXY"); return refuse_zero ? 0 : 1;
 }
@@ -116,6 +122,7 @@ static FARPROC WINAPI fake_export(HMODULE, LPCSTR name) {
   if (!std::strcmp(name,"GetDeviceGuid")) return (FARPROC)device_guid;
   if (!std::strcmp(name,"SetStrictDeviceSelection")) return (FARPROC)strict_selection;
   if (!std::strcmp(name,"InitDirectInput")) return (FARPROC)initialize;
+  if (!std::strcmp(name,"InitDirectInputChecked")) return missing_checked ? nullptr : (FARPROC)initialize_checked;
   if (!std::strcmp(name,"SetDeviceForcesXY")) return (FARPROC)forces;
 #define RESOLVE(ret,export_name,args) if (!std::strcmp(name,#export_name)) return (FARPROC)stub_##export_name;
   WHEELFFB_API_LIST(RESOLVE)
@@ -147,7 +154,7 @@ static int latch_test(bool force_first) {
   const char *cfg="fake-ffb-latch.ini";
   if (force_first) {
     write_text(cfg,"[ForceFeedback]\nEnabled=1\nDevice=FAKE WHEEL\nImpactType=Sine\n");
-    FzeroFfbInit(cfg,nullptr);
+    FzeroFfbInitSelected(cfg,nullptr,"FAKE-PATH");
     CHECK(s_active && loads==1);
     write_text(on.c_str(),session);
     write_text(cfg,"[ForceFeedback]\nEnabled=0\n");
@@ -230,6 +237,37 @@ static int shared_core_test(bool extras) {
 }
 
 #endif
+static int checked_refusal_test() {
+  const char *cfg="fake-checked-refusal.ini";
+  write_text(cfg,"[ForceFeedback]\nEnabled=1\nDevice=FAKE WHEEL\nImpactType=Sine\n");
+  missing_checked=true;
+  FzeroFfbInitSelected(cfg,nullptr,"FAKE-PATH");
+  CHECK(!s_active && loads==1 && unloads==1);
+  missing_checked=false;
+  FzeroFfbInitSelected(cfg,nullptr,nullptr);
+  CHECK(!s_active && loads==2 && unloads==2);
+  for (const auto &e:events) CHECK(e!="InitDirectInput" && e!="InitDirectInputChecked" && e!="SetDeviceForcesXY");
+  std::remove(cfg);
+  std::puts("PASS missing checked export/path refuses Native force before initialization");
+  return 0;
+}
+static int checked_loss_test() {
+  const char *cfg="fake-checked-loss.ini";
+  write_text(cfg,"[ForceFeedback]\nEnabled=1\nDevice=FAKE WHEEL\nImpactType=Sine\n");
+  release_shutdown=true;
+  FzeroFfbInitSelected(cfg,nullptr,"FAKE-PATH");
+  CHECK(s_active && s_checked);
+  refuse_zero=true;
+  unsigned char ram[0x20000]{};ram[0x54]=2;ram[0x55]=3;
+  FzeroFfbFrame(ram,sizeof(ram),0);
+  CHECK(!s_active && !s_checked && unloads==1);
+  const size_t stopped=event_count();
+  FzeroFfbFrame(ram,sizeof(ram),0);
+  CHECK(event_count()==stopped);
+  std::remove(cfg);
+  std::puts("PASS rejected checked force frame closes and later frames emit nothing");
+  return 0;
+}
 int main(int argc, char **argv) {
   #ifdef FZERO_SHARED_CORE_TEST
   if(argc>1 && !std::strcmp(argv[1],"--shared-core"))return shared_core_test(false);
@@ -239,6 +277,8 @@ int main(int argc, char **argv) {
   if(argc>1 && !std::strcmp(argv[1],"--shared-missing"))return shared_test(false);
   if (argc>1 && !std::strcmp(argv[1],"--injection-latch")) return latch_test(false);
   if (argc>1 && !std::strcmp(argv[1],"--force-first")) return latch_test(true);
+  if (argc>1 && !std::strcmp(argv[1],"--checked-refusal")) return checked_refusal_test();
+  if (argc>1 && !std::strcmp(argv[1],"--checked-loss")) return checked_loss_test();
   char names[2][256]{};
   missing_export=true;
   CHECK(FzeroFfbListDevices(names,2)==0 && loads==1 && unloads==1);
@@ -246,7 +286,7 @@ int main(int argc, char **argv) {
   FILE *cfg=std::fopen("fake-ffb-lifecycle.ini","wb"); CHECK(cfg);
   std::fputs("[ForceFeedback]\nEnabled=1\nDevice=FAKE WHEEL\nImpactType=Sine\n",cfg);
   std::fclose(cfg);
-  FzeroFfbInit("fake-ffb-lifecycle.ini",nullptr);
+  FzeroFfbInitSelected("fake-ffb-lifecycle.ini",nullptr,"FAKE-PATH");
   CHECK(worker_active);
   CHECK(initial_x==0 && initial_y==0);
   for (const auto &e: events) CHECK(e!="StartEffect");
@@ -290,7 +330,7 @@ int main(int argc, char **argv) {
   // A refused neutral start must not create/start any other effect or watchdog.
   block_frame=false; refuse_zero=true; strict_selected=false;
   size_t start=event_count();
-  FzeroFfbInit("fake-ffb-lifecycle.ini",nullptr);
+  FzeroFfbInitSelected("fake-ffb-lifecycle.ini",nullptr,"FAKE-PATH");
   CHECK(!s_active && !worker_active && loads==3 && unloads==3);
   CHECK(initial_x==0 && initial_y==0 && strict_selected);
   for (size_t i=start;i<events.size();++i) {
@@ -302,13 +342,13 @@ int main(int argc, char **argv) {
   CHECK(event_count()==final_count);
   // Strict device open refusal also completes cleanup without an output call.
   refuse_zero=false; refuse_init=true; strict_selected=false; start=event_count();
-  FzeroFfbInit("fake-ffb-lifecycle.ini",nullptr);
+  FzeroFfbInitSelected("fake-ffb-lifecycle.ini",nullptr,"FAKE-PATH");
   CHECK(!s_active && !worker_active && loads==4 && unloads==4 && strict_selected);
   for (size_t i=start;i<events.size();++i)
     CHECK(events[i]!="SetDeviceForcesXY" && events[i]!="StartEffect" && events[i]!="SetHoldTimeoutMs");
   // A deliberate later initialization can start neutrally after the failure.
   refuse_init=false;
-  FzeroFfbInit("fake-ffb-lifecycle.ini",nullptr);
+  FzeroFfbInitSelected("fake-ffb-lifecycle.ini",nullptr,"FAKE-PATH");
   CHECK(s_active && worker_active && initial_x==0 && initial_y==0);
   FzeroFfbShutdown();
   CHECK(!s_active && !worker_active && loads==5 && unloads==5);

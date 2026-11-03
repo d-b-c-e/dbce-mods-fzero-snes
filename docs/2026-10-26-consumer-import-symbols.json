@@ -1,0 +1,3286 @@
+{
+  "schema": 1,
+  "runtimeAllowed": false,
+  "windowsBaseline": null,
+  "method": "Read-only PE32+ original import-thunk decoding; no target loading",
+  "readerSHA256": "CCB4087BE86139F0CE672C0CD5949B161353240802AE7DB9224EF430B6316BD9",
+  "priorInventorySHA256": "BF57809E8B3B18ACA6D5A4FE758A81ED3925265C3A6ED8895C048D6574A5D477",
+  "artifacts": [
+    {
+      "name": "fzero_virtual_consumer.exe",
+      "sha256": "F07A2E5A2A2AD711C240A326DCDEBE995FF2994FFCACB9CED4214D24D23B489C",
+      "size": 2251122,
+      "machine": "AMD64",
+      "delayImports": [],
+      "imports": [
+        {
+          "module": "libgcc_s_seh-1.dll",
+          "symbols": [
+            {
+              "name": "_Unwind_Resume",
+              "ordinal": null,
+              "hint": 14
+            }
+          ]
+        },
+        {
+          "module": "libstdc++-6.dll",
+          "symbols": [
+            {
+              "name": "_ZNKSt5ctypeIcE13_M_widen_initEv",
+              "ordinal": null,
+              "hint": 957
+            },
+            {
+              "name": "_ZNKSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE6substrEyy",
+              "ordinal": null,
+              "hint": 1115
+            },
+            {
+              "name": "_ZNSi4readEPcx",
+              "ordinal": null,
+              "hint": 1902
+            },
+            {
+              "name": "_ZNSo5flushEv",
+              "ordinal": null,
+              "hint": 1951
+            },
+            {
+              "name": "_ZNSolsEPSt15basic_streambufIcSt11char_traitsIcEE",
+              "ordinal": null,
+              "hint": 1986
+            },
+            {
+              "name": "_ZNSt12__basic_fileIcED1Ev",
+              "ordinal": null,
+              "hint": 2551
+            },
+            {
+              "name": "_ZNSt13basic_filebufIcSt11char_traitsIcEE4openEPKcSt13_Ios_Openmode",
+              "ordinal": null,
+              "hint": 2849
+            },
+            {
+              "name": "_ZNSt13basic_filebufIcSt11char_traitsIcEE5closeEv",
+              "ordinal": null,
+              "hint": 2855
+            },
+            {
+              "name": "_ZNSt13basic_filebufIcSt11char_traitsIcEEC1Ev",
+              "ordinal": null,
+              "hint": 2868
+            },
+            {
+              "name": "_ZNSt13basic_filebufIcSt11char_traitsIcEED1Ev",
+              "ordinal": null,
+              "hint": 2872
+            },
+            {
+              "name": "_ZNSt14basic_ifstreamIcSt11char_traitsIcEEC1EPKcSt13_Ios_Openmode",
+              "ordinal": null,
+              "hint": 3101
+            },
+            {
+              "name": "_ZNSt14basic_ifstreamIcSt11char_traitsIcEEC1ERKNSt7__cxx1112basic_stringIcS1_SaIcEEESt13_Ios_Openmode",
+              "ordinal": null,
+              "hint": 3103
+            },
+            {
+              "name": "_ZNSt14basic_ifstreamIcSt11char_traitsIcEED1Ev",
+              "ordinal": null,
+              "hint": 3113
+            },
+            {
+              "name": "_ZNSt14basic_ofstreamIcSt11char_traitsIcEED1Ev",
+              "ordinal": null,
+              "hint": 3170
+            },
+            {
+              "name": "_ZNSt6localeC1Ev",
+              "ordinal": null,
+              "hint": 4446
+            },
+            {
+              "name": "_ZNSt6localeD1Ev",
+              "ordinal": null,
+              "hint": 4453
+            },
+            {
+              "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE10_M_disposeEv",
+              "ordinal": null,
+              "hint": 4526
+            },
+            {
+              "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE10_M_replaceEyyPKcy",
+              "ordinal": null,
+              "hint": 4527
+            },
+            {
+              "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE15_M_replace_coldEPcyPKcyy",
+              "ordinal": null,
+              "hint": 4552
+            },
+            {
+              "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE6appendEPKc",
+              "ordinal": null,
+              "hint": 4573
+            },
+            {
+              "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE7reserveEy",
+              "ordinal": null,
+              "hint": 4627
+            },
+            {
+              "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE9_M_appendEPKcy",
+              "ordinal": null,
+              "hint": 4630
+            },
+            {
+              "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE9_M_assignERKS4_",
+              "ordinal": null,
+              "hint": 4631
+            },
+            {
+              "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE9_M_mutateEyyPKcy",
+              "ordinal": null,
+              "hint": 4634
+            },
+            {
+              "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE9push_backEc",
+              "ordinal": null,
+              "hint": 4636
+            },
+            {
+              "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEC1EOS4_",
+              "ordinal": null,
+              "hint": 4638
+            },
+            {
+              "name": "_ZNSt7__cxx1115basic_stringbufIcSt11char_traitsIcESaIcEE7_M_syncEPcyy",
+              "ordinal": null,
+              "hint": 4869
+            },
+            {
+              "name": "_ZNSt7__cxx1118basic_stringstreamIcSt11char_traitsIcESaIcEED1Ev",
+              "ordinal": null,
+              "hint": 5031
+            },
+            {
+              "name": "_ZNSt7__cxx1119basic_istringstreamIcSt11char_traitsIcESaIcEED1Ev",
+              "ordinal": null,
+              "hint": 5069
+            },
+            {
+              "name": "_ZNSt8ios_baseC2Ev",
+              "ordinal": null,
+              "hint": 5429
+            },
+            {
+              "name": "_ZNSt8ios_baseD2Ev",
+              "ordinal": null,
+              "hint": 5432
+            },
+            {
+              "name": "_ZNSt9basic_iosIcSt11char_traitsIcEE4initEPSt15basic_streambufIcS1_E",
+              "ordinal": null,
+              "hint": 5530
+            },
+            {
+              "name": "_ZNSt9basic_iosIcSt11char_traitsIcEE5clearESt12_Ios_Iostate",
+              "ordinal": null,
+              "hint": 5534
+            },
+            {
+              "name": "_ZSt16__ostream_insertIcSt11char_traitsIcEERSt13basic_ostreamIT_T0_ES6_PKS3_x",
+              "ordinal": null,
+              "hint": 5685
+            },
+            {
+              "name": "_ZSt16__throw_bad_castv",
+              "ordinal": null,
+              "hint": 5687
+            },
+            {
+              "name": "_ZSt19__throw_logic_errorPKc",
+              "ordinal": null,
+              "hint": 5710
+            },
+            {
+              "name": "_ZSt20__throw_length_errorPKc",
+              "ordinal": null,
+              "hint": 5720
+            },
+            {
+              "name": "_ZSt20__throw_system_errori",
+              "ordinal": null,
+              "hint": 5722
+            },
+            {
+              "name": "_ZSt24__throw_out_of_range_fmtPKcz",
+              "ordinal": null,
+              "hint": 5741
+            },
+            {
+              "name": "_ZSt7getlineIcSt11char_traitsIcESaIcEERSt13basic_istreamIT_T0_ES7_RNSt7__cxx1112basic_stringIS4_S5_T1_EES4_",
+              "ordinal": null,
+              "hint": 5764
+            },
+            {
+              "name": "_ZTTNSt7__cxx1118basic_stringstreamIcSt11char_traitsIcESaIcEEE",
+              "ordinal": null,
+              "hint": 6663
+            },
+            {
+              "name": "_ZTTNSt7__cxx1119basic_istringstreamIcSt11char_traitsIcESaIcEEE",
+              "ordinal": null,
+              "hint": 6665
+            },
+            {
+              "name": "_ZTTSt14basic_ifstreamIcSt11char_traitsIcEE",
+              "ordinal": null,
+              "hint": 6678
+            },
+            {
+              "name": "_ZTTSt14basic_ofstreamIcSt11char_traitsIcEE",
+              "ordinal": null,
+              "hint": 6681
+            },
+            {
+              "name": "_ZTVNSt7__cxx1115basic_stringbufIcSt11char_traitsIcESaIcEEE",
+              "ordinal": null,
+              "hint": 6731
+            },
+            {
+              "name": "_ZTVNSt7__cxx1118basic_stringstreamIcSt11char_traitsIcESaIcEEE",
+              "ordinal": null,
+              "hint": 6743
+            },
+            {
+              "name": "_ZTVNSt7__cxx1119basic_istringstreamIcSt11char_traitsIcESaIcEEE",
+              "ordinal": null,
+              "hint": 6745
+            },
+            {
+              "name": "_ZTVSt13basic_filebufIcSt11char_traitsIcEE",
+              "ordinal": null,
+              "hint": 6799
+            },
+            {
+              "name": "_ZTVSt14basic_ifstreamIcSt11char_traitsIcEE",
+              "ordinal": null,
+              "hint": 6806
+            },
+            {
+              "name": "_ZTVSt14basic_ofstreamIcSt11char_traitsIcEE",
+              "ordinal": null,
+              "hint": 6809
+            },
+            {
+              "name": "_ZTVSt15basic_streambufIcSt11char_traitsIcEE",
+              "ordinal": null,
+              "hint": 6817
+            },
+            {
+              "name": "_ZTVSt9basic_iosIcSt11char_traitsIcEE",
+              "ordinal": null,
+              "hint": 6904
+            },
+            {
+              "name": "_ZdlPvy",
+              "ordinal": null,
+              "hint": 7004
+            },
+            {
+              "name": "_Znwy",
+              "ordinal": null,
+              "hint": 7010
+            },
+            {
+              "name": "__cxa_begin_catch",
+              "ordinal": null,
+              "hint": 7020
+            },
+            {
+              "name": "__cxa_end_catch",
+              "ordinal": null,
+              "hint": 7026
+            },
+            {
+              "name": "__gxx_personality_seh0",
+              "ordinal": null,
+              "hint": 7056
+            }
+          ]
+        },
+        {
+          "module": "ADVAPI32.dll",
+          "symbols": [
+            {
+              "name": "RegCloseKey",
+              "ordinal": null,
+              "hint": 614
+            },
+            {
+              "name": "RegOpenKeyExW",
+              "ordinal": null,
+              "hint": 663
+            },
+            {
+              "name": "RegQueryValueExW",
+              "ordinal": null,
+              "hint": 676
+            }
+          ]
+        },
+        {
+          "module": "GDI32.dll",
+          "symbols": [
+            {
+              "name": "CreateBitmap",
+              "ordinal": null,
+              "hint": 41
+            },
+            {
+              "name": "CreateCompatibleDC",
+              "ordinal": null,
+              "hint": 49
+            },
+            {
+              "name": "CreateDIBSection",
+              "ordinal": null,
+              "hint": 55
+            },
+            {
+              "name": "DeleteDC",
+              "ordinal": null,
+              "hint": 384
+            },
+            {
+              "name": "DeleteObject",
+              "ordinal": null,
+              "hint": 387
+            },
+            {
+              "name": "SelectObject",
+              "ordinal": null,
+              "hint": 869
+            },
+            {
+              "name": "SetPixel",
+              "ordinal": null,
+              "hint": 905
+            }
+          ]
+        },
+        {
+          "module": "KERNEL32.dll",
+          "symbols": [
+            {
+              "name": "AddVectoredExceptionHandler",
+              "ordinal": null,
+              "hint": 20
+            },
+            {
+              "name": "AttachConsole",
+              "ordinal": null,
+              "hint": 40
+            },
+            {
+              "name": "CloseHandle",
+              "ordinal": null,
+              "hint": 151
+            },
+            {
+              "name": "CompareFileTime",
+              "ordinal": null,
+              "hint": 169
+            },
+            {
+              "name": "CopyFileExW",
+              "ordinal": null,
+              "hint": 190
+            },
+            {
+              "name": "CreateDirectoryW",
+              "ordinal": null,
+              "hint": 206
+            },
+            {
+              "name": "CreateEventW",
+              "ordinal": null,
+              "hint": 211
+            },
+            {
+              "name": "CreateFileW",
+              "ordinal": null,
+              "hint": 223
+            },
+            {
+              "name": "CreateSemaphoreW",
+              "ordinal": null,
+              "hint": 257
+            },
+            {
+              "name": "CreateThread",
+              "ordinal": null,
+              "hint": 263
+            },
+            {
+              "name": "DeleteCriticalSection",
+              "ordinal": null,
+              "hint": 295
+            },
+            {
+              "name": "DeleteFileW",
+              "ordinal": null,
+              "hint": 300
+            },
+            {
+              "name": "EnterCriticalSection",
+              "ordinal": null,
+              "hint": 333
+            },
+            {
+              "name": "ExitProcess",
+              "ordinal": null,
+              "hint": 380
+            },
+            {
+              "name": "FileTimeToSystemTime",
+              "ordinal": null,
+              "hint": 392
+            },
+            {
+              "name": "FindClose",
+              "ordinal": null,
+              "hint": 403
+            },
+            {
+              "name": "FindFirstFileExW",
+              "ordinal": null,
+              "hint": 409
+            },
+            {
+              "name": "FindNextFileW",
+              "ordinal": null,
+              "hint": 426
+            },
+            {
+              "name": "FlushFileBuffers",
+              "ordinal": null,
+              "hint": 446
+            },
+            {
+              "name": "FormatMessageW",
+              "ordinal": null,
+              "hint": 454
+            },
+            {
+              "name": "FreeEnvironmentStringsW",
+              "ordinal": null,
+              "hint": 457
+            },
+            {
+              "name": "FreeLibrary",
+              "ordinal": null,
+              "hint": 458
+            },
+            {
+              "name": "GetCommandLineW",
+              "ordinal": null,
+              "hint": 503
+            },
+            {
+              "name": "GetConsoleMode",
+              "ordinal": null,
+              "hint": 540
+            },
+            {
+              "name": "GetCurrentDirectoryW",
+              "ordinal": null,
+              "hint": 561
+            },
+            {
+              "name": "GetCurrentProcess",
+              "ordinal": null,
+              "hint": 568
+            },
+            {
+              "name": "GetCurrentThread",
+              "ordinal": null,
+              "hint": 572
+            },
+            {
+              "name": "GetCurrentThreadId",
+              "ordinal": null,
+              "hint": 573
+            },
+            {
+              "name": "GetEnvironmentStringsW",
+              "ordinal": null,
+              "hint": 603
+            },
+            {
+              "name": "GetEnvironmentVariableA",
+              "ordinal": null,
+              "hint": 604
+            },
+            {
+              "name": "GetFileAttributesA",
+              "ordinal": null,
+              "hint": 614
+            },
+            {
+              "name": "GetFileAttributesExA",
+              "ordinal": null,
+              "hint": 615
+            },
+            {
+              "name": "GetFileAttributesExW",
+              "ordinal": null,
+              "hint": 616
+            },
+            {
+              "name": "GetFileSizeEx",
+              "ordinal": null,
+              "hint": 627
+            },
+            {
+              "name": "GetFileTime",
+              "ordinal": null,
+              "hint": 628
+            },
+            {
+              "name": "GetFileType",
+              "ordinal": null,
+              "hint": 629
+            },
+            {
+              "name": "GetLastError",
+              "ordinal": null,
+              "hint": 648
+            },
+            {
+              "name": "GetLocaleInfoW",
+              "ordinal": null,
+              "hint": 653
+            },
+            {
+              "name": "GetLogicalDrives",
+              "ordinal": null,
+              "hint": 656
+            },
+            {
+              "name": "GetModuleFileNameW",
+              "ordinal": null,
+              "hint": 669
+            },
+            {
+              "name": "GetModuleHandleA",
+              "ordinal": null,
+              "hint": 670
+            },
+            {
+              "name": "GetModuleHandleW",
+              "ordinal": null,
+              "hint": 673
+            },
+            {
+              "name": "GetProcAddress",
+              "ordinal": null,
+              "hint": 730
+            },
+            {
+              "name": "GetProcessHeap",
+              "ordinal": null,
+              "hint": 737
+            },
+            {
+              "name": "GetStartupInfoA",
+              "ordinal": null,
+              "hint": 765
+            },
+            {
+              "name": "GetStdHandle",
+              "ordinal": null,
+              "hint": 768
+            },
+            {
+              "name": "GetSystemInfo",
+              "ordinal": null,
+              "hint": 785
+            },
+            {
+              "name": "GetSystemTimeAsFileTime",
+              "ordinal": null,
+              "hint": 791
+            },
+            {
+              "name": "GetTickCount64",
+              "ordinal": null,
+              "hint": 826
+            },
+            {
+              "name": "GlobalMemoryStatusEx",
+              "ordinal": null,
+              "hint": 878
+            },
+            {
+              "name": "HeapAlloc",
+              "ordinal": null,
+              "hint": 889
+            },
+            {
+              "name": "HeapFree",
+              "ordinal": null,
+              "hint": 895
+            },
+            {
+              "name": "InitializeCriticalSection",
+              "ordinal": null,
+              "hint": 918
+            },
+            {
+              "name": "InitializeCriticalSectionAndSpinCount",
+              "ordinal": null,
+              "hint": 919
+            },
+            {
+              "name": "IsDBCSLeadByte",
+              "ordinal": null,
+              "hint": 944
+            },
+            {
+              "name": "LeaveCriticalSection",
+              "ordinal": null,
+              "hint": 1012
+            },
+            {
+              "name": "LoadLibraryA",
+              "ordinal": null,
+              "hint": 1016
+            },
+            {
+              "name": "LoadLibraryExW",
+              "ordinal": null,
+              "hint": 1018
+            },
+            {
+              "name": "LoadLibraryW",
+              "ordinal": null,
+              "hint": 1019
+            },
+            {
+              "name": "LocalFree",
+              "ordinal": null,
+              "hint": 1030
+            },
+            {
+              "name": "MoveFileExA",
+              "ordinal": null,
+              "hint": 1056
+            },
+            {
+              "name": "MoveFileExW",
+              "ordinal": null,
+              "hint": 1057
+            },
+            {
+              "name": "OutputDebugStringW",
+              "ordinal": null,
+              "hint": 1107
+            },
+            {
+              "name": "QueryPerformanceCounter",
+              "ordinal": null,
+              "hint": 1161
+            },
+            {
+              "name": "QueryPerformanceFrequency",
+              "ordinal": null,
+              "hint": 1162
+            },
+            {
+              "name": "RaiseException",
+              "ordinal": null,
+              "hint": 1184
+            },
+            {
+              "name": "ReadFile",
+              "ordinal": null,
+              "hint": 1201
+            },
+            {
+              "name": "ReleaseSemaphore",
+              "ordinal": null,
+              "hint": 1229
+            },
+            {
+              "name": "RemoveDirectoryW",
+              "ordinal": null,
+              "hint": 1234
+            },
+            {
+              "name": "RemoveVectoredExceptionHandler",
+              "ordinal": null,
+              "hint": 1240
+            },
+            {
+              "name": "SetEnvironmentVariableA",
+              "ordinal": null,
+              "hint": 1338
+            },
+            {
+              "name": "SetErrorMode",
+              "ordinal": null,
+              "hint": 1340
+            },
+            {
+              "name": "SetFilePointer",
+              "ordinal": null,
+              "hint": 1354
+            },
+            {
+              "name": "SetFilePointerEx",
+              "ordinal": null,
+              "hint": 1355
+            },
+            {
+              "name": "SetLastError",
+              "ordinal": null,
+              "hint": 1370
+            },
+            {
+              "name": "SetThreadPriority",
+              "ordinal": null,
+              "hint": 1417
+            },
+            {
+              "name": "SetUnhandledExceptionFilter",
+              "ordinal": null,
+              "hint": 1433
+            },
+            {
+              "name": "Sleep",
+              "ordinal": null,
+              "hint": 1449
+            },
+            {
+              "name": "SystemTimeToFileTime",
+              "ordinal": null,
+              "hint": 1461
+            },
+            {
+              "name": "SystemTimeToTzSpecificLocalTime",
+              "ordinal": null,
+              "hint": 1462
+            },
+            {
+              "name": "TerminateProcess",
+              "ordinal": null,
+              "hint": 1465
+            },
+            {
+              "name": "TlsAlloc",
+              "ordinal": null,
+              "hint": 1483
+            },
+            {
+              "name": "TlsFree",
+              "ordinal": null,
+              "hint": 1484
+            },
+            {
+              "name": "TlsGetValue",
+              "ordinal": null,
+              "hint": 1485
+            },
+            {
+              "name": "TlsSetValue",
+              "ordinal": null,
+              "hint": 1487
+            },
+            {
+              "name": "TryEnterCriticalSection",
+              "ordinal": null,
+              "hint": 1493
+            },
+            {
+              "name": "VerSetConditionMask",
+              "ordinal": null,
+              "hint": 1522
+            },
+            {
+              "name": "VerifyVersionInfoW",
+              "ordinal": null,
+              "hint": 1526
+            },
+            {
+              "name": "VirtualProtect",
+              "ordinal": null,
+              "hint": 1533
+            },
+            {
+              "name": "VirtualQuery",
+              "ordinal": null,
+              "hint": 1535
+            },
+            {
+              "name": "WaitForSingleObject",
+              "ordinal": null,
+              "hint": 1544
+            },
+            {
+              "name": "WaitForSingleObjectEx",
+              "ordinal": null,
+              "hint": 1545
+            },
+            {
+              "name": "WideCharToMultiByte",
+              "ordinal": null,
+              "hint": 1588
+            },
+            {
+              "name": "WriteConsoleW",
+              "ordinal": null,
+              "hint": 1607
+            },
+            {
+              "name": "WriteFile",
+              "ordinal": null,
+              "hint": 1608
+            },
+            {
+              "name": "__C_specific_handler",
+              "ordinal": null,
+              "hint": 1625
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-convert-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "_i64toa",
+              "ordinal": null,
+              "hint": 23
+            },
+            {
+              "name": "_itoa",
+              "ordinal": null,
+              "hint": 28
+            },
+            {
+              "name": "_ltoa",
+              "ordinal": null,
+              "hint": 32
+            },
+            {
+              "name": "_ui64toa",
+              "ordinal": null,
+              "hint": 49
+            },
+            {
+              "name": "_ultoa",
+              "ordinal": null,
+              "hint": 53
+            },
+            {
+              "name": "atof",
+              "ordinal": null,
+              "hint": 83
+            },
+            {
+              "name": "atoi",
+              "ordinal": null,
+              "hint": 84
+            },
+            {
+              "name": "mbrtowc",
+              "ordinal": null,
+              "hint": 91
+            },
+            {
+              "name": "strtol",
+              "ordinal": null,
+              "hint": 100
+            },
+            {
+              "name": "strtoll",
+              "ordinal": null,
+              "hint": 101
+            },
+            {
+              "name": "strtoul",
+              "ordinal": null,
+              "hint": 102
+            },
+            {
+              "name": "strtoull",
+              "ordinal": null,
+              "hint": 103
+            },
+            {
+              "name": "wcrtomb",
+              "ordinal": null,
+              "hint": 105
+            },
+            {
+              "name": "wcstol",
+              "ordinal": null,
+              "hint": 112
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-environment-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "__p__environ",
+              "ordinal": null,
+              "hint": 0
+            },
+            {
+              "name": "getenv",
+              "ordinal": null,
+              "hint": 18
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-filesystem-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "_lock_file",
+              "ordinal": null,
+              "hint": 35
+            },
+            {
+              "name": "_unlock_file",
+              "ordinal": null,
+              "hint": 59
+            },
+            {
+              "name": "remove",
+              "ordinal": null,
+              "hint": 98
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-heap-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "_set_new_mode",
+              "ordinal": null,
+              "hint": 23
+            },
+            {
+              "name": "calloc",
+              "ordinal": null,
+              "hint": 24
+            },
+            {
+              "name": "free",
+              "ordinal": null,
+              "hint": 25
+            },
+            {
+              "name": "malloc",
+              "ordinal": null,
+              "hint": 26
+            },
+            {
+              "name": "realloc",
+              "ordinal": null,
+              "hint": 27
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-locale-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "_configthreadlocale",
+              "ordinal": null,
+              "hint": 9
+            },
+            {
+              "name": "localeconv",
+              "ordinal": null,
+              "hint": 19
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-math-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "__setusermatherr",
+              "ordinal": null,
+              "hint": 9
+            },
+            {
+              "name": "acos",
+              "ordinal": null,
+              "hint": 84
+            },
+            {
+              "name": "acosf",
+              "ordinal": null,
+              "hint": 85
+            },
+            {
+              "name": "asin",
+              "ordinal": null,
+              "hint": 88
+            },
+            {
+              "name": "asinf",
+              "ordinal": null,
+              "hint": 89
+            },
+            {
+              "name": "atan",
+              "ordinal": null,
+              "hint": 92
+            },
+            {
+              "name": "atan2",
+              "ordinal": null,
+              "hint": 93
+            },
+            {
+              "name": "atan2f",
+              "ordinal": null,
+              "hint": 94
+            },
+            {
+              "name": "atanf",
+              "ordinal": null,
+              "hint": 95
+            },
+            {
+              "name": "ceil",
+              "ordinal": null,
+              "hint": 120
+            },
+            {
+              "name": "ceilf",
+              "ordinal": null,
+              "hint": 121
+            },
+            {
+              "name": "cos",
+              "ordinal": null,
+              "hint": 134
+            },
+            {
+              "name": "cosf",
+              "ordinal": null,
+              "hint": 135
+            },
+            {
+              "name": "exp",
+              "ordinal": null,
+              "hint": 158
+            },
+            {
+              "name": "expf",
+              "ordinal": null,
+              "hint": 161
+            },
+            {
+              "name": "floor",
+              "ordinal": null,
+              "hint": 167
+            },
+            {
+              "name": "floorf",
+              "ordinal": null,
+              "hint": 168
+            },
+            {
+              "name": "fmod",
+              "ordinal": null,
+              "hint": 175
+            },
+            {
+              "name": "fmodf",
+              "ordinal": null,
+              "hint": 176
+            },
+            {
+              "name": "llround",
+              "ordinal": null,
+              "hint": 186
+            },
+            {
+              "name": "log",
+              "ordinal": null,
+              "hint": 188
+            },
+            {
+              "name": "log10",
+              "ordinal": null,
+              "hint": 189
+            },
+            {
+              "name": "log10f",
+              "ordinal": null,
+              "hint": 190
+            },
+            {
+              "name": "logf",
+              "ordinal": null,
+              "hint": 197
+            },
+            {
+              "name": "lround",
+              "ordinal": null,
+              "hint": 200
+            },
+            {
+              "name": "lroundf",
+              "ordinal": null,
+              "hint": 201
+            },
+            {
+              "name": "modf",
+              "ordinal": null,
+              "hint": 202
+            },
+            {
+              "name": "modff",
+              "ordinal": null,
+              "hint": 203
+            },
+            {
+              "name": "pow",
+              "ordinal": null,
+              "hint": 213
+            },
+            {
+              "name": "powf",
+              "ordinal": null,
+              "hint": 214
+            },
+            {
+              "name": "round",
+              "ordinal": null,
+              "hint": 221
+            },
+            {
+              "name": "roundf",
+              "ordinal": null,
+              "hint": 222
+            },
+            {
+              "name": "sin",
+              "ordinal": null,
+              "hint": 227
+            },
+            {
+              "name": "sinf",
+              "ordinal": null,
+              "hint": 228
+            },
+            {
+              "name": "sqrt",
+              "ordinal": null,
+              "hint": 231
+            },
+            {
+              "name": "sqrtf",
+              "ordinal": null,
+              "hint": 232
+            },
+            {
+              "name": "tan",
+              "ordinal": null,
+              "hint": 233
+            },
+            {
+              "name": "tanf",
+              "ordinal": null,
+              "hint": 234
+            },
+            {
+              "name": "trunc",
+              "ordinal": null,
+              "hint": 239
+            },
+            {
+              "name": "truncf",
+              "ordinal": null,
+              "hint": 240
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-private-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "memchr",
+              "ordinal": null,
+              "hint": 1086
+            },
+            {
+              "name": "memcmp",
+              "ordinal": null,
+              "hint": 1087
+            },
+            {
+              "name": "memcpy",
+              "ordinal": null,
+              "hint": 1088
+            },
+            {
+              "name": "memmove",
+              "ordinal": null,
+              "hint": 1089
+            },
+            {
+              "name": "strchr",
+              "ordinal": null,
+              "hint": 1092
+            },
+            {
+              "name": "strrchr",
+              "ordinal": null,
+              "hint": 1093
+            },
+            {
+              "name": "strstr",
+              "ordinal": null,
+              "hint": 1094
+            },
+            {
+              "name": "wcsstr",
+              "ordinal": null,
+              "hint": 1098
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-runtime-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "__p___argc",
+              "ordinal": null,
+              "hint": 4
+            },
+            {
+              "name": "__p___argv",
+              "ordinal": null,
+              "hint": 5
+            },
+            {
+              "name": "__p__acmdln",
+              "ordinal": null,
+              "hint": 7
+            },
+            {
+              "name": "_beginthreadex",
+              "ordinal": null,
+              "hint": 20
+            },
+            {
+              "name": "_cexit",
+              "ordinal": null,
+              "hint": 22
+            },
+            {
+              "name": "_configure_narrow_argv",
+              "ordinal": null,
+              "hint": 24
+            },
+            {
+              "name": "_crt_atexit",
+              "ordinal": null,
+              "hint": 30
+            },
+            {
+              "name": "_endthreadex",
+              "ordinal": null,
+              "hint": 32
+            },
+            {
+              "name": "_errno",
+              "ordinal": null,
+              "hint": 33
+            },
+            {
+              "name": "_exit",
+              "ordinal": null,
+              "hint": 35
+            },
+            {
+              "name": "_initialize_narrow_environment",
+              "ordinal": null,
+              "hint": 51
+            },
+            {
+              "name": "_set_app_type",
+              "ordinal": null,
+              "hint": 54
+            },
+            {
+              "name": "_initterm",
+              "ordinal": null,
+              "hint": 56
+            },
+            {
+              "name": "_initterm_e",
+              "ordinal": null,
+              "hint": 57
+            },
+            {
+              "name": "_set_invalid_parameter_handler",
+              "ordinal": null,
+              "hint": 73
+            },
+            {
+              "name": "abort",
+              "ordinal": null,
+              "hint": 86
+            },
+            {
+              "name": "exit",
+              "ordinal": null,
+              "hint": 87
+            },
+            {
+              "name": "signal",
+              "ordinal": null,
+              "hint": 101
+            },
+            {
+              "name": "strerror",
+              "ordinal": null,
+              "hint": 102
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-stdio-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "__acrt_iob_func",
+              "ordinal": null,
+              "hint": 0
+            },
+            {
+              "name": "__p__commode",
+              "ordinal": null,
+              "hint": 1
+            },
+            {
+              "name": "__p__fmode",
+              "ordinal": null,
+              "hint": 2
+            },
+            {
+              "name": "__stdio_common_vfprintf",
+              "ordinal": null,
+              "hint": 3
+            },
+            {
+              "name": "__stdio_common_vsprintf",
+              "ordinal": null,
+              "hint": 13
+            },
+            {
+              "name": "fclose",
+              "ordinal": null,
+              "hint": 153
+            },
+            {
+              "name": "fflush",
+              "ordinal": null,
+              "hint": 156
+            },
+            {
+              "name": "fgets",
+              "ordinal": null,
+              "hint": 160
+            },
+            {
+              "name": "fopen",
+              "ordinal": null,
+              "hint": 163
+            },
+            {
+              "name": "fputc",
+              "ordinal": null,
+              "hint": 166
+            },
+            {
+              "name": "fwrite",
+              "ordinal": null,
+              "hint": 180
+            },
+            {
+              "name": "getc",
+              "ordinal": null,
+              "hint": 181
+            },
+            {
+              "name": "puts",
+              "ordinal": null,
+              "hint": 190
+            },
+            {
+              "name": "setvbuf",
+              "ordinal": null,
+              "hint": 195
+            },
+            {
+              "name": "ungetc",
+              "ordinal": null,
+              "hint": 201
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-string-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "_strrev",
+              "ordinal": null,
+              "hint": 74
+            },
+            {
+              "name": "isdigit",
+              "ordinal": null,
+              "hint": 132
+            },
+            {
+              "name": "isspace",
+              "ordinal": null,
+              "hint": 138
+            },
+            {
+              "name": "isxdigit",
+              "ordinal": null,
+              "hint": 154
+            },
+            {
+              "name": "mbrlen",
+              "ordinal": null,
+              "hint": 157
+            },
+            {
+              "name": "memset",
+              "ordinal": null,
+              "hint": 160
+            },
+            {
+              "name": "strcmp",
+              "ordinal": null,
+              "hint": 163
+            },
+            {
+              "name": "strlen",
+              "ordinal": null,
+              "hint": 168
+            },
+            {
+              "name": "strncmp",
+              "ordinal": null,
+              "hint": 171
+            },
+            {
+              "name": "strnlen",
+              "ordinal": null,
+              "hint": 174
+            },
+            {
+              "name": "strpbrk",
+              "ordinal": null,
+              "hint": 175
+            },
+            {
+              "name": "tolower",
+              "ordinal": null,
+              "hint": 180
+            },
+            {
+              "name": "wcscmp",
+              "ordinal": null,
+              "hint": 186
+            },
+            {
+              "name": "wcslen",
+              "ordinal": null,
+              "hint": 191
+            },
+            {
+              "name": "wcsncmp",
+              "ordinal": null,
+              "hint": 194
+            },
+            {
+              "name": "wcsnlen",
+              "ordinal": null,
+              "hint": 197
+            }
+          ]
+        },
+        {
+          "module": "ole32.dll",
+          "symbols": [
+            {
+              "name": "CoInitializeEx",
+              "ordinal": null,
+              "hint": 85
+            },
+            {
+              "name": "CoUninitialize",
+              "ordinal": null,
+              "hint": 132
+            }
+          ]
+        },
+        {
+          "module": "libwinpthread-1.dll",
+          "symbols": [
+            {
+              "name": "pthread_mutex_destroy",
+              "ordinal": null,
+              "hint": 85
+            },
+            {
+              "name": "pthread_mutex_init",
+              "ordinal": null,
+              "hint": 86
+            },
+            {
+              "name": "pthread_mutex_lock",
+              "ordinal": null,
+              "hint": 87
+            },
+            {
+              "name": "pthread_mutex_unlock",
+              "ordinal": null,
+              "hint": 92
+            }
+          ]
+        },
+        {
+          "module": "SHELL32.dll",
+          "symbols": [
+            {
+              "name": "CommandLineToArgvW",
+              "ordinal": null,
+              "hint": 10
+            },
+            {
+              "name": "SHGetFolderPathW",
+              "ordinal": null,
+              "hint": 219
+            }
+          ]
+        },
+        {
+          "module": "USER32.dll",
+          "symbols": [
+            {
+              "name": "CreateIconIndirect",
+              "ordinal": null,
+              "hint": 108
+            },
+            {
+              "name": "CreateWindowExW",
+              "ordinal": null,
+              "hint": 116
+            },
+            {
+              "name": "DefWindowProcW",
+              "ordinal": null,
+              "hint": 165
+            },
+            {
+              "name": "DestroyWindow",
+              "ordinal": null,
+              "hint": 178
+            },
+            {
+              "name": "GetDC",
+              "ordinal": null,
+              "hint": 320
+            },
+            {
+              "name": "GetDoubleClickTime",
+              "ordinal": null,
+              "hint": 334
+            },
+            {
+              "name": "RegisterClassW",
+              "ordinal": null,
+              "hint": 710
+            },
+            {
+              "name": "ReleaseDC",
+              "ordinal": null,
+              "hint": 741
+            },
+            {
+              "name": "SetPropW",
+              "ordinal": null,
+              "hint": 831
+            },
+            {
+              "name": "UnregisterClassW",
+              "ordinal": null,
+              "hint": 926
+            }
+          ]
+        },
+        {
+          "module": "WINMM.dll",
+          "symbols": [
+            {
+              "name": "timeBeginPeriod",
+              "ordinal": null,
+              "hint": 159
+            },
+            {
+              "name": "timeEndPeriod",
+              "ordinal": null,
+              "hint": 160
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "libgcc_s_seh-1.dll",
+      "sha256": "3974EAAB76D816A2011DC313A8470B3CCD4CA88CBD5BA00C25815F8187DFA7CC",
+      "size": 938161,
+      "machine": "AMD64",
+      "delayImports": [],
+      "imports": [
+        {
+          "module": "KERNEL32.dll",
+          "symbols": [
+            {
+              "name": "DeleteCriticalSection",
+              "ordinal": null,
+              "hint": 295
+            },
+            {
+              "name": "EnterCriticalSection",
+              "ordinal": null,
+              "hint": 333
+            },
+            {
+              "name": "FreeLibrary",
+              "ordinal": null,
+              "hint": 458
+            },
+            {
+              "name": "GetLastError",
+              "ordinal": null,
+              "hint": 648
+            },
+            {
+              "name": "GetModuleHandleA",
+              "ordinal": null,
+              "hint": 670
+            },
+            {
+              "name": "GetProcAddress",
+              "ordinal": null,
+              "hint": 730
+            },
+            {
+              "name": "InitializeCriticalSection",
+              "ordinal": null,
+              "hint": 918
+            },
+            {
+              "name": "LeaveCriticalSection",
+              "ordinal": null,
+              "hint": 1012
+            },
+            {
+              "name": "LoadLibraryA",
+              "ordinal": null,
+              "hint": 1016
+            },
+            {
+              "name": "RaiseException",
+              "ordinal": null,
+              "hint": 1184
+            },
+            {
+              "name": "RtlCaptureContext",
+              "ordinal": null,
+              "hint": 1256
+            },
+            {
+              "name": "RtlLookupFunctionEntry",
+              "ordinal": null,
+              "hint": 1264
+            },
+            {
+              "name": "RtlUnwindEx",
+              "ordinal": null,
+              "hint": 1270
+            },
+            {
+              "name": "RtlVirtualUnwind",
+              "ordinal": null,
+              "hint": 1271
+            },
+            {
+              "name": "Sleep",
+              "ordinal": null,
+              "hint": 1449
+            },
+            {
+              "name": "TlsGetValue",
+              "ordinal": null,
+              "hint": 1485
+            },
+            {
+              "name": "VirtualProtect",
+              "ordinal": null,
+              "hint": 1533
+            },
+            {
+              "name": "VirtualQuery",
+              "ordinal": null,
+              "hint": 1535
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-heap-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "calloc",
+              "ordinal": null,
+              "hint": 24
+            },
+            {
+              "name": "free",
+              "ordinal": null,
+              "hint": 25
+            },
+            {
+              "name": "malloc",
+              "ordinal": null,
+              "hint": 26
+            },
+            {
+              "name": "realloc",
+              "ordinal": null,
+              "hint": 27
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-private-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "memcpy",
+              "ordinal": null,
+              "hint": 1088
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-runtime-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "_execute_onexit_table",
+              "ordinal": null,
+              "hint": 34
+            },
+            {
+              "name": "_exit",
+              "ordinal": null,
+              "hint": 35
+            },
+            {
+              "name": "_initialize_onexit_table",
+              "ordinal": null,
+              "hint": 53
+            },
+            {
+              "name": "_initterm",
+              "ordinal": null,
+              "hint": 56
+            },
+            {
+              "name": "_initterm_e",
+              "ordinal": null,
+              "hint": 57
+            },
+            {
+              "name": "_register_onexit_function",
+              "ordinal": null,
+              "hint": 62
+            },
+            {
+              "name": "abort",
+              "ordinal": null,
+              "hint": 86
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-stdio-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "__acrt_iob_func",
+              "ordinal": null,
+              "hint": 0
+            },
+            {
+              "name": "__stdio_common_vfprintf",
+              "ordinal": null,
+              "hint": 3
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-string-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "memset",
+              "ordinal": null,
+              "hint": 160
+            },
+            {
+              "name": "strlen",
+              "ordinal": null,
+              "hint": 168
+            },
+            {
+              "name": "strncmp",
+              "ordinal": null,
+              "hint": 171
+            }
+          ]
+        },
+        {
+          "module": "libwinpthread-1.dll",
+          "symbols": [
+            {
+              "name": "pthread_getspecific",
+              "ordinal": null,
+              "hint": 80
+            },
+            {
+              "name": "pthread_key_create",
+              "ordinal": null,
+              "hint": 82
+            },
+            {
+              "name": "pthread_mutex_init",
+              "ordinal": null,
+              "hint": 86
+            },
+            {
+              "name": "pthread_mutex_lock",
+              "ordinal": null,
+              "hint": 87
+            },
+            {
+              "name": "pthread_mutex_unlock",
+              "ordinal": null,
+              "hint": 92
+            },
+            {
+              "name": "pthread_once",
+              "ordinal": null,
+              "hint": 104
+            },
+            {
+              "name": "pthread_setspecific",
+              "ordinal": null,
+              "hint": 130
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "libstdc++-6.dll",
+      "sha256": "0F6565D34F27F94F15DE75BF9DAB725BE93FECF9B5FBB23130EA598536E6995D",
+      "size": 2597845,
+      "machine": "AMD64",
+      "delayImports": [],
+      "imports": [
+        {
+          "module": "libgcc_s_seh-1.dll",
+          "symbols": [
+            {
+              "name": "_GCC_specific_handler",
+              "ordinal": null,
+              "hint": 0
+            },
+            {
+              "name": "_Unwind_DeleteException",
+              "ordinal": null,
+              "hint": 2
+            },
+            {
+              "name": "_Unwind_GetDataRelBase",
+              "ordinal": null,
+              "hint": 6
+            },
+            {
+              "name": "_Unwind_GetIPInfo",
+              "ordinal": null,
+              "hint": 9
+            },
+            {
+              "name": "_Unwind_GetLanguageSpecificData",
+              "ordinal": null,
+              "hint": 10
+            },
+            {
+              "name": "_Unwind_GetRegionStart",
+              "ordinal": null,
+              "hint": 11
+            },
+            {
+              "name": "_Unwind_GetTextRelBase",
+              "ordinal": null,
+              "hint": 12
+            },
+            {
+              "name": "_Unwind_RaiseException",
+              "ordinal": null,
+              "hint": 13
+            },
+            {
+              "name": "_Unwind_Resume",
+              "ordinal": null,
+              "hint": 14
+            },
+            {
+              "name": "_Unwind_Resume_or_Rethrow",
+              "ordinal": null,
+              "hint": 15
+            },
+            {
+              "name": "_Unwind_SetGR",
+              "ordinal": null,
+              "hint": 16
+            },
+            {
+              "name": "_Unwind_SetIP",
+              "ordinal": null,
+              "hint": 17
+            },
+            {
+              "name": "__emutls_get_address",
+              "ordinal": null,
+              "hint": 44
+            },
+            {
+              "name": "__udivmodti4",
+              "ordinal": null,
+              "hint": 124
+            },
+            {
+              "name": "__udivti3",
+              "ordinal": null,
+              "hint": 125
+            }
+          ]
+        },
+        {
+          "module": "KERNEL32.dll",
+          "symbols": [
+            {
+              "name": "CloseHandle",
+              "ordinal": null,
+              "hint": 151
+            },
+            {
+              "name": "CreateFileW",
+              "ordinal": null,
+              "hint": 223
+            },
+            {
+              "name": "CreateHardLinkW",
+              "ordinal": null,
+              "hint": 227
+            },
+            {
+              "name": "DeleteCriticalSection",
+              "ordinal": null,
+              "hint": 295
+            },
+            {
+              "name": "DeleteFileW",
+              "ordinal": null,
+              "hint": 300
+            },
+            {
+              "name": "EnterCriticalSection",
+              "ordinal": null,
+              "hint": 333
+            },
+            {
+              "name": "FormatMessageA",
+              "ordinal": null,
+              "hint": 453
+            },
+            {
+              "name": "FreeLibrary",
+              "ordinal": null,
+              "hint": 458
+            },
+            {
+              "name": "GetDiskFreeSpaceExW",
+              "ordinal": null,
+              "hint": 587
+            },
+            {
+              "name": "GetDynamicTimeZoneInformation",
+              "ordinal": null,
+              "hint": 597
+            },
+            {
+              "name": "GetFileAttributesW",
+              "ordinal": null,
+              "hint": 619
+            },
+            {
+              "name": "GetFileInformationByHandle",
+              "ordinal": null,
+              "hint": 621
+            },
+            {
+              "name": "GetFullPathNameW",
+              "ordinal": null,
+              "hint": 640
+            },
+            {
+              "name": "GetGeoInfoW",
+              "ordinal": null,
+              "hint": 643
+            },
+            {
+              "name": "GetLastError",
+              "ordinal": null,
+              "hint": 648
+            },
+            {
+              "name": "GetModuleFileNameA",
+              "ordinal": null,
+              "hint": 668
+            },
+            {
+              "name": "GetModuleHandleA",
+              "ordinal": null,
+              "hint": 670
+            },
+            {
+              "name": "GetModuleHandleExA",
+              "ordinal": null,
+              "hint": 671
+            },
+            {
+              "name": "GetProcAddress",
+              "ordinal": null,
+              "hint": 730
+            },
+            {
+              "name": "GetSystemTimeAsFileTime",
+              "ordinal": null,
+              "hint": 791
+            },
+            {
+              "name": "GetTempPathW",
+              "ordinal": null,
+              "hint": 806
+            },
+            {
+              "name": "GetTimeZoneInformation",
+              "ordinal": null,
+              "hint": 832
+            },
+            {
+              "name": "GetUserGeoID",
+              "ordinal": null,
+              "hint": 842
+            },
+            {
+              "name": "InitializeCriticalSection",
+              "ordinal": null,
+              "hint": 918
+            },
+            {
+              "name": "LeaveCriticalSection",
+              "ordinal": null,
+              "hint": 1012
+            },
+            {
+              "name": "LoadLibraryA",
+              "ordinal": null,
+              "hint": 1016
+            },
+            {
+              "name": "LocalFree",
+              "ordinal": null,
+              "hint": 1030
+            },
+            {
+              "name": "MoveFileExW",
+              "ordinal": null,
+              "hint": 1057
+            },
+            {
+              "name": "RemoveDirectoryW",
+              "ordinal": null,
+              "hint": 1234
+            },
+            {
+              "name": "Sleep",
+              "ordinal": null,
+              "hint": 1449
+            },
+            {
+              "name": "TlsGetValue",
+              "ordinal": null,
+              "hint": 1485
+            },
+            {
+              "name": "VirtualProtect",
+              "ordinal": null,
+              "hint": 1533
+            },
+            {
+              "name": "VirtualQuery",
+              "ordinal": null,
+              "hint": 1535
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-convert-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "mbrtowc",
+              "ordinal": null,
+              "hint": 91
+            },
+            {
+              "name": "strtoul",
+              "ordinal": null,
+              "hint": 102
+            },
+            {
+              "name": "wcrtomb",
+              "ordinal": null,
+              "hint": 105
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-environment-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "_wgetcwd",
+              "ordinal": null,
+              "hint": 10
+            },
+            {
+              "name": "getenv",
+              "ordinal": null,
+              "hint": 18
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-filesystem-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "_findclose",
+              "ordinal": null,
+              "hint": 7
+            },
+            {
+              "name": "_fstat64",
+              "ordinal": null,
+              "hint": 23
+            },
+            {
+              "name": "_lock_file",
+              "ordinal": null,
+              "hint": 35
+            },
+            {
+              "name": "_unlock_file",
+              "ordinal": null,
+              "hint": 59
+            },
+            {
+              "name": "_wchdir",
+              "ordinal": null,
+              "hint": 62
+            },
+            {
+              "name": "_wchmod",
+              "ordinal": null,
+              "hint": 64
+            },
+            {
+              "name": "_wfindfirst64i32",
+              "ordinal": null,
+              "hint": 70
+            },
+            {
+              "name": "_wfindnext64i32",
+              "ordinal": null,
+              "hint": 76
+            },
+            {
+              "name": "_wfullpath",
+              "ordinal": null,
+              "hint": 77
+            },
+            {
+              "name": "_wmkdir",
+              "ordinal": null,
+              "hint": 80
+            },
+            {
+              "name": "_wstat64",
+              "ordinal": null,
+              "hint": 93
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-heap-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "_aligned_free",
+              "ordinal": null,
+              "hint": 0
+            },
+            {
+              "name": "_aligned_malloc",
+              "ordinal": null,
+              "hint": 1
+            },
+            {
+              "name": "calloc",
+              "ordinal": null,
+              "hint": 24
+            },
+            {
+              "name": "free",
+              "ordinal": null,
+              "hint": 25
+            },
+            {
+              "name": "malloc",
+              "ordinal": null,
+              "hint": 26
+            },
+            {
+              "name": "realloc",
+              "ordinal": null,
+              "hint": 27
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-locale-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "___mb_cur_max_func",
+              "ordinal": null,
+              "hint": 3
+            },
+            {
+              "name": "localeconv",
+              "ordinal": null,
+              "hint": 19
+            },
+            {
+              "name": "setlocale",
+              "ordinal": null,
+              "hint": 20
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-math-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "_fdopen",
+              "ordinal": null,
+              "hint": 37
+            },
+            {
+              "name": "frexp",
+              "ordinal": null,
+              "hint": 177
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-private-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "memchr",
+              "ordinal": null,
+              "hint": 1086
+            },
+            {
+              "name": "memcmp",
+              "ordinal": null,
+              "hint": 1087
+            },
+            {
+              "name": "memcpy",
+              "ordinal": null,
+              "hint": 1088
+            },
+            {
+              "name": "memmove",
+              "ordinal": null,
+              "hint": 1089
+            },
+            {
+              "name": "strchr",
+              "ordinal": null,
+              "hint": 1092
+            },
+            {
+              "name": "strstr",
+              "ordinal": null,
+              "hint": 1094
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-runtime-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "_errno",
+              "ordinal": null,
+              "hint": 33
+            },
+            {
+              "name": "_execute_onexit_table",
+              "ordinal": null,
+              "hint": 34
+            },
+            {
+              "name": "_exit",
+              "ordinal": null,
+              "hint": 35
+            },
+            {
+              "name": "_get_errno",
+              "ordinal": null,
+              "hint": 39
+            },
+            {
+              "name": "_initialize_onexit_table",
+              "ordinal": null,
+              "hint": 53
+            },
+            {
+              "name": "_initterm",
+              "ordinal": null,
+              "hint": 56
+            },
+            {
+              "name": "_initterm_e",
+              "ordinal": null,
+              "hint": 57
+            },
+            {
+              "name": "_register_onexit_function",
+              "ordinal": null,
+              "hint": 62
+            },
+            {
+              "name": "_set_errno",
+              "ordinal": null,
+              "hint": 71
+            },
+            {
+              "name": "abort",
+              "ordinal": null,
+              "hint": 86
+            },
+            {
+              "name": "strerror",
+              "ordinal": null,
+              "hint": 102
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-stdio-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "__acrt_iob_func",
+              "ordinal": null,
+              "hint": 0
+            },
+            {
+              "name": "__stdio_common_vfprintf",
+              "ordinal": null,
+              "hint": 3
+            },
+            {
+              "name": "__stdio_common_vsprintf",
+              "ordinal": null,
+              "hint": 13
+            },
+            {
+              "name": "_chsize_s",
+              "ordinal": null,
+              "hint": 23
+            },
+            {
+              "name": "_close",
+              "ordinal": null,
+              "hint": 25
+            },
+            {
+              "name": "_fileno",
+              "ordinal": null,
+              "hint": 51
+            },
+            {
+              "name": "_fseeki64",
+              "ordinal": null,
+              "hint": 63
+            },
+            {
+              "name": "_ftelli64",
+              "ordinal": null,
+              "hint": 69
+            },
+            {
+              "name": "_get_osfhandle",
+              "ordinal": null,
+              "hint": 72
+            },
+            {
+              "name": "_lseeki64",
+              "ordinal": null,
+              "hint": 91
+            },
+            {
+              "name": "_read",
+              "ordinal": null,
+              "hint": 114
+            },
+            {
+              "name": "_wfopen",
+              "ordinal": null,
+              "hint": 133
+            },
+            {
+              "name": "_wopen",
+              "ordinal": null,
+              "hint": 140
+            },
+            {
+              "name": "_write",
+              "ordinal": null,
+              "hint": 142
+            },
+            {
+              "name": "fclose",
+              "ordinal": null,
+              "hint": 153
+            },
+            {
+              "name": "fflush",
+              "ordinal": null,
+              "hint": 156
+            },
+            {
+              "name": "fopen",
+              "ordinal": null,
+              "hint": 163
+            },
+            {
+              "name": "fputc",
+              "ordinal": null,
+              "hint": 166
+            },
+            {
+              "name": "fputs",
+              "ordinal": null,
+              "hint": 167
+            },
+            {
+              "name": "fread",
+              "ordinal": null,
+              "hint": 170
+            },
+            {
+              "name": "fwrite",
+              "ordinal": null,
+              "hint": 180
+            },
+            {
+              "name": "getc",
+              "ordinal": null,
+              "hint": 181
+            },
+            {
+              "name": "getwc",
+              "ordinal": null,
+              "hint": 186
+            },
+            {
+              "name": "putc",
+              "ordinal": null,
+              "hint": 188
+            },
+            {
+              "name": "putwc",
+              "ordinal": null,
+              "hint": 191
+            },
+            {
+              "name": "setvbuf",
+              "ordinal": null,
+              "hint": 195
+            },
+            {
+              "name": "ungetc",
+              "ordinal": null,
+              "hint": 201
+            },
+            {
+              "name": "ungetwc",
+              "ordinal": null,
+              "hint": 202
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-string-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "isspace",
+              "ordinal": null,
+              "hint": 138
+            },
+            {
+              "name": "iswctype",
+              "ordinal": null,
+              "hint": 145
+            },
+            {
+              "name": "memset",
+              "ordinal": null,
+              "hint": 160
+            },
+            {
+              "name": "strcmp",
+              "ordinal": null,
+              "hint": 163
+            },
+            {
+              "name": "strcoll",
+              "ordinal": null,
+              "hint": 164
+            },
+            {
+              "name": "strlen",
+              "ordinal": null,
+              "hint": 168
+            },
+            {
+              "name": "strncmp",
+              "ordinal": null,
+              "hint": 171
+            },
+            {
+              "name": "strnlen",
+              "ordinal": null,
+              "hint": 174
+            },
+            {
+              "name": "strxfrm",
+              "ordinal": null,
+              "hint": 179
+            },
+            {
+              "name": "toupper",
+              "ordinal": null,
+              "hint": 181
+            },
+            {
+              "name": "towlower",
+              "ordinal": null,
+              "hint": 182
+            },
+            {
+              "name": "towupper",
+              "ordinal": null,
+              "hint": 183
+            },
+            {
+              "name": "wcscat",
+              "ordinal": null,
+              "hint": 184
+            },
+            {
+              "name": "wcscmp",
+              "ordinal": null,
+              "hint": 186
+            },
+            {
+              "name": "wcscoll",
+              "ordinal": null,
+              "hint": 187
+            },
+            {
+              "name": "wcscpy",
+              "ordinal": null,
+              "hint": 188
+            },
+            {
+              "name": "wcslen",
+              "ordinal": null,
+              "hint": 191
+            },
+            {
+              "name": "wcsnlen",
+              "ordinal": null,
+              "hint": 197
+            },
+            {
+              "name": "wcsxfrm",
+              "ordinal": null,
+              "hint": 202
+            },
+            {
+              "name": "wctype",
+              "ordinal": null,
+              "hint": 203
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-time-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "_wutime64",
+              "ordinal": null,
+              "hint": 85
+            },
+            {
+              "name": "strftime",
+              "ordinal": null,
+              "hint": 89
+            },
+            {
+              "name": "wcsftime",
+              "ordinal": null,
+              "hint": 90
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-utility-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "rand_s",
+              "ordinal": null,
+              "hint": 31
+            }
+          ]
+        },
+        {
+          "module": "libwinpthread-1.dll",
+          "symbols": [
+            {
+              "name": "clock_gettime64",
+              "ordinal": null,
+              "hint": 12
+            },
+            {
+              "name": "nanosleep64",
+              "ordinal": null,
+              "hint": 21
+            },
+            {
+              "name": "pthread_cond_broadcast",
+              "ordinal": null,
+              "hint": 48
+            },
+            {
+              "name": "pthread_cond_destroy",
+              "ordinal": null,
+              "hint": 49
+            },
+            {
+              "name": "pthread_cond_signal",
+              "ordinal": null,
+              "hint": 51
+            },
+            {
+              "name": "pthread_cond_timedwait64",
+              "ordinal": null,
+              "hint": 55
+            },
+            {
+              "name": "pthread_cond_wait",
+              "ordinal": null,
+              "hint": 58
+            },
+            {
+              "name": "pthread_create",
+              "ordinal": null,
+              "hint": 65
+            },
+            {
+              "name": "pthread_detach",
+              "ordinal": null,
+              "hint": 70
+            },
+            {
+              "name": "pthread_getspecific",
+              "ordinal": null,
+              "hint": 80
+            },
+            {
+              "name": "pthread_join",
+              "ordinal": null,
+              "hint": 81
+            },
+            {
+              "name": "pthread_key_create",
+              "ordinal": null,
+              "hint": 82
+            },
+            {
+              "name": "pthread_key_delete",
+              "ordinal": null,
+              "hint": 83
+            },
+            {
+              "name": "pthread_mutex_destroy",
+              "ordinal": null,
+              "hint": 85
+            },
+            {
+              "name": "pthread_mutex_init",
+              "ordinal": null,
+              "hint": 86
+            },
+            {
+              "name": "pthread_mutex_lock",
+              "ordinal": null,
+              "hint": 87
+            },
+            {
+              "name": "pthread_mutex_unlock",
+              "ordinal": null,
+              "hint": 92
+            },
+            {
+              "name": "pthread_num_processors_np",
+              "ordinal": null,
+              "hint": 103
+            },
+            {
+              "name": "pthread_once",
+              "ordinal": null,
+              "hint": 104
+            },
+            {
+              "name": "pthread_rwlock_rdlock",
+              "ordinal": null,
+              "hint": 107
+            },
+            {
+              "name": "pthread_rwlock_unlock",
+              "ordinal": null,
+              "hint": 116
+            },
+            {
+              "name": "pthread_rwlock_wrlock",
+              "ordinal": null,
+              "hint": 117
+            },
+            {
+              "name": "pthread_setspecific",
+              "ordinal": null,
+              "hint": 130
+            },
+            {
+              "name": "sched_yield",
+              "ordinal": null,
+              "hint": 143
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "libwinpthread-1.dll",
+      "sha256": "05C11CF29AA7A1720E42E7004203F15D07ED409885050F5B7190EF4EED9E746D",
+      "size": 72171,
+      "machine": "AMD64",
+      "delayImports": [],
+      "imports": [
+        {
+          "module": "KERNEL32.dll",
+          "symbols": [
+            {
+              "name": "CloseHandle",
+              "ordinal": null,
+              "hint": 151
+            },
+            {
+              "name": "CreateEventA",
+              "ordinal": null,
+              "hint": 208
+            },
+            {
+              "name": "CreateSemaphoreA",
+              "ordinal": null,
+              "hint": 254
+            },
+            {
+              "name": "DeleteCriticalSection",
+              "ordinal": null,
+              "hint": 295
+            },
+            {
+              "name": "DuplicateHandle",
+              "ordinal": null,
+              "hint": 325
+            },
+            {
+              "name": "EnterCriticalSection",
+              "ordinal": null,
+              "hint": 333
+            },
+            {
+              "name": "FileTimeToSystemTime",
+              "ordinal": null,
+              "hint": 392
+            },
+            {
+              "name": "FreeLibrary",
+              "ordinal": null,
+              "hint": 458
+            },
+            {
+              "name": "GetCurrentProcess",
+              "ordinal": null,
+              "hint": 568
+            },
+            {
+              "name": "GetCurrentProcessId",
+              "ordinal": null,
+              "hint": 569
+            },
+            {
+              "name": "GetCurrentThread",
+              "ordinal": null,
+              "hint": 572
+            },
+            {
+              "name": "GetCurrentThreadId",
+              "ordinal": null,
+              "hint": 573
+            },
+            {
+              "name": "GetLastError",
+              "ordinal": null,
+              "hint": 648
+            },
+            {
+              "name": "GetModuleHandleA",
+              "ordinal": null,
+              "hint": 670
+            },
+            {
+              "name": "GetProcAddress",
+              "ordinal": null,
+              "hint": 730
+            },
+            {
+              "name": "GetProcessAffinityMask",
+              "ordinal": null,
+              "hint": 731
+            },
+            {
+              "name": "GetProcessTimes",
+              "ordinal": null,
+              "hint": 747
+            },
+            {
+              "name": "GetSystemTimeAdjustment",
+              "ordinal": null,
+              "hint": 790
+            },
+            {
+              "name": "GetSystemTimeAsFileTime",
+              "ordinal": null,
+              "hint": 791
+            },
+            {
+              "name": "GetThreadContext",
+              "ordinal": null,
+              "hint": 807
+            },
+            {
+              "name": "GetThreadPriority",
+              "ordinal": null,
+              "hint": 818
+            },
+            {
+              "name": "GetThreadTimes",
+              "ordinal": null,
+              "hint": 823
+            },
+            {
+              "name": "GetTickCount",
+              "ordinal": null,
+              "hint": 825
+            },
+            {
+              "name": "InitializeCriticalSection",
+              "ordinal": null,
+              "hint": 918
+            },
+            {
+              "name": "LeaveCriticalSection",
+              "ordinal": null,
+              "hint": 1012
+            },
+            {
+              "name": "LoadLibraryA",
+              "ordinal": null,
+              "hint": 1016
+            },
+            {
+              "name": "OpenProcess",
+              "ordinal": null,
+              "hint": 1097
+            },
+            {
+              "name": "OutputDebugStringA",
+              "ordinal": null,
+              "hint": 1106
+            },
+            {
+              "name": "QueryPerformanceCounter",
+              "ordinal": null,
+              "hint": 1161
+            },
+            {
+              "name": "QueryPerformanceFrequency",
+              "ordinal": null,
+              "hint": 1162
+            },
+            {
+              "name": "RaiseException",
+              "ordinal": null,
+              "hint": 1184
+            },
+            {
+              "name": "ReleaseSemaphore",
+              "ordinal": null,
+              "hint": 1229
+            },
+            {
+              "name": "ResetEvent",
+              "ordinal": null,
+              "hint": 1247
+            },
+            {
+              "name": "ResumeThread",
+              "ordinal": null,
+              "hint": 1254
+            },
+            {
+              "name": "SetEvent",
+              "ordinal": null,
+              "hint": 1341
+            },
+            {
+              "name": "SetLastError",
+              "ordinal": null,
+              "hint": 1370
+            },
+            {
+              "name": "SetProcessAffinityMask",
+              "ordinal": null,
+              "hint": 1381
+            },
+            {
+              "name": "SetSystemTime",
+              "ordinal": null,
+              "hint": 1401
+            },
+            {
+              "name": "SetThreadContext",
+              "ordinal": null,
+              "hint": 1407
+            },
+            {
+              "name": "SetThreadPriority",
+              "ordinal": null,
+              "hint": 1417
+            },
+            {
+              "name": "Sleep",
+              "ordinal": null,
+              "hint": 1449
+            },
+            {
+              "name": "SuspendThread",
+              "ordinal": null,
+              "hint": 1458
+            },
+            {
+              "name": "TlsAlloc",
+              "ordinal": null,
+              "hint": 1483
+            },
+            {
+              "name": "TlsGetValue",
+              "ordinal": null,
+              "hint": 1485
+            },
+            {
+              "name": "TlsSetValue",
+              "ordinal": null,
+              "hint": 1487
+            },
+            {
+              "name": "TryEnterCriticalSection",
+              "ordinal": null,
+              "hint": 1493
+            },
+            {
+              "name": "VirtualProtect",
+              "ordinal": null,
+              "hint": 1533
+            },
+            {
+              "name": "VirtualQuery",
+              "ordinal": null,
+              "hint": 1535
+            },
+            {
+              "name": "WaitForMultipleObjects",
+              "ordinal": null,
+              "hint": 1542
+            },
+            {
+              "name": "WaitForSingleObject",
+              "ordinal": null,
+              "hint": 1544
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-convert-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "mbsrtowcs",
+              "ordinal": null,
+              "hint": 92
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-heap-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "calloc",
+              "ordinal": null,
+              "hint": 24
+            },
+            {
+              "name": "free",
+              "ordinal": null,
+              "hint": 25
+            },
+            {
+              "name": "malloc",
+              "ordinal": null,
+              "hint": 26
+            },
+            {
+              "name": "realloc",
+              "ordinal": null,
+              "hint": 27
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-private-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "__intrinsic_setjmp",
+              "ordinal": null,
+              "hint": 35
+            },
+            {
+              "name": "longjmp",
+              "ordinal": null,
+              "hint": 1085
+            },
+            {
+              "name": "memcpy",
+              "ordinal": null,
+              "hint": 1088
+            },
+            {
+              "name": "memmove",
+              "ordinal": null,
+              "hint": 1089
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-runtime-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "_assert",
+              "ordinal": null,
+              "hint": 18
+            },
+            {
+              "name": "_beginthreadex",
+              "ordinal": null,
+              "hint": 20
+            },
+            {
+              "name": "_endthreadex",
+              "ordinal": null,
+              "hint": 32
+            },
+            {
+              "name": "_errno",
+              "ordinal": null,
+              "hint": 33
+            },
+            {
+              "name": "_execute_onexit_table",
+              "ordinal": null,
+              "hint": 34
+            },
+            {
+              "name": "_exit",
+              "ordinal": null,
+              "hint": 35
+            },
+            {
+              "name": "_initialize_onexit_table",
+              "ordinal": null,
+              "hint": 53
+            },
+            {
+              "name": "_initterm",
+              "ordinal": null,
+              "hint": 56
+            },
+            {
+              "name": "_initterm_e",
+              "ordinal": null,
+              "hint": 57
+            },
+            {
+              "name": "_register_onexit_function",
+              "ordinal": null,
+              "hint": 62
+            },
+            {
+              "name": "_set_errno",
+              "ordinal": null,
+              "hint": 71
+            },
+            {
+              "name": "abort",
+              "ordinal": null,
+              "hint": 86
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-stdio-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "__acrt_iob_func",
+              "ordinal": null,
+              "hint": 0
+            },
+            {
+              "name": "__stdio_common_vfprintf",
+              "ordinal": null,
+              "hint": 3
+            },
+            {
+              "name": "__stdio_common_vsprintf",
+              "ordinal": null,
+              "hint": 13
+            },
+            {
+              "name": "_fileno",
+              "ordinal": null,
+              "hint": 51
+            },
+            {
+              "name": "_setmode",
+              "ordinal": null,
+              "hint": 118
+            },
+            {
+              "name": "fflush",
+              "ordinal": null,
+              "hint": 156
+            }
+          ]
+        },
+        {
+          "module": "api-ms-win-crt-string-l1-1-0.dll",
+          "symbols": [
+            {
+              "name": "_strdup",
+              "ordinal": null,
+              "hint": 51
+            },
+            {
+              "name": "memset",
+              "ordinal": null,
+              "hint": 160
+            },
+            {
+              "name": "strlen",
+              "ordinal": null,
+              "hint": 168
+            },
+            {
+              "name": "strncmp",
+              "ordinal": null,
+              "hint": 171
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

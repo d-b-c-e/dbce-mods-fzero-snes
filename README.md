@@ -332,7 +332,11 @@ SteeringResponsePercent = 50
 Full wheel lock is held every frame. Smaller deflections produce evenly
 distributed presses, while returning to centre or changing direction clears
 the pending pulse immediately. The setting is opt-in and the default digital
-gamepad behavior is unchanged.
+gamepad behavior is unchanged. Pulses are used only during a race; in F-Zero's
+menus the stick is a plain held direction past the launcher's controller
+deadzone (`[Controller] DeadzoneP1`, 25% by default), even when the
+controller's own `Deadzone` above is lower, so a resting stick never moves a
+menu.
 
 True racing wheels that SDL does not classify as gamepads use the same GUID
 section. Raw axis and button indices are zero-based; omitted pedals and
@@ -350,6 +354,14 @@ ButtonR=13
 ButtonSelect=23
 ButtonStart=36
 ```
+
+On such a wheel with `AnalogSteering=1`, the wheel's own steering reaches the
+game only during a race (the same race state the force feedback and telemetry
+use). In F-Zero's menus the steering axis does nothing, so a wheel resting
+slightly off centre cannot pulse a menu choice. Use the wheel's D-pad or hat
+(`ButtonUp`/`ButtonDown`/`ButtonLeft`/`ButtonRight`) or the keyboard to move
+through menus. The save-state and rewind screens still accept a clear wheel
+turn, past the launcher's controller deadzone, as a held Left/Right.
 
 Set `AcceleratorInvert=1` or `BrakeInvert=1` when an axis runs backwards.
 Available button keys are `ButtonA`, `ButtonB`, `ButtonX`, `ButtonY`,

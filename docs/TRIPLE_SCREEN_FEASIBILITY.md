@@ -148,6 +148,9 @@ width, eye distance, left/right yaw, bezel gap, and eye height are configurable
 in the mod UI and saved in `fzero-video.ini`. Menus,
 save-state and rewind overlays stay centered. A rejected camera calibration,
 wrong display mode, or non-race scene falls back to the centered game view.
+When the Surround layout starts on a desktop that is not one three-panel span
+(for example three separate monitors), a warning says so and names the
+Separate monitors layout, instead of falling back silently.
 The runtime side compositor now samples the captured Mode 1 BG1/BG2 panorama
 at each panel's horizontal eye angle and carries its skyline down to the
 ground-plane horizon. This removes the black sky/gap seen in the first rig

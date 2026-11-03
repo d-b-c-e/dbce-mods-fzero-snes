@@ -1,5 +1,147 @@
 # 2026-10-10: rig-profile controls installed and applied on the rig (STD-033)
 
+## October 23 Native portable helper capability source
+
+Producer `6e17a8b7f0b42f5a051ede665fd52b5893b229ac` adds the backend-specific
+`nativeControls` receipt object: `schema:2`, `adapter:fzero-raw-wheel-2`,
+`consumer:FZeroSNESRecomp-wheel-launcher.exe`. Existing top-level schema1 and
+Shared descriptors stay unchanged. The installer requires the linked canonical
+steering/throttle/brake profile keys and action markers, retains clean-source /
+payload hashes, and refreshes an older receipt through the backup transaction.
+The Native-pin fixture passed117 inert-file checks under PowerShell5.1; no device
+was opened. Evidence: `build-native-helper-check/native-pin-ps51.log` in isolated
+worktree `lamo-fzero-native-schema2-admission-20261023`.
+
+Companion Wheelkit branch `lamo/fzero-native-schema2-helper-20261023` admits that
+exact Native version for portable import/Preview/Apply and canonical calibration
+round trips. Its F-Zero fixtures227/227 and helper GUI compile0W/0E passed.
+Schema2 supported requests are atomic; one qualified R12 / raw range0..65535 /
+same-device restrictions remain. Legacy Native full-app writes remain schema1;
+Shared/Core remains schema1. No global `ini-controls-2` capability is declared.
+
+This source candidate does not change frozen stock product `dc40ec3`, its helper
+`0cc6493`, the installed owner Deluxe launcher or the upstream stock route.
+No product rebuild, helper publish, game, rendered GUI, device, force or owner
+installation was performed. Delivery still needs a freshly coordinated private
+Deluxe build, matching new helper and authentic receipt before rendered/physical
+qualification; the stock/private package fence remains in place.
+
+## October 23 isolated source integration and focused qualification
+
+Branch `lamo/fzero-native-profile-20261023` in
+`E:/Source/games/.worktrees/lamo-fzero-native-profile-20261023` integrates
+Native source `31e43033d205df0840d964ba1095b928b4e30759` with canonical
+`main` `a03c7222bd7c7e09756a28492a3f094fc5fab6f9` at merge
+`672ed8d039af8cec4b2624ff6a82b11ccf8eb0b4`. Canonical main and both retained
+worktrees were left unchanged. The integration keeps the PowerShell 5.1 hash
+implementation and the Native fixture's distinct missing-session refusal.
+Binding coverage now reflects the six optional Native actions rather than the
+older main-only snapshot. No saved key, force setting or launcher name changed.
+
+Focused MSVC Release compilation passed for `fzero_controls_contract_tests`,
+`fzero_controls_tests`, `fzero_gamepad_tests`, `fzero_mods_tests` and
+`CMakeFiles/FZeroSNESRecomp.dir/src/sdl_main.c.obj`, using two build jobs and
+the existing cached SDL3 library. CTest's exact four-test selection passed:
+contract **207 vectors / 599 checks / zero failures**; controls **308 checks**;
+gamepad and Mods passed. This independently checks the retained source author's
+previously unexecuted candidate; it is not a new game build or device test.
+The only compiler warning was the existing `HIBYTE` macro redefinition.
+
+Windows PowerShell 5.1 `tools/Test-InstallNativePin.ps1` passed **92 checks**
+against inert files on the clean merged commit. It checks optional-action
+admission, stale/missing capability refusal, receipt refresh, settings
+preservation, rollback and the separate Shared ownership gates. All fixture
+children exited; no game, device, display, lease or owner installation was used.
+Evidence remains in ignored `build-focused/` (`configure.log`, `build.log`,
+`ctest.log`, `native-install-ps51.log`, and CTest's `Testing/Temporary/LastTest.log`).
+The synthetic install/rollback target remains under ignored `build/`.
+
+Initial CMake configuration refused the new worktree's absent private generated
+sources. The successful configuration read existing generated sources from
+`E:/Source/games/dbce-mods-fzero-snes/src/gen`, framework/UI dependencies from
+that checkout, and SDL3 from the retained `build-helo/_deps/sdl3-build`. It did
+not regenerate cartridge data or compile/package a game executable.
+
+Next delivery gate: a separately coordinated private product build and package
+with the exact supporting Native mapper/helper, followed by rendered and device
+qualification. Native receipts still advertise schema 1; no global
+`ini-controls-2` capability or Shared/Core schema upgrade is implied. The prior
+Deluxe helper-admission/installation receipts remain valid historical evidence;
+their former stock-only admission gap must not be recreated. The Deluxe
+`FZeroSNESRecomp-wheel-launcher.exe` route stays distinct from the upstream
+`FZeroSNESRecomp.exe` LaunchBox route. No public push, distribution or owner
+acceptance is claimed.
+
+## October 22 retained Native Schema-2 source successor
+
+The Native controls adapter now reads Schema 2 using an unchanged copy of the
+toolkit `ee8014d` header, SHA256
+`6002B403122EDA689BC4413944FD5D30631566FE61F9BE3E37D520EA4A90C870`.
+Accepted steering/pedal bindings are stored as `SteeringProfileBinding`,
+`AcceleratorProfileBinding` and `BrakeProfileBinding` under the existing
+`Controller.<SDL GUID>` in the same backup/readback/atomic-replace transaction.
+The raw reader converts the qualified SDL sample to DI0..65535, calls canonical
+normalization once, then keeps the existing deadzone, steering curve/range and
+pedal threshold. The editable Native inversion switch remains effective and is
+translated into the contract's once-only inversion. Measured pedal endpoints
+determine travel even when their direction differs from the old `travel` field.
+
+Only the existing qualified device/axis mapping and raw range0..65535 are
+admitted. Invalid Schema-2 entries, invalid calibration, other ranges or a
+different pedal device refuse Apply without partial writes. Corrupted persisted
+metadata holds that axis neutral. A deliberate launcher axis change uses that
+new axis's legacy mapping; the old axis's calibration is never transferred to it.
+Changing inversion alone retains calibration. A newly applied Schema-1 binding
+clears the corresponding calibration and restores the exact legacy law; omitted
+actions retain their canonical native values and explicit pedal unbind clears
+its calibration. Unrelated player settings remain intact.
+
+The Native development action resolver also opts into Schema2 so its inverse
+uses the same measured endpoints. Existing force/session/channel guards remain
+unchanged. Shared-owner readers stay on Schema1; this source task does not
+advertise global `ini-controls-2`, change the Wheelkit writer/capability, rebuild
+or install a product, or qualify actual input/physical normalization. STD-019 is
+still unchecked; STD-021/031 physical normalization remains pending. The other
+existing partial standards are not promoted by this change.
+
+The October 22 Fleet recall supersedes the parked assignment. Source work resumes
+from `f6546c526197baba25d0442e594644b548113f9d` on private branch
+`zulo/fzero-native-schema2-20261022`, preserving the ten retained modified files
+and the original Samo branch. Prior acceptance was read from portfolio handoff
+`.local/outrun-fzero-reconcile-samo-20261019/handoff.txt` (task
+`01M5AX2CF072PPZJS5X4Y2XQW7`); current source task is
+`01M5HXKG6B81N39HQ514X7NNV6`.
+
+Completion fixes the launcher preview to load calibration from the executable's
+`config.ini`, rather than the separate video settings file, and includes the
+required math declaration. Preview leaves inversion and deadzone to the existing
+Mods controls; gameplay applies the same canonical calibration and inversion
+once before its existing deadzone path. Schema-2 conflicting bind/unbind entries, unsupported
+bound actions, other-device digital mappings and diagonal hats now refuse the
+whole plan. Schema-1 notes and behavior stay intact. The development resolver
+uses Native plan admission for Schema 2 as well as canonical denormalization.
+
+The unchanged canonical vectors are vendored alongside the header (SHA256
+`30EEEDA81E55F72A8AF88D692C321A9E0507051D6A543C2567EFB67B52663F7A`).
+`fzero_controls_contract_tests` uses the toolkit vector harness for schemas 1/2,
+including canonical parse/format, normalize/inverse and saturation vectors.
+CMake registers it as `fzero_controls_contract`, requiring no SDL or ROM data.
+The existing controls fixture additionally covers calibrated locks/center,
+reversed and inverted pedals, digital deadzone once, proportional endpoint
+symmetry, injection action inverse, unsupported mappings, explicit unbind,
+Schema-1 restoration, omitted values, unrelated settings and write rollback.
+Physical SDL drivers remain disabled in the virtual controls/gamepad fixtures.
+
+No build, tests or typechecks were executed in this source attempt. Dependent
+Claude owns the focused checks on the committed candidate: build the contract,
+controls/gamepad and launcher/mod fixture targets, compile the affected
+`src/sdl_main.c` graphical object, then run the focused fixtures. Historical
+283-check/virtual-gamepad evidence predates the final launcher and completion
+edits and does not validate this candidate. The prior inversion candidate,
+225 checks, product/cleanup receipts and historical failures remain intact.
+Actual wheel/SDL driver calibration, rendered preview, device loss, physical
+normalization/force, install/package behavior and owner acceptance remain open.
+
 ## October 19 source successor: Native steering inversion
 
 Private branch `samo/fzero-native-steering-invert-20261019`, based on canonical

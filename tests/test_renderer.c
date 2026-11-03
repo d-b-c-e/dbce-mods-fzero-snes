@@ -640,6 +640,36 @@ static void publish_triple_sky(unsigned frame, unsigned sky_color) {
   FzeroRendererEndFrame(&p, stock);
 }
 
+static void test_triple_forced_blank(void) {
+  setup();
+  memset(p.vram, 0, sizeof(p.vram));
+  for (int i = 0x7800; i < 0x8000; ++i) p.vram[i] = 1;
+  for (int y = 0; y < 8; ++y) p.vram[16 + y] = 255;
+  ram[0x55] = 3;
+  publish_triple_sky(110, 31);
+  /* Blank a band below the sky IRQ while keeping the calibration lines.
+   * The side projection extends the red panorama into this output band. */
+  p.inidisp |= 128;
+  for (unsigned line = 56; line <= 80; ++line) FzeroRendererCaptureLine(&p, line);
+  FzeroRendererEndFrame(&p, stock);
+  for (int scale = 1; scale <= 2; ++scale) {
+    const int width = 64 * scale, height = 36 * scale;
+    const size_t area = (size_t)width * height;
+    FzeroTripleRig rig = {708.4166, 398.4843, 660, 0, 70, 70, 8, width, height};
+    uint32_t *sides = malloc((2 * area + 2) * sizeof(*sides));
+    CHECK(sides);
+    sides[0] = sides[2 * area + 1] = 0xdeadbeef;
+    CHECK(FzeroRendererDrawTripleSides(sides + 1, 2 * area, &rig, 342));
+    for (int side = 0; side < 2; ++side) {
+      CHECK(sides[1 + side * area] == 0xff0000);
+      for (int x = 0; x < width; ++x)
+        CHECK(sides[1 + side * area + (size_t)(12 * scale) * width + x] == 0);
+    }
+    CHECK(sides[0] == 0xdeadbeef && sides[2 * area + 1] == 0xdeadbeef);
+    free(sides);
+  }
+}
+
 static void test_triple_sky_horizon(void) {
   /* ROM-free race-shaped frame: red Mode 1 panorama above the IRQ split,
    * green Mode 7 below. A turned side ray remains above the ground plane well
@@ -791,6 +821,7 @@ int main(void) {
   test_hd_mode7();
   test_hd_composition_cache();
   test_triple_fallback();
+  test_triple_forced_blank();
   test_triple_sky_horizon();
   puts("F-Zero renderer: bounds, immutable frames, scene fallback, car identity, signed X, panorama wrap and HUD transitions passed");
   return 0;

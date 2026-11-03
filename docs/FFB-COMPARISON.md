@@ -30,7 +30,9 @@ amplitude0.20 normal /0.35 rough. At saved-default40 these become0.40,0.16,
 additional simultaneous force. The collision column is a boolean event edge,
 not a magnitude. Keep all of these distinct in the shared
 [FFB comparison](https://github.com/d-b-c-e/dbce-wheel-mod-toolkit/blob/master/docs/FFB-NORMALIZATION.md).
-World units per frame are not a calibrated speed in m/s.
+World units per frame are not a calibrated speed in m/s. A one-frame move of
+more than 32 units (a save-state load or rewind) holds speed and skips that
+frame's collision check, the same bound telemetry uses.
 
 Condition coefficients cannot be equated to constant-force torque without wheel
 displacement/velocity and device-response information. No strength/default or

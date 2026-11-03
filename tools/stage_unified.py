@@ -1,10 +1,11 @@
-"""Create a fresh explicit stock-only staging folder and build receipt.
+"""Create a fresh staging folder and build receipt; default stock-only.
 
 Run immediately after a clean source build. Reads only that build and its
 verified dependency roots; never launches binaries, copies configs or ROMs,
 or modifies a source/install folder. Use package_unified.py afterward for normal
 staging. --private-shared-input adds the provisional DLL and a private receipt;
-the public packager deliberately refuses it. Neither route admits Deluxe data.
+the public packager deliberately refuses it. --private-deluxe-install additionally
+requires the real installer's fresh scratch receipt and matching Native2 helper.
 """
 import argparse
 import json
@@ -13,8 +14,8 @@ import re
 import struct
 import subprocess
 
-from package_unified import ROOT, UI_ASSETS, SYSTEM_DLLS, OFL_FILES, OFL_SEPARATOR, digest, pe_imports
-from setup_bundle import payload as setup_payload
+from package_unified import ROOT, UI_ASSETS, SYSTEM_DLLS, OFL_FILES, OFL_SEPARATOR, NATIVE2_HELPER_SOURCE, digest, pe_imports, relative, validate_deluxe
+from setup_bundle import payload as setup_payload, no_links
 
 
 def git(root, *args):
@@ -146,7 +147,11 @@ def validate_shared_consumer(image, description, extras=False, host_controls=Fal
         raise ValueError("Private host consumer lacks the linked SharedHostControls opt-in flag")
 
 
-def stage(build, output, private_shared_input=False, private_controls_setup=False, private_host_controls=False):
+def stage(build, output, private_shared_input=False, private_controls_setup=False, private_host_controls=False,
+          private_deluxe_install=None):
+    deluxe = private_deluxe_install is not None
+    if deluxe and (not private_shared_input or not private_controls_setup):
+        raise ValueError("Private Deluxe requires explicit Shared/setup flags for the reviewed Native2 helper")
     if private_host_controls and not private_shared_input:
         raise ValueError("Private host controls require private Shared input")
     if private_controls_setup and not private_shared_input:
@@ -156,8 +161,10 @@ def stage(build, output, private_shared_input=False, private_controls_setup=Fals
         match = re.match(r"([^:#]+):[^=]+=(.*)", line)
         if match:
             cache[match[1]] = match[2]
-    if cache.get("FZERO_DELUXE_GEN_DIR") or cache.get("FZERO_DELUXE_DATA_FILE"):
+    if not deluxe and (cache.get("FZERO_DELUXE_GEN_DIR") or cache.get("FZERO_DELUXE_DATA_FILE")):
         raise ValueError("Stock-only build required; BS-generated module excluded")
+    if deluxe and not (cache.get("FZERO_DELUXE_GEN_DIR") and cache.get("FZERO_DELUXE_DATA_FILE")):
+        raise ValueError("Private Deluxe requires both generated-module and embedded-data build inputs")
     revision, tree = git(ROOT, "rev-parse", "HEAD"), git(ROOT, "rev-parse", "HEAD^{tree}")
     if git(ROOT, "status", "--porcelain", "--untracked-files=no"):
         raise ValueError("Commit tested source before the release build")
@@ -170,7 +177,7 @@ def stage(build, output, private_shared_input=False, private_controls_setup=Fals
              ("FZeroSNESRecomp.exe", "FZeroSNESRecompHeadless.exe")}
     if version.encode() not in files["FZeroSNESRecomp.exe"]:
         raise ValueError("Build does not contain product version")
-    if b"BSDELX1" in files["FZeroSNESRecomp.exe"]:
+    if not deluxe and b"BSDELX1" in files["FZeroSNESRecomp.exe"]:
         raise ValueError("Embedded private BS module excluded")
     links = dict((line.split()[3], line.split()[1]) for line in git(ROOT, "ls-files", "--stage", "snesrecomp", "recomp-ui").splitlines())
     dependencies = {}
@@ -194,8 +201,8 @@ def stage(build, output, private_shared_input=False, private_controls_setup=Fals
                 raise ValueError("Unpinned launcher font")
             files["licenses/" + Path(name).stem + ".txt"] = font_notice(files[name], Path(name).name)
         else:
-            relative = "assets/consoles/snes/img/pad.tga" if name.endswith("/pad.tga") else "assets/common/img/" + Path(name).name
-            if files[name] != (dependencies["recomp-ui"] / relative).read_bytes():
+            asset_path = "assets/consoles/snes/img/pad.tga" if name.endswith("/pad.tga") else "assets/common/img/" + Path(name).name
+            if files[name] != (dependencies["recomp-ui"] / asset_path).read_bytes():
                 raise ValueError("Unpinned launcher image")
     for name in git(ROOT, "ls-files", "assets/shaders").splitlines():
         files[name] = (ROOT / name).read_bytes()
@@ -227,18 +234,69 @@ def stage(build, output, private_shared_input=False, private_controls_setup=Fals
         files.update(extra) # Existing portable bundle already owns its runtime/notices.
     receipt = {"schema": "dbce.fzero-build", "version": 1, "productVersion": version,
                "sourceRevision": revision, "sourceTree": tree, "dirty": False,
-               "bsDeluxe": False, "dependencies": links,
+               "bsDeluxe": deluxe, "dependencies": links,
                "files": {n: digest(d) for n, d in sorted(files.items())}}
     if shared is not None:
         receipt["privateSharedInput"] = shared
     if setup is not None:
         receipt["privateControlsSetup"] = setup
+    if deluxe:
+        install = Path(private_deluxe_install)
+        no_links(install)
+        if (install / "build-receipt.json").exists():
+            raise ValueError("Stock/Deluxe receipt ambiguity")
+        receipt_path = install / "install-receipt.json"
+        no_links(receipt_path)
+        if receipt_path.stat().st_size > 256 * 1024:
+            raise ValueError("Oversized Deluxe install receipt")
+        raw = receipt_path.read_bytes()
+        installed = json.loads(raw.decode("utf-8-sig"))
+        backup = installed.get("backup", "")
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}-[a-z0-9][a-z0-9-]*", backup):
+            raise ValueError("Deluxe rollback input missing")
+        rollback_path = install / "deployment-backups" / backup / "backup-state.json"
+        no_links(rollback_path)
+        if rollback_path.stat().st_size > 256 * 1024:
+            raise ValueError("Oversized Deluxe rollback input")
+        rollback = rollback_path.read_bytes()
+        files["FZeroSNESRecomp-wheel-launcher.exe"] = files.pop("FZeroSNESRecomp.exe")
+        files["tools/Recording.ps1"] = (ROOT / "tools/Recording.ps1").read_bytes()
+        files["install-receipt.json"] = raw
+        files["private-inputs/backup-state.json"] = rollback
+        shared["controls"]["consumer"] = "FZeroSNESRecomp-wheel-launcher.exe"
+        generated = Path(cache["FZERO_DELUXE_GEN_DIR"])
+        data_path = Path(cache["FZERO_DELUXE_DATA_FILE"])
+        no_links(generated)
+        no_links(data_path)
+        if data_path.stat().st_size > 128 * 1024 * 1024:
+            raise ValueError("Oversized Deluxe embedded-data input")
+        data = data_path.read_bytes()
+        sources = sorted(generated.glob("*.c")) + [generated / "deluxe_namespace.h"]
+        if len(sources) < 2:
+            raise ValueError("Private generated Deluxe sources missing")
+        for path in sources:
+            no_links(path)
+        receipt["privateDeluxe"] = {"helperSource": NATIVE2_HELPER_SOURCE,
+            "installReceiptSha256": digest(raw), "rollbackStateSha256": digest(rollback),
+            "generatedSources": {p.name: digest(p.read_bytes()) for p in sources},
+            "embeddedData": {"sha256": digest(data), "bytes": len(data),
+                             "offset": files["FZeroSNESRecomp-wheel-launcher.exe"].find(data)}}
+        for row in installed["files"]:
+            path = install.joinpath(*relative(row["name"]).parts)
+            no_links(path)
+            if row["name"] not in files or digest(path.read_bytes()) != digest(files[row["name"]]):
+                raise ValueError("Deluxe scratch install differs from exact build inputs")
+        receipt["files"] = {n: digest(d) for n, d in sorted(files.items())}
+        validate_deluxe(output / "payload", receipt, files, build / "controls-setup")
     output.mkdir(parents=True, exist_ok=False)
     for name, data in files.items():
         path = output / "payload" / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
-    write_receipts(output, receipt)
+    if deluxe:
+        (output / "build-receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+    else:
+        write_receipts(output, receipt)
     return output / "build-receipt.json"
 
 
@@ -252,8 +310,10 @@ if __name__ == "__main__":
                         help="Stage the exact qualified portable setup bundle with the private Shared consumer")
     parser.add_argument("--private-host-controls", action="store_true",
                         help="Publish the opt-in six-slot Shared save-state browser/rewind consumer contract")
+    parser.add_argument("--private-deluxe-install", type=Path, help="Fresh scratch target from the real Deluxe installer; never an owner install")
     args = parser.parse_args()
     try:
-        print(stage(args.build.resolve(), args.output.resolve(), args.private_shared_input, args.private_controls_setup, args.private_host_controls))
+        print(stage(args.build.resolve(), args.output.resolve(), args.private_shared_input, args.private_controls_setup,
+                    args.private_host_controls, args.private_deluxe_install))
     except (ValueError, OSError, KeyError, struct.error, subprocess.CalledProcessError) as error:
         raise SystemExit(str(error))

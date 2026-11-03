@@ -9,6 +9,9 @@
     and hashes; install-receipt.json records what was installed. config.ini, fzero-video.ini, keybinds.ini, saves,
     the ROM and every other file are never touched. Refuses while the game is running.
 
+    -PrivatePackageScratch admits only an explicitly supplied, existing empty target directory for private
+    package preparation. The normal existing-launcher guard and rollback route are unchanged.
+
     The build must be the configured integration build (build-merge: BS Deluxe embedded). Build it with
     `cmd /c "call vcvars64.bat && cmake --build build-merge"` and run `ctest --test-dir build-merge` first.
 
@@ -31,6 +34,7 @@ param(
     [switch]$PrivateSharedInput,
     [switch]$PrivateControlsSetup,
     [switch]$PrivateHostControls,
+    [switch]$PrivatePackageScratch,
     [string]$SetupPython = 'python'
 )
 $ErrorActionPreference = 'Stop'
@@ -188,7 +192,16 @@ function Restore-Files([string]$from, $state,
     }
 }
 if (Get-Process | Where-Object { $_.Name -like 'FZeroSNESRecomp*' }) { throw 'F-Zero is running; close it first. Nothing changed.' }
-if (-not (Test-Path -LiteralPath (Join-Path $Target $launcher))) { throw "Not the F-Zero Stream Deck folder: $Target" }
+if ($PrivatePackageScratch) {
+    if ($Rollback -or !$PSBoundParameters.ContainsKey('Target') -or !(Test-Path -LiteralPath $Target -PathType Container)) {
+        throw '-PrivatePackageScratch requires an explicit existing empty -Target and cannot be used with -Rollback. Nothing changed.'
+    }
+    if (((Get-Item -LiteralPath $Target -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+        @(Get-ChildItem -LiteralPath $Target -Force).Count) {
+        throw '-PrivatePackageScratch requires an empty target without links. Nothing changed.'
+    }
+}
+elseif (-not (Test-Path -LiteralPath (Join-Path $Target $launcher))) { throw "Not the F-Zero Stream Deck folder: $Target" }
 $checkedPaths = if ($Rollback) { $restorableFiles } else { $transactionFiles }
 foreach ($name in @($checkedPaths) + 'deployment-backups') {
     $current = [IO.Path]::GetFullPath((Join-Path $Target $name))
@@ -269,6 +282,19 @@ if (!(Test-Path -LiteralPath $header) -or
     !$linkedText.Contains('fzero.session-status@1') -or ($PrivateSharedInput -and !$linkedText.Contains('[fzero-shim]'))) {
     throw 'Build source stamp is stale or absent; reconfigure and rebuild from this clean commit. Nothing changed.'
 }
+# These exact strings are linked by the Native mapper, not by the receipt producer.
+$controlsProfileActions = @('nativeX','nativeY','nativeL','nativeR','saveStateMenu','rewind')
+foreach ($action in $controlsProfileActions) {
+    if (!$linkedText.Contains($action + [char]0)) {
+        throw 'Built Native mapper lacks optional profile actions; rebuild from the clean supporting source. Nothing changed.'
+    }
+}
+$nativeControls = [ordered]@{ schema=2; adapter='fzero-raw-wheel-2'; consumer=$launcher }
+foreach ($key in @('SteeringProfileBinding','AcceleratorProfileBinding','BrakeProfileBinding')) {
+    if (!$linkedText.Contains($key + [char]0)) {
+        throw 'Built Native mapper lacks Schema 2 axis profiles; rebuild from the clean supporting source. Nothing changed.'
+    }
+}
 $sessionCapability = Recording-Capability ([bool]$PrivateSharedInput) $linkedText
 if ($PrivateSharedInput -and $shared.metadata.extrasAbi -eq 1) { Assert-SharedExtrasConsumer $linkedText ([bool]$PrivateHostControls) }
 $setup = $null
@@ -301,6 +327,8 @@ if (-not $changes.Count -and (Test-Path -LiteralPath $oldReceiptPath)) {
     }
     if ($oldReceipt.schemaVersion -eq 1 -and $oldReceipt.controlsProfileSchema -eq 1 -and
         $oldReceipt.controlsProfileAdapter -ceq 'fzero-raw-wheel-1' -and $oldReceipt.sourceCommit -ceq $commit -and
+        (ConvertTo-Json -InputObject $oldReceipt.controlsProfileActions -Compress) -ceq (ConvertTo-Json -InputObject $controlsProfileActions -Compress) -and
+        (ConvertTo-Json -InputObject $oldReceipt.nativeControls -Compress) -ceq (ConvertTo-Json -InputObject $nativeControls -Compress) -and
         $oldReceipt.launcherSha256 -ceq (HashOrNull $built) -and $oldReceipt.wheelFfbSha256 -ceq $nativeHash.ToUpperInvariant() -and
         $oldReceipt.session.schema -ceq 'fzero.session-capability@1' -and $oldReceipt.session.protocol -ceq 'fzero.session-control@1' -and
         $oldReceipt.session.automatedRecord -eq $sessionCapability.automatedRecord -and
@@ -341,6 +369,8 @@ foreach ($name in $changes) {
 }
 $receipt = [ordered]@{
     schemaVersion = 1; controlsProfileSchema = 1; controlsProfileAdapter = 'fzero-raw-wheel-1'
+    controlsProfileActions = $controlsProfileActions
+    nativeControls = $nativeControls
     launcher = $launcher; launcherSha256 = (HashOrNull (Join-Path $Target $launcher)); wheelFfbSha256 = (HashOrNull (Join-Path $Target 'WheelFfb.dll'))
     label = $Label; sourceCommit = $commit; installedUtc = [DateTime]::UtcNow.ToString('o'); buildDir = $BuildDir; backup = $stamp
     session = $sessionCapability

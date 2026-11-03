@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 static int s_checks;
 #define CHECK(x) do { ++s_checks; if (!(x)) { fprintf(stderr, "%d: %s (%s)\n", __LINE__, #x, SDL_GetError()); exit(1); } } while (0)
@@ -35,6 +36,14 @@ static const char *const kProfile[] = {
     "camera = button 32 " WHEEL " name=\"MOZA R12 Base\"",
 };
 enum { kProfileLines = (int)(sizeof(kProfile) / sizeof(kProfile[0])) };
+
+static const char *const kCalProfile[] = {
+    "Schema = 2", "Revision = calibrated-1",
+    "steer = axis 0 " WHEEL " range=0..65535 rest=32768 travel=-1 cal=1000..30000..60000 inverted",
+    "throttle = axis 2 " WHEEL " range=0..65535 rest=65535 travel=-1 cal=60000..10000",
+    "brake = axis 5 " WHEEL " range=0..65535 rest=0 travel=+1 cal=9000..59000 inverted",
+};
+enum { kCalProfileLines = (int)(sizeof(kCalProfile) / sizeof(kCalProfile[0])) };
 
 static int key(const FzeroControlsPlan *p, const char *name) {
   for (int i = 0; i < p->nkeys; ++i)
@@ -129,9 +138,9 @@ static void plan_tests(void) {
   plan_one("start = button 35 " WHEEL, &p);
   CHECK(p.ok && key(&p, "SteeringInvert") == 0); /* later normal profile clears inversion */
 
-  const char *schema2[] = {"Schema = 2", "steer = axis 0 " WHEEL " range=0..65535 rest=32768 travel=-1"};
-  FzeroControlsPlanLines(schema2, 2, &p);
-  CHECK(!p.ok && strstr(p.error, "Schema 2"));
+  const char *schema3[] = {"Schema = 3", "steer = axis 0 " WHEEL " range=0..65535 rest=32768 travel=-1"};
+  FzeroControlsPlanLines(schema3, 2, &p);
+  CHECK(!p.ok && strstr(p.error, "Schema 3"));
   /* A device whose SDL numbering was never compared with DirectInput's is refused, not guessed. */
   const char *other[] = {"Schema = 1", "steer = axis 0 dev={11111111-2222-3333-4444-555555555555} "
                          "prod={56781234-0000-0000-0000-504944564944} range=0..65535 rest=32768 travel=-1",
@@ -189,7 +198,7 @@ static void fault_tests(void) {
   const char *tmp = "controls-fault-test.ini.controls-tmp";
   const char *original = "[Controller]\nSourceP1 = 1\n\n[Controller.abc]\nButtonX = 33\n";
   FzeroControlsPlan plan;
-  FzeroControlsPlanLines(kProfile, kProfileLines, &plan);
+  FzeroControlsPlanLines(kCalProfile, kCalProfileLines, &plan);
   CHECK(plan.ok);
   remove(backup);
   for (int pass = 0; pass < 2; ++pass) {   /* without a backup yet (the backup step fails), then with one */
@@ -210,10 +219,10 @@ static void fault_tests(void) {
   CHECK(FzeroControlsWrite(path, "abc", &plan) == 1);
   char *applied = slurp(path);
   int v = 0;
-  CHECK(FzeroIniReadInt(path, "Controller.abc", "ButtonStart", &v) && v == 35);
+  CHECK(FzeroIniReadInt(path, "Controller.abc", "SteeringInvert", &v) && v == 1);
   CHECK(FzeroIniReadInt(path, "Controller.abc", "ButtonX", &v) && v == 33);
   char value[64];
-  CHECK(FzeroIniReadString(path, "ControlsApplied", "Revision", value, sizeof(value)) && !strcmp(value, "rev-1"));
+  CHECK(FzeroIniReadString(path, "ControlsApplied", "Revision", value, sizeof(value)) && !strcmp(value, "calibrated-1"));
   CHECK(FzeroControlsWrite(path, "abc", &plan) == 1); /* the same plan again changes nothing */
   char *again = slurp(path);
   CHECK(applied && again && !strcmp(applied, again));
@@ -222,6 +231,87 @@ static void fault_tests(void) {
   CHECK(!exists(tmp));
   remove(path);
   remove(backup);
+}
+
+static void calibration_tests(void) {
+  FzeroControlsPlan plan;
+  FzeroControlsPlanLines(kCalProfile, kCalProfileLines, &plan);
+  CHECK(plan.ok && plan.axis_profiles == 7u);
+  const char *path = "controls-calibration-test.ini";
+  const char *backup = "controls-calibration-test.ini.before-profile-controls";
+  remove(backup);
+  write_file(path, "[Graphics]\nFullscreen=1\n[Controller.abc]\nDeadzone=3\nSteeringResponsePercent=75\nPedalThreshold=2000\nButtonX=33\n");
+  CHECK(FzeroControlsWrite(path, "abc", &plan));
+  FzeroControlsNativeLoad(path, "Controller.abc");
+  double n;
+  CHECK(FzeroControlsNativeNormalize(0, 0, 1, 30000 - 32768, &n) == 1 && n == 0);
+  CHECK(FzeroControlsNativeNormalize(0, 0, 1, 1000 - 32768, &n) == 1 && n == 1);
+  CHECK(FzeroControlsNativeNormalize(0, 0, 1, 60000 - 32768, &n) == 1 && n == -1);
+  CHECK(FzeroControlsNativeNormalize(0, 0, 0, 0 - 32768, &n) == 1 && n == -1); // saturates; launcher inversion toggled
+  CHECK(FzeroControlsNativeNormalize(0, 0, 0, 65535 - 32768, &n) == 1 && n == 1);
+  CHECK(FzeroControlsNativeNormalize(0, 0, 0, 15000 - 32768, &n) == 1 && fabs(n + 15000.0 / 29000.0) < 1e-12);
+  CHECK(FzeroControlsNativeNormalize(0, 0, 0, 45000 - 32768, &n) == 1 && n == 0.5);
+  CHECK(FzeroControlsNativeNormalize(1, 2, 1, 60000 - 32768, &n) == 1 && n == 0);
+  CHECK(FzeroControlsNativeNormalize(1, 2, 1, 10000 - 32768, &n) == 1 && n == 1);
+  CHECK(FzeroControlsNativeNormalize(1, 2, 1, 35000 - 32768, &n) == 1 && n == 0.5);
+  CHECK(FzeroControlsNativeNormalize(2, 5, 1, 9000 - 32768, &n) == 1 && n == 1); // explicit inversion once
+  CHECK(FzeroControlsNativeNormalize(2, 5, 1, 59000 - 32768, &n) == 1 && n == 0);
+  CHECK(FzeroControlsNativeNormalize(2, 5, 0, 59000 - 32768, &n) == 1 && n == 1);
+  CHECK(FzeroControlsNativeNormalize(0, 1, 0, 0, &n) == 0); // a different native axis never borrows this calibration
+  int v;
+  CHECK(FzeroIniReadInt(path, "Controller.abc", "Deadzone", &v) && v == 3);
+  CHECK(FzeroIniReadInt(path, "Controller.abc", "SteeringResponsePercent", &v) && v == 75);
+  CHECK(FzeroIniReadInt(path, "Controller.abc", "PedalThreshold", &v) && v == 2000);
+  CHECK(FzeroIniReadInt(path, "Controller.abc", "ButtonX", &v) && v == 33);
+
+  const char *bad[] = {"Schema = 2", kCalProfile[2],
+      "throttle = axis 2 " WHEEL " range=0..65535 rest=0 travel=+1 cal=100..200"};
+  FzeroControlsPlanLines(bad, 3, &plan);
+  CHECK(!plan.ok && strstr(plan.error, "cal"));
+  char *before = slurp(path);
+  CHECK(!FzeroControlsWrite(path, "abc", &plan));
+  char *after = slurp(path);
+  CHECK(before && after && !strcmp(before, after));
+  free(before); free(after);
+  const char *bad_range[] = {"Schema = 2", "steer = axis 0 " WHEEL " range=-32768..32767 rest=0 travel=-1 cal=-30000..0..30000"};
+  FzeroControlsPlanLines(bad_range, 2, &plan);
+  CHECK(!plan.ok && strstr(plan.error, "0..65535"));
+  const char *other_device[] = {"Schema = 2", kCalProfile[2],
+      "brake = axis 2 " SHIFTER " range=0..65535 rest=0 travel=+1 cal=1000..60000"};
+  FzeroControlsPlanLines(other_device, 3, &plan);
+  CHECK(!plan.ok && strstr(plan.error, "one controller"));
+  const char *other_button[] = {"Schema = 2", kCalProfile[2], "start = button 1 " SHIFTER};
+  FzeroControlsPlanLines(other_button, 3, &plan);
+  CHECK(!plan.ok && strstr(plan.error, "one controller"));
+  const char *diagonal[] = {"Schema = 2", kCalProfile[2], "navUp = hat 0 4500 " WHEEL};
+  FzeroControlsPlanLines(diagonal, 3, &plan);
+  CHECK(!plan.ok && strstr(plan.error, "cannot be represented"));
+  const char *unsupported[] = {"Schema = 2", kCalProfile[2], "clutch = button 1 " WHEEL};
+  FzeroControlsPlanLines(unsupported, 3, &plan);
+  CHECK(!plan.ok && strstr(plan.error, "no Native"));
+  const char *contradictory[] = {"Schema = 2", kCalProfile[2], "steer ="};
+  FzeroControlsPlanLines(contradictory, 3, &plan);
+  CHECK(!plan.ok && strstr(plan.error, "duplicate"));
+  CHECK(!FzeroInjectTestArm("abc", contradictory, 3));
+  CHECK(!FzeroInjectTestArm("abc", bad, 3));
+  CHECK(!FzeroInjectTestArm("abc", other_button, 3));
+
+  CHECK(FzeroControlsIniSet(path, "Controller.abc", "SteeringProfileBinding", "axis 0 broken"));
+  FzeroControlsNativeLoad(path, "Controller.abc");
+  CHECK(FzeroControlsNativeNormalize(0, 0, 0, 32767, &n) == -1 && n == 0); // no legacy fallback on corruption
+  const char *legacy[] = {"Schema = 1", kProfile[4]};
+  FzeroControlsPlanLines(legacy, 2, &plan);
+  CHECK(plan.ok && FzeroControlsWrite(path, "abc", &plan));
+  FzeroControlsNativeLoad(path, "Controller.abc");
+  CHECK(FzeroControlsNativeNormalize(0, 0, 0, 0, &n) == 0); // Schema 1 restores its exact legacy law
+  CHECK(FzeroControlsNativeNormalize(1, 2, 1, 10000 - 32768, &n) == 1 && n == 1); // omission preserves native pedal config
+  const char *unbound[] = {"Schema = 1", kProfile[4], "throttle ="};
+  FzeroControlsPlanLines(unbound, 3, &plan);
+  CHECK(plan.ok && FzeroControlsWrite(path, "abc", &plan));
+  FzeroControlsNativeLoad(path, "Controller.abc");
+  CHECK(FzeroControlsNativeNormalize(1, 2, 1, 0, &n) == 0);
+  FzeroControlsNativeLoad(NULL, NULL);
+  remove(path); remove(backup);
 }
 
 #if SNESRECOMP_SDL3
@@ -437,6 +527,69 @@ static void startup_tests(void) {
   CHECK(FzeroIniReadInt(cfg, section, "ButtonStart", &start) && start == 40);
   CHECK(FzeroIniReadInt(cfg, section, "ButtonY", &y) && y == 7);
 
+  /* Schema 2 passes through the actual game reader on this virtual-only wheel.
+   * Apply and SDL reads use the same off-center locks/reversed pedal travel. */
+  FzeroControlsPlan calibrated;
+  FzeroControlsPlanLines(kCalProfile, kCalProfileLines, &calibrated);
+  CHECK(calibrated.ok && FzeroControlsWrite(cfg, guid, &calibrated));
+  CHECK(FzeroControlsIniSet(cfg, section, "AnalogSteering", "0"));
+  CHECK(FzeroControlsIniSet(cfg, section, "Deadzone", "25"));
+  FzeroGamepadConfigure(cfg, guid, 25);
+  FzeroGamepadRefresh(&pad);
+  CHECK(!pad);
+  CHECK(SDL_SetJoystickVirtualAxis(wheel, 0, 30000 - 32768));
+  CHECK(SDL_SetJoystickVirtualAxis(wheel, 2, 60000 - 32768));
+  CHECK(SDL_SetJoystickVirtualAxis(wheel, 5, 59000 - 32768));
+  SDL_UpdateJoysticks();
+  CHECK(FzeroGamepadRead(pad) == 0);
+  /* Native deadzone is applied once, after the off-center calibration. */
+  CHECK(SDL_SetJoystickVirtualAxis(wheel, 0, 36000 - 32768)); /* +20%, inside 25% */
+  SDL_UpdateJoysticks();
+  CHECK(FzeroGamepadRead(pad) == 0);
+  CHECK(SDL_SetJoystickVirtualAxis(wheel, 0, 39000 - 32768)); /* +30%, outside 25% */
+  SDL_UpdateJoysticks();
+  CHECK(FzeroGamepadRead(pad) == 0x0040u); /* inverted once */
+  CHECK(SDL_SetJoystickVirtualAxis(wheel, 0, 1000 - 32768));
+  SDL_UpdateJoysticks();
+  CHECK(FzeroGamepadRead(pad) == 0x0080u);
+  CHECK(SDL_SetJoystickVirtualAxis(wheel, 0, 60000 - 32768));
+  SDL_UpdateJoysticks();
+  CHECK(FzeroGamepadRead(pad) == 0x0040u);
+  CHECK(SDL_SetJoystickVirtualAxis(wheel, 0, 30000 - 32768));
+  CHECK(SDL_SetJoystickVirtualAxis(wheel, 2, 10000 - 32768));
+  SDL_UpdateJoysticks();
+  CHECK(FzeroGamepadRead(pad) == 0x0001u && FzeroGamepadReadOverlay(pad) == 0);
+  CHECK(SDL_SetJoystickVirtualAxis(wheel, 2, 60000 - 32768));
+  CHECK(SDL_SetJoystickVirtualAxis(wheel, 5, 9000 - 32768));
+  SDL_UpdateJoysticks();
+  CHECK(FzeroGamepadRead(pad) == 0x0002u);
+  CHECK(FzeroGamepadReadSupplemental(pad, 0xffffffffu) == 0); // calibration must not create axes in supplemental reads
+  CHECK(FzeroInjectTestArm(guid, kCalProfile, kCalProfileLines));
+  FzeroInjectTestClock(5000);
+  CHECK(FzeroInjectTestCommand("inject action steer 0 ms=500", why, sizeof why));
+  CHECK(FzeroInjectTestCommand("inject action throttle 0 ms=500", why, sizeof why));
+  CHECK(FzeroInjectTestCommand("inject action brake 0 ms=500", why, sizeof why));
+  CHECK(FzeroGamepadRead(pad) == 0);
+  CHECK(FzeroInjectTestCommand("inject action steer 1 ms=500", why, sizeof why));
+  CHECK(FzeroInjectTestCommand("inject action throttle 1 ms=500", why, sizeof why));
+  CHECK(FzeroGamepadRead(pad) == 0x0081u); // canonical denormalization and Native normalization agree
+  FzeroInjectDeviceClosed();
+  FzeroGamepadShutdown(&pad);
+  CHECK(FzeroControlsIniSet(cfg, section, "AnalogSteering", "1"));
+  FzeroGamepadConfigure(cfg, guid, 25);
+  FzeroGamepadRefresh(&pad);
+  CHECK(SDL_SetJoystickVirtualAxis(wheel, 2, 60000 - 32768));
+  CHECK(SDL_SetJoystickVirtualAxis(wheel, 5, 59000 - 32768));
+  static const int calibrated_locks[] = {1000, 30000, 60000};
+  static const uint32_t calibrated_bits[] = {0x0080u, 0, 0x0040u};
+  for (int i = 0; i < 3; ++i) {
+    CHECK(SDL_SetJoystickVirtualAxis(wheel, 0, calibrated_locks[i] - 32768));
+    SDL_UpdateJoysticks();
+    CHECK(FzeroGamepadRead(pad) == calibrated_bits[i]);
+    CHECK(FzeroGamepadReadOverlay(pad) == calibrated_bits[i]);
+  }
+  FzeroGamepadShutdown(&pad);
+
   /* Two attached wheels with the profile's vendor/product: SDL cannot tell them apart, so nothing is written. */
   desc.name = "second MOZA R12 Base";
   SDL_JoystickID twin = SDL_AttachVirtualJoystick(&desc);
@@ -470,6 +623,7 @@ int main(void) {
   plan_tests();
   ini_tests();
   fault_tests();
+  calibration_tests();
 #if SNESRECOMP_SDL3
   startup_tests();
 #endif

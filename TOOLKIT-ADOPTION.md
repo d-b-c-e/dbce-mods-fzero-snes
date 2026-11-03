@@ -1,5 +1,23 @@
 # Toolkit standards adoption
 
+## October 23 scoped Native helper admission source
+
+STD-033/035/037 source follow-up adds `nativeControls` to the Deluxe install
+receipt: schema2, adapter `fzero-raw-wheel-2`, and the renamed launcher consumer.
+It is separate from the retained top-level schema1/adapter1 and Shared controls
+descriptor. The installer requires all three linked canonical axis-profile keys,
+in addition to the clean source stamp and six action markers, before declaring
+Native calibration. Receipt refresh/rollback preserve unknown metadata and
+owner settings. No global `ini-controls-2`, Shared/Core upgrade, stock receipt,
+product/package rebuild, owner install or physical qualification is implied.
+Companion Wheelkit source on `lamo/fzero-native-schema2-helper-20261023` adds the
+version-gated Native portable import/Preview/Apply path; focused F-Zero fixtures
+227/227 and helper GUI compilation passed. The clean-source game producer
+fixture passed117 inert checks under Windows PowerShell5.1; evidence is
+`build-native-helper-check/native-pin-ps51.log`. Existing STD-019
+unchecked and STD-021/031 physical pending states remain unchanged; all37 ledger
+IDs remain represented.
+
 ## October 19 Native profile steering direction
 
 STD-033 source follow-up adds the previously unsupported Native steering
@@ -10,7 +28,7 @@ no Native wheel settings. `fzero_controls`225 checks and `fzero_mods` pass in
 focused offline fixtures. See the October 19 source successor in
 `docs/2026-10-10-profile-controls.md` for exact receipt and retained failures.
 All37 ledger IDs remain represented. STD-019 stays unchecked;
-STD-021/031 physical normalization and STD-037 schema2 remain pending, and
+STD-021/031 physical normalization remain pending; STD-037 source adoption below remains partial, and
 STD-030 in-game F6 parity stays partial. This source change does not promote
 installed, rendered, force, physical or distribution acceptance.
 
@@ -28,14 +46,14 @@ Audited 2026-10-04 (read-only standards audit); STD-001 and STD-010 revised 2026
 | STD-004 | Consistent settings UX | partial | settings in the recomp launcher Mods page; F6/F8 taken by save slots/rewind (sdl_main.c:2020,2481-2503) |
 | STD-005 | Camera numpad layout 8/2 9/3 4/6 7/1 +/- 5 | n/a | no 3D camera rig; Mode 7 fixed chase view |
 | STD-006 | Camera step sizes are settings | n/a | no adjustable camera mount |
-| STD-007 | Triple screens in one wide window | partial | side panels draw ground, sky and now live opponents (712a7cf, billboard at world anchor; seen headless frame 2070); manual enable, no Auto; side-by-side test install "F-Zero (SNES Recomp) triple-test"; seen at the rig under Surround 2026-10-05 (attract demo, 60 fps; side ground aliases at distance) |
+| STD-007 | Triple screens in one wide window | partial | side panels draw ground, sky and now live opponents (712a7cf, billboard at world anchor; seen headless frame 2070); manual enable, no Auto; side-by-side test install "F-Zero (SNES Recomp) triple-test"; seen at the rig under Surround 2026-10-05 (attract demo, 60 fps; side ground aliases at distance). October23 source corrects forced-blank side rows after sky/vehicle composition; synthetic renderer regression only, no new display or performance acceptance. |
 | STD-008 | Display changes: game applies once | partial | SDL FULLSCREEN_DESKTOP, no mode changes (likely compliant); watchdog run pending |
 | STD-009 | Dashboard telemetry matches the HUD | partial | speed from position deltas at a guessed 0.25 m/unit, not the HUD; RPM derived from speed (1200-12000, documented); gear fixed at 1 |
 | STD-010 | Install the latest build for testing | adopted | `tools/Install-StreamDeck.ps1` backs up the replaced launcher/WheelFfb.dll, installs build-merge's exe as FZeroSNESRecomp-wheel-launcher.exe (the Stream Deck target) and writes install-receipt.json; `-Rollback` restores. Installed October 8 from 4ac6f6b (steering-native50ba), five protected files unchanged; 17 CTest and 31 adapter checks pass. Muted plain launcher rendered/exited 0, 36 protected files restored; settings navigation and force remain untested. |
 
 | STD-011 | Work lands on main | adopted | Packaging research starts from b7eb125 and returns to main; private ROMs, generated content and recordings remain outside release archives. |
 | STD-012 | Reproduce the route and preserve original signals | partial | October 12 private Deluxe player Practice original has 2,351 exact cold WRAM checkpoints; final consumed words equal the shared capture and computed force/telemetry remain available under muted delivery. Original immutable. New CLI graphically replays the same 2,351 frames and a fresh 900-frame preview exactly, with rendered status; owner normalization remains open. |
-| STD-013 | The installed build launches plainly | partial | The Stream Deck key launches the integration build with no extra arguments (grid PLN 🧪); triple screens start only when the Triple Screen mod is on in the launcher |
+| STD-013 | The installed build launches plainly | partial | The Stream Deck key launches the integration build with no extra arguments (grid PLN ðŸ§ª); triple screens start only when the Triple Screen mod is on in the launcher |
 | STD-014 | Request reciprocal review when progress stalls | adopted | Process standard; reviews go through the portfolio inbox |
 | STD-015 | Triples on Surround and on separate monitors | partial | Display layout Surround (one spanning fullscreen display) or Separate monitors (one borderless SDL window per display); Surround seen at the rig 2026-10-05, separate displays not yet at the rig |
 | STD-016 | Telemetry: Forza Horizon layout, on by default | partial | Forza Horizon 324-byte UDP built in, but off by default (`[Telemetry] Enabled=1` in config.ini) |
@@ -55,11 +73,15 @@ Audited 2026-10-04 (read-only standards audit); STD-001 and STD-010 revised 2026
 | STD-030 | F6 panel first | partial | F6 opens an in-game settings panel (src/fzero_panel.c model, overlay in sdl_main.c; [KeyMap] ModMenu): triple screens, output, curve presets, widescreen/aspect, presentation FPS, FPS readout, crash-flash reduction, saved through the launcher's fzero-video.ini writer. Plain F6 no longer loads quick slot 6 (Shift+F6 saves; the browser loads). Wheel/FFB/controls remain launcher-only; not yet seen at the rig. |
 | STD-031 | New Art reference level | pending | Physical normalization remains pending; this controls work does not change forces. |
 | STD-032 | Wheelkit reads portfolio records | partial | Installer declares hash-bound fzero-raw-wheel-1 controls in install-receipt.json after checking configured and linked source stamps. Restores/withdraws capability with the runtime. Wheelkit's Native writer exists. October 13 source-only private stager adds a separate Shared controls descriptor inside its existing build receipt; installed receipts and catalog remain unchanged. |
-| STD-033 | Rig-profile controls contract | partial | `[Controls]` in config.ini -> `[Controller.<SDL GUID>]` at start (src/fzero_controls.cpp, the toolkit's parser vendored from e4502a6); `fzero_controls` ctest: 102 checks, translation, startup apply and the game's reader on a virtual wheel. Installed 2026-10-10 (`docs/2026-10-10-profile-controls.md`): the owner's profile applied by the game itself to the real R12 at start. Wheelkit Native writer exists; owner acceptance and Shared production Apply qualification remain separate. DirectInput injection does not reach the Native SDL path. 2026-10-22 binding coverage (source read only): the Native profile translates steer, throttle/brake (axes), confirm->A, back->B, start, select and navUp/Down/Left/Right; X/Y/L/R and save/rewind are not translated and bind only through the launcher's direct `[Controller.<guid>]` keys; Shared binds the same common actions through Core. In-game and physical delivery of these bindings is unverified. See docs/2026-10-22-game-action-bindings.md. |
+| STD-033 | Rig-profile controls contract | partial | `[Controls]` in config.ini -> `[Controller.<SDL GUID>]` at start (src/fzero_controls.cpp, the toolkit's parser vendored from e4502a6); `fzero_controls` ctest: 102 checks, translation, startup apply and the game's reader on a virtual wheel. Installed 2026-10-10 (`docs/2026-10-10-profile-controls.md`): the owner's profile applied by the game itself to the real R12 at start. Wheelkit Native writer exists; owner acceptance and Shared production Apply qualification remain separate. DirectInput injection does not reach the Native SDL path. 2026-10-22 binding coverage (source read only): the Native profile translates steer, throttle/brake (axes), confirm->A, back->B, start, select and navUp/Down/Left/Right; Native source now translates `nativeX/nativeY/nativeL/nativeR/saveStateMenu/rewind` into the existing `[Controller.<guid>]` keys; Shared binds the same common actions through Core. In-game and physical delivery of these bindings is unverified. See docs/2026-10-22-game-action-bindings.md. |
 | STD-034 | Apply qualified by a closed loop | partial | Existing raw-wheel evidence remains separate. October 12 shared-shim production Core diagnostic reached player Practice, matched 2,351 consumed words and cold WRAM checks; this injected drive is not Wheelkit-to-shim or physical owner-control qualification. See docs/2026-10-12-shim-diagnostic.md. |
 | STD-035 | Identity, provenance and failure rules | partial | Exact profile bytes through pinned ABI2; muted latched private Deluxe original and native terminal shutdown qualified October 12. Five private CLI runs exit0 with all77 owner pins exact; nonlatched preview seals and matches final consumed words. Ordinary Shared9790788 failed in legacy SDL acquisition (retained dump). Corrected7187c57 disables SDL for Shared; a private900-frame at-rest original and fresh graphical replay pass exactly, normal exits and owner77 pins unchanged. Legacy wheel extras and launcher remain explicitly unavailable pending owned-reader integration. Shared+FFB refusal remains pending the ownership bridge. No installed capability/default changed. See docs/2026-10-12-ordinary-shared-input.md. |
-| STD-036 | Bindings from each device | partial | Shared Core supports one owned epoch per bound instance in the diagnostic; installed raw-wheel writer still has its R12/single-device scope. October 14 source adapter adds opt-in declared fzero-snes.x/y/l/r on the same owned extras tick, with 36/36 device-free fixtures and independent source review. Clean ea568c2 x64/MT BF6455E6 native candidate is archived with passing native fixtures and pure consumer ABI/export checks; new private source pin/staging owns both headers, while old installed four-file receipts retain extras-off compatibility. Adoption fd52deb passed 33 package tests, 34 synthetic installer checks, 51 companion checks, 36 consumer cases and actual five-file dependency-only staging. Runtime, physical and multi-device acceptance remain open. No unrelated generic action aliases. See docs/2026-10-14-shared-extras.md. 2026-10-22 binding coverage (source read only): Shared binds steer, throttle/brake, confirm/back/start/select and navigation by default, fzero-snes.x/y/l/r with `SharedExtras=1`, and saveMenu/rewind with `SharedHostControls=1` as well; gears, clutch, handbrake, camera, lookBack, reset, horn, modMenu and muteFfb are declared unsupported. Native binds the common actions from the profile and X/Y/L/R plus save/rewind only through direct launcher keys, all on one device. In-game and physical delivery is unverified. See docs/2026-10-22-game-action-bindings.md. |
-| STD-037 | Measured endpoints through schema 2 | pending | This consumer remains schema 1. No measured calibration transfer is advertised; Nene owns the coordinated parser/profile follow-up. |
+| STD-036 | Bindings from each device | partial | Shared Core supports one owned epoch per bound instance in the diagnostic; installed raw-wheel writer still has its R12/single-device scope. October 14 source adapter adds opt-in declared fzero-snes.x/y/l/r on the same owned extras tick, with 36/36 device-free fixtures and independent source review. Clean ea568c2 x64/MT BF6455E6 native candidate is archived with passing native fixtures and pure consumer ABI/export checks; new private source pin/staging owns both headers, while old installed four-file receipts retain extras-off compatibility. Adoption fd52deb passed 33 package tests, 34 synthetic installer checks, 51 companion checks, 36 consumer cases and actual five-file dependency-only staging. Runtime, physical and multi-device acceptance remain open. No unrelated generic action aliases. See docs/2026-10-14-shared-extras.md. 2026-10-22 binding coverage (source read only): Shared binds steer, throttle/brake, confirm/back/start/select and navigation by default, fzero-snes.x/y/l/r with `SharedExtras=1`, and saveMenu/rewind with `SharedHostControls=1` as well; gears, clutch, handbrake, camera, lookBack, reset, horn, modMenu and muteFfb are declared unsupported. Native source binds common actions plus `nativeX/nativeY/nativeL/nativeR/saveStateMenu/rewind` from the profile, all on one device. In-game and physical delivery is unverified. See docs/2026-10-22-game-action-bindings.md. |
+| STD-037 | Measured endpoints through schema 2 | partial | October22 retained Native source adopts the exact toolkit ee8014d controls header (6002B403) plus unchanged canonical vectors (30EEEDA8) and opts Native Apply/action denormalization into Schema2. Native SDL reads canonical persisted bindings before existing deadzone/curve/threshold, with inversion once. Qualified raw range0..65535 only; invalid/unrepresentable Schema2 refuses the transaction. Schema1 and Shared/Core remain unchanged; no global ini-controls-2 capability, writer, product/package/install or physical acceptance is claimed. October23 independent focused MSVC compilation (including the launcher object) and four fixtures passed; contract599 checks/207 vectors, controls308 checks. Merged installer passed92 synthetic checks under PowerShell5.1. Product/package, rendered and physical qualification remain open. See docs/2026-10-10-profile-controls.md. |
+| STD-038 | Game window lands on racing row | pending | Current shared ledger adds this October24 rule. Retained native SDL window placement has not been reconciled against the row policy; no runtime evidence added by the controls refusal fix. |
+| STD-039 | Direct in-process wheel input | partial | Retained Native SDL controls consume raw wheel bindings in-process. This source-only refusal correction does not qualify physical response or alternate Shared paths. |
+| STD-040 | One simple package and standalone binding parity | partial | Unified package direction exists; standalone launcher controls and Wheelkit selected-profile action parity, replacement install and public packaging remain unqualified. No package promotion in this change. |
+
 
 October 12 delivery follow-up for STD-002/012/035: `tools/Recording.ps1` and
 `docs/RECORDING-QUICKSTART.md` expose the existing record/replay CLI in the player
@@ -376,6 +398,14 @@ See docs/2026-10-17-host-controls-private-package.md. The older Deluxe candidate
 unchanged; Deluxe portable admission and existing pending/unchecked standards
 remain separate.
 
+October 22 ledger comparison: all STD-001 through STD-037 are represented.
+STD-019 remains unchecked and STD-021/031 remain pending physical normalization;
+none is exercised by this source-only Native calibration task. STD-033/035/036
+retain their partial status and per-device refusal. STD-037 gains canonical
+Schema-2 Native Apply, consumption, preview and vector-fixture authoring;
+Shared/Core, global capability, installed settings and physical acceptance
+are not promoted. No new family-wide standard is introduced.
+
 ## October 22 installer suites under Windows PowerShell 5.1
 
 All three authored suites ran under Windows PowerShell 5.1 against synthetic
@@ -402,6 +432,37 @@ against a real install), real initial setup on a clean target, and the owner
 install. STD-032 remains partial.
 
 October22 Help report route offline recheck on main cfd4e26: fzero_mods, fzero_setup, fzero_setup_no_bundle and the ten setup_bundle report-marker tests pass. Report action stays unavailable for old controls-only helpers (marker0), isolated sessions and Linux (source-confirmed). No new framework, uploader or HTTP submission; STD-004/030 states unchanged. See docs/2026-10-16-help-report-route.md.
+
+## October 23 private Deluxe package route source
+
+The existing unified stage/package scripts now offer an explicit local private
+Deluxe route with exact Native2 installer/helper admission and fresh-scratch
+rollback provenance. Default stock/public fences remain. Forty inert stage/package
+tests pass; no fresh helper/product build, package, owner installation or device
+acceptance is claimed. See [the private route](docs/UNIFIED-PRODUCT.md#october-23-private-deluxe-native2-packaging-source).
+All 37 ledger IDs remain represented. STD-019 stays unchecked, STD-021/031 physical
+normalization stays pending, and STD-010/033/035/037 acceptance states are not
+promoted by source packaging checks. The frozen stock package is unchanged.
+## October 26 selected-device consumer contract
+
+STD-033/035/037: production Native planner now checks both instance and product
+identity for non-steering bindings. Device-free contract passes 913 checks / 207
+vectors after 16 conflicting-product failures demonstrated the defect. No writer,
+vendored header, package, runtime or physical qualification changed. STD-019 stays
+unchecked; STD-021/031 pending; STD-037 partial. See
+[consumer evidence](docs/2026-10-26-cardinal-consumer-contract.md).
+
+
+October26 refusal-review follow-up: current ledger contains STD-001..040; missing
+STD-038..040 are now recorded above. STD-019 remains unchecked, STD-021/031
+pending, STD-037 partial. Accurate product-conflict rebind feedback supports
+STD-004's settings UX; deployment and physical qualification stay unchanged.
+
+October26 DBC-328: raw_snapshot hat loop now explicitly bounds indexing by its
+four-entry array capacity in both SDL branches. Existing 0..4 count clamp and
+cardinal/neutral behavior are unchanged. SDL3 Release consumer compile/link
+passes without the reproduced GCC bounds warning; fixture not executed.
+No acceptance status promoted. See docs/2026-10-26-raw-snapshot-hat-bounds.md.
 
 ## October 29 clean-install plan ledger refresh
 

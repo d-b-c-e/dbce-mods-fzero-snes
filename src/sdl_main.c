@@ -54,6 +54,7 @@
 #include "desktop/config.h"
 #include "desktop/sdl_compat.h"
 
+#include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -666,6 +667,9 @@ static int launcher_steering_axis(const char *guid, int axis, int *value) {
     if (!s_launcher_steering_stick) return 0;
     snprintf(s_launcher_steering_guid, sizeof(s_launcher_steering_guid),
              "%s", guid);
+    char profile_section[64];
+    snprintf(profile_section, sizeof(profile_section), "Controller.%s", guid);
+    FzeroControlsNativeLoad(g_config_path, profile_section);
   }
 #if SNESRECOMP_SDL3
   SDL_UpdateJoysticks();
@@ -676,6 +680,12 @@ static int launcher_steering_axis(const char *guid, int axis, int *value) {
   if (axis >= SDL_JoystickNumAxes(s_launcher_steering_stick)) return 0;
   *value = SDL_JoystickGetAxis(s_launcher_steering_stick, axis);
 #endif
+  /* The Mods preview applies its editable inversion after this callback.
+   * Use the same measured center/locks as gameplay, without inverting twice. */
+  double normalized = 0.0;
+  int canonical = FzeroControlsNativeNormalize(0, axis, 0, *value, &normalized);
+  if (canonical < 0) return 0;
+  if (canonical) *value = (int)lround(normalized * (normalized < 0 ? 32768.0 : 32767.0));
   return 1;
 }
 
@@ -867,7 +877,7 @@ static uint32_t keyboard_input(void) {
 }
 
 static uint32_t controller_input(SDL_GameController *pad) {
-  return FzeroGamepadRead(pad);
+  return FzeroGamepadReadFrame(pad, FzeroShimGameplayState(g_ram, sizeof(g_ram)));
 }
 
 #define FZERO_MENU_GESTURE (SNES_PAD_SELECT | SNES_PAD_R)
@@ -2870,9 +2880,18 @@ int main(int argc, char **argv) {
   bool triple_active = triple_separate ||
       (triple_requested && g_compare_view != 1 &&
        FzeroTripleSpanSupported(drawable_width, drawable_height));
-  if (triple_requested && !triple_separate && !triple_active && g_compare_view != 1)
+  if (triple_requested && !triple_separate && !triple_active && g_compare_view != 1) {
     fprintf(stderr, "[fzero-triple] expected three equal 1.2:1–2.5:1 panels in one fullscreen span; got %dx%d, using stock view\n",
             drawable_width, drawable_height);
+    /* Shown before FFB init, like the HD Mode 7 notice: a three-monitor desktop
+     * otherwise falls back to one screen with no visible reason. */
+    char message[320];
+    snprintf(message, sizeof(message),
+        "Triple Screen is on, but this display is %dx%d, not one Surround span of three equal screens. "
+        "Using one screen for this session. For three separate monitors, choose Separate monitors "
+        "in Mods > Triple Screen > Display layout.", drawable_width, drawable_height);
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "Triple Screen", message, window);
+  }
   FzeroViewport viewport = FzeroCalculateViewport(&g_video,
       triple_active && !triple_separate ? drawable_width / 3 : drawable_width,
       drawable_height);
@@ -2913,6 +2932,7 @@ int main(int argc, char **argv) {
   if (!FzeroShimUsingInput() && !recorded_replay) selftest_attach();
 
   SDL_GameController *pad = NULL;
+  FzeroGamepadIdentity force_input = {0};
   if (g_playthrough.mode != 2 && !FzeroShimUsingInput()) {
     FzeroGamepadConfigure(g_config_path, g_selftest_pad ? g_selftest_guid : launcher_settings.player_gamepad_guid[0],
                          launcher_settings.deadzone[0]);
@@ -2925,7 +2945,8 @@ int main(int argc, char **argv) {
    * menu calls ZeroForces. Start after the window settles, then clear the
    * initial effect state so the first nonzero update explicitly starts it. */
   if (g_playthrough.mode != 2 && !FzeroShimUsingInput()) {
-    FzeroFfbInit(g_config_path, native_window);
+    FzeroGamepadGetIdentity(pad, &force_input);
+    FzeroFfbInitSelected(g_config_path, native_window, force_input.path);
     FzeroFfbSilence();
   }
   int shim_callbacks_fenced = FzeroShimRequested();
@@ -3376,6 +3397,12 @@ int main(int argc, char **argv) {
       }
       if (g_playthrough.mode != 2) {
         FzeroTelemetryFrame(g_ram, sizeof(g_ram), input);
+        if (force_input.path[0]) {
+          if (!FzeroGamepadIdentityStillSelected(pad, &force_input)) {
+            FzeroFfbShutdown();
+            force_input.path[0] = 0;
+          }
+        }
         FzeroFfbFrame(g_ram, sizeof(g_ram), input);
       }
       FzeroDiagnosticsEnd(FZERO_DIAG_SIMULATION, diagnostic_start);

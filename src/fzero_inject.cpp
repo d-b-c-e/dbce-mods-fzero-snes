@@ -133,8 +133,15 @@ std::vector<std::string> controlsLines(const char *path)
 
 const char *armWith(const std::string &device, const std::vector<std::string> &lines)
 {
-    g_section = ctl::parseSection(lines);
+    g_section = ctl::parseSection(lines, 2); // Native reader and action denormalization share the same measured endpoints
     if (!g_section.error.empty()) return "the [Controls] profile does not parse";
+    if (g_section.schema == 2) {
+        std::vector<const char *> body;
+        for (const auto &line : lines) body.push_back(line.c_str());
+        FzeroControlsPlan plan;
+        FzeroControlsPlanLines(body.data(), (int)body.size(), &plan);
+        if (!plan.ok) return "the Schema-2 profile cannot be applied by Native";
+    }
     const ctl::Binding *steer = ctl::find(g_section, "steer");
     if (!steer) return "the [Controls] profile has no steering binding (F-Zero's one controller)";
     if (device.empty()) return "[ControlsApplied] names no device";

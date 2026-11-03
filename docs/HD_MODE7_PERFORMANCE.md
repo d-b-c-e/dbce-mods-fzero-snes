@@ -109,3 +109,35 @@ Set `EnhancedRenderer=1`, `HDMode7=1`, and the table's `Aspect`,
 by `FZERO_VIDEO_CONFIG`, with `PresentationEnabled=1`. Set
 `SNESRECOMP_WRAM_DUMP` to compare guest state and read the final
 `simulation=... presentations=... missed=... target_hz=...` log entry.
+
+## October 23 source check
+
+The retained measurements above describe the earlier optimization. They do not
+attribute a new bottleneck in current source `a03c722`. The older Surround
+reports also combine projection and upload inside the draw bucket. Do not
+infer GPU cost or claim a new performance improvement from those reports.
+The next useful measurement is a complete replay on a current, exact build
+with the existing split diagnostics: composition, triple projection, triple
+upload, draw submission, present and pacing. Keep the replay, aspect, HD scale,
+presentation target and output dimensions fixed; compare stable race intervals
+and retain guest-state checks. A renderer-only capture benchmark cannot resolve
+upload, driver waiting or real-display performance.
+
+Source inspection instead found a visual defect: the side compositor fills
+extended sky first, then skips forced-blank ground scanlines, leaving panorama
+pixels visible in those rows. It now clears forced-blank output rows after sky,
+ground and vehicle composition. The existing ROM-free renderer fixture adds a
+blank band below the sky split, checks both side panels at two output sizes,
+keeps surrounding red sky intact and checks buffer sentinels. This regression
+fails on the old source. Offline fixture results are recorded in the handoff;
+no game, display, private capture, telemetry/profile or package change is part
+of this correction. No frame-time improvement is claimed.
+
+Validation: the added regression failed against unchanged `a03c722` renderer
+at its blank-row pixel assertion (GNU C11, `-O0`). The corrected source passed
+the complete existing renderer fixture with `-O2 -Wall -Wextra -Werror`, including
+the new two-size forced-blank case. It used the unchanged framework headers at
+`59d2966fa71d0346f92c43753e09b1ba7a1956f5`. Exact input/compiler hashes and
+before/after logs are retained in ignored `build-triple-blank/qualification.json`,
+`before.log` and `after.log` in the isolated worktree. No timing comparison was
+made between those optimization levels; game/display acceptance remains open.

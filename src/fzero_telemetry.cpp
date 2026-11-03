@@ -39,6 +39,9 @@ uint16_t read16(const uint8_t *p) {
   return (uint16_t)(p[0] | ((uint16_t)p[1] << 8));
 }
 
+/* About four times measured race movement; anything longer in one frame is a jump. */
+const int kMaxStepUnits = 32;
+
 int wrapped_delta(uint16_t current, uint16_t previous, int modulus) {
   int delta = (int)current - (int)previous;
   if (delta > modulus / 2) delta -= modulus;
@@ -46,9 +49,15 @@ int wrapped_delta(uint16_t current, uint16_t previous, int modulus) {
   return delta;
 }
 
-float race_seconds(const uint8_t *ram) {
-  return (float)ram[0xc0] * 60.0f + (float)ram[0xc1] +
-         (float)ram[0xc2] * 0.01f;
+/* $00:8ECE ticks the race clock in decimal mode and the HUD ($00:A880) draws
+ * its nibbles: minutes, seconds and hundredths are BCD bytes. The lap records
+ * copy it. Seconds of one such time, or -1 when the bytes are not one. */
+float bcd_seconds(const uint8_t *time) {
+  for (int i = 0; i < 3; ++i)
+    if ((time[i] >> 4) > 9 || (time[i] & 15) > 9) return -1.0f;
+  if (time[1] >= 0x60) return -1.0f;
+  const auto value = [](uint8_t b) { return (float)((b >> 4) * 10 + (b & 15)); };
+  return value(time[0]) * 60.0f + value(time[1]) + value(time[2]) * 0.01f;
 }
 
 void close_socket(void) {
@@ -77,14 +86,19 @@ size_t FzeroTelemetryBuild(FzeroTelemetryState *state, const uint8_t *ram,
   if (racing && state->have_position) {
     const int dx = wrapped_delta(x, state->previous_x, 0x2000);
     const int dy = wrapped_delta(y, state->previous_y, 0x1000);
-    /* F-Zero's world is 8192 x 4096 coordinate units.  One quarter metre per
-     * unit makes the stock top-speed movement agree with the HUD to within the
-     * precision useful to a dashboard; keep the scale isolated here so a
-     * measured calibration can replace it without touching the wire format. */
-    const float distance = std::sqrt((float)(dx * dx + dy * dy)) * 0.25f;
-    const float instantaneous = distance * 60.098811862f;
-    state->speed_mps += (instantaneous - state->speed_mps) * 0.25f;
-    state->total_distance_m += distance;
+    /* Racing moves about 7 units a frame (TELEMETRY_SIGNALS.md). A save-state
+     * load or rewind moves the craft further in one frame: hold speed and
+     * distance and count again from the new position. */
+    if (dx * dx + dy * dy <= kMaxStepUnits * kMaxStepUnits) {
+      /* F-Zero's world is 8192 x 4096 coordinate units.  One quarter metre per
+       * unit makes the stock top-speed movement agree with the HUD to within
+       * the precision useful to a dashboard; keep the scale isolated here so a
+       * measured calibration can replace it without touching the wire format. */
+      const float distance = std::sqrt((float)(dx * dx + dy * dy)) * 0.25f;
+      const float instantaneous = distance * 60.098811862f;
+      state->speed_mps += (instantaneous - state->speed_mps) * 0.25f;
+      state->total_distance_m += distance;
+    }
   } else {
     state->speed_mps = 0.0f;
     if (!racing) state->total_distance_m = 0.0f;
@@ -109,11 +123,39 @@ size_t FzeroTelemetryBuild(FzeroTelemetryState *state, const uint8_t *ram,
   dash.posZ = (float)y * 0.25f;
   dash.speed = state->speed_mps;
   dash.distance = state->total_distance_m;
-  dash.currentLap = race_seconds(ram);
-  dash.currentRaceTime = dash.currentLap;
+  const float race = std::max(0.0f, bcd_seconds(ram + 0xc0));
+  dash.currentLap = race;
+  dash.currentRaceTime = race;
   dash.fuel = std::max(0.0f, std::min((float)(int16_t)read16(ram + 0xc9) /
                                       1024.0f, 1.0f));
-  dash.racePosition = 0; /* Rank and lap remain intentionally unsupported. */
+  /* $00:A8B1 renders this 1-based rank. Short snapshots and invalid values
+   * retain unknown (zero). */
+  if (racing && ram_size > 0x0dc8 && ram[0x0dc8] >= 1 && ram[0x0dc8] <= 20)
+    dash.racePosition = ram[0x0dc8];
+  /* Completed laps are the laps the game has timed (TELEMETRY_SIGNALS.md):
+   * race start clears $0F53 and the lap records, and $00:99C0 stores the race
+   * clock for lap L at $0E90 + 3(L - 1) and sets $0F53 = L in the same frame.
+   * $0F53 never falls within a race; lap 5 is the finish. Records that are not
+   * BCD times in order up to the clock leave the lap fields unknown (zero) and
+   * currentLap on the race clock, which is lap 1's time. */
+  if (racing && ram_size > 0x0f53 && ram[0x0f53] <= 5) {
+    const int laps = ram[0x0f53];
+    float previous = 0.0f, last = 0.0f, best = 0.0f;
+    bool valid = race > 0.0f || laps == 0;
+    for (int lap = 1; valid && lap <= laps; ++lap) {
+      const float at = bcd_seconds(ram + 0x0e90 + 3 * (lap - 1));
+      valid = at >= previous && at <= race;
+      last = at - previous;
+      best = lap == 1 ? last : std::min(best, last);
+      previous = at;
+    }
+    if (valid) {
+      dash.lapNumber = (uint16_t)laps;
+      dash.lastLap = last;
+      dash.bestLap = best;
+      dash.currentLap = race - previous;
+    }
+  }
   dash.accel = (input & 0x0001u) ? 255 : 0;  /* SNES B */
   dash.brake = (input & 0x0002u) ? 255 : 0;  /* SNES Y */
   dash.gear = 1;
@@ -159,6 +201,7 @@ void FzeroTelemetryInit(const char *config_path) {
   if (getaddrinfo(host, service, &hints, &result) != 0 || !result) {
     std::fprintf(stderr, "[fzero-telemetry] cannot resolve %s:%d; disabled\n",
                  host, port);
+    FzeroTelemetryShutdown();
     return;
   }
   s_socket = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
@@ -173,6 +216,8 @@ void FzeroTelemetryInit(const char *config_path) {
   if (s_socket != kInvalidSocket)
     std::fprintf(stderr, "[fzero-telemetry] Forza Horizon 324 -> %s:%d\n",
                  host, port);
+  else
+    FzeroTelemetryShutdown();
 }
 
 void FzeroTelemetryFrame(const uint8_t *ram, size_t ram_size, uint32_t input) {

@@ -1,4 +1,5 @@
 # Root-level CMake build trees and release staging.
+/.local/
 /build*/
 /FZeroSNESRecomp/
 /release-stage/

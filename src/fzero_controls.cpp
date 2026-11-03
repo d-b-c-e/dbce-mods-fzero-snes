@@ -1,5 +1,5 @@
 // Rig-profile controls -> F-Zero's raw-wheel keys (see fzero_controls.h). The [Controls] parser is the toolkit's
-// shared one (src/vendor/controls/dbce_controls.hpp, toolkit 65c686d), so this file holds only the F-Zero mapping
+// shared one (src/vendor/controls/dbce_controls.hpp, toolkit ee8014d), so this file holds only the F-Zero mapping
 // and the config.ini edits.
 //
 // Index mapping: the profile names DirectInput objects (axis 0 X, 2 Z, 5 Rz ...; button n = DIJOYSTATE button n);
@@ -27,6 +27,32 @@ namespace ctl = dbce::controls;
 
 namespace {
 
+const char *const kAxisProfileKeys[] = {"SteeringProfileBinding", "AcceleratorProfileBinding", "BrakeProfileBinding"};
+const char *const kAxisActions[] = {"steer", "throttle", "brake"};
+struct NativeAxisProfile { ctl::Binding binding; bool present = false, valid = false; };
+NativeAxisProfile g_native_axes[3];
+
+bool axisProfile(FzeroControlsPlan *p, int slot, const ctl::Binding &binding, int schema)
+{
+    p->axis_profiles |= 1u << slot;
+    if (schema == 1) return true; // actively clears a preceding Schema-2 request for this axis
+    // The qualified SDL wheel exposes the same 16-bit positions as DI's 0..65535 range.
+    // Other ranges have not been compared; never guess their raw conversion.
+    if (binding.min != 0 || binding.max != 65535) {
+        snprintf(p->error, sizeof(p->error), "%s: Native Schema 2 requires the qualified 0..65535 range", kAxisActions[slot]);
+        return false;
+    }
+    ctl::Binding stored = binding;
+    stored.name.clear(); // display names do not participate in normalization
+    const std::string text = ctl::format(stored);
+    if (text.size() >= sizeof(p->axis_profile[slot])) {
+        snprintf(p->error, sizeof(p->error), "%s: axis profile too long", kAxisActions[slot]);
+        return false;
+    }
+    std::memcpy(p->axis_profile[slot], text.c_str(), text.size() + 1);
+    return true;
+}
+
 // recomp-ui raw_hat_binding.h: raw bindings 0..127 are buttons; 128 + hat * 4 + direction (up, right, down, left).
 enum { kMaxButton = 127, kHatBase = 128, kMaxHat = 15 };
 
@@ -43,7 +69,16 @@ struct Digital { const char *action, *key; };
 const Digital kDigital[] = {
     {"confirm", "ButtonA"}, {"back", "ButtonB"}, {"start", "ButtonStart"}, {"select", "ButtonSelect"},
     {"navUp", "ButtonUp"}, {"navDown", "ButtonDown"}, {"navLeft", "ButtonLeft"}, {"navRight", "ButtonRight"},
+    {"nativeX", "ButtonX"}, {"nativeY", "ButtonY"}, {"nativeL", "ButtonL"}, {"nativeR", "ButtonR"},
+    {"saveStateMenu", "ButtonSaveStateMenu"}, {"rewind", "ButtonRewind"},
 };
+
+bool nativeDigital(const std::string &action)
+{
+    if (ctl::shapeOf(action) != ctl::Shape::Unknown) return false;
+    for (const Digital &d : kDigital) if (action == d.action) return true;
+    return false;
+}
 
 void note(FzeroControlsPlan *p, const std::string &action, const char *why)
 {
@@ -241,11 +276,44 @@ extern "C" void FzeroControlsPlanLines(const char *const *lines, int count, Fzer
     std::vector<std::string> body;
     std::string joined;
     for (int i = 0; i < count; ++i) { body.push_back(lines[i] ? lines[i] : ""); joined += body.back() + "\n"; }
-    ctl::Section s = ctl::parseSection(body);
+    // Native extensions stay local: Shared/Core keeps the toolkit's existing action table.
+    std::vector<std::string> common;
+    for (const auto &line : body) if (!nativeDigital(lineKey(line))) common.push_back(line);
+    ctl::Section s = ctl::parseSection(common, 2);
+    if (s.error.empty()) for (const auto &line : body) {
+        const std::string action = lineKey(line);
+        if (!nativeDigital(action)) continue;
+        const std::string value = ctl::trim(line.substr(line.find('=') + 1));
+        if (value.empty()) { s.unbound.push_back(action); continue; }
+        ctl::Binding binding;
+        std::string why;
+        if (ctl::parse(value, binding, why, s.schema)) why = ctl::fits(ctl::Shape::Digital, binding);
+        if (!why.empty()) { s.invalid.push_back({action, why}); continue; }
+        if (ctl::find(s, action)) { s.invalid.push_back({action, "duplicate"}); continue; }
+        s.bound.push_back({action, binding});
+    }
     snprintf(p->profile, sizeof(p->profile), "%s", s.profile.c_str());
     if (!s.revision.empty()) snprintf(p->revision, sizeof(p->revision), "%s", s.revision.c_str());
     else snprintf(p->revision, sizeof(p->revision), "fnv1a:%08x", (unsigned)fnv1a(joined));
     if (!s.error.empty()) { snprintf(p->error, sizeof(p->error), "%s", s.error.c_str()); return; }
+    // Schema 1 retains its per-entry notes. A malformed Schema-2 request must not
+    // partially apply new calibration alongside an old axis or direction.
+    if (s.schema == 2 && !s.invalid.empty()) {
+        snprintf(p->error, sizeof(p->error), "%s: %s", s.invalid[0].first.c_str(), s.invalid[0].second.c_str());
+        return;
+    }
+    if (s.schema == 2) {
+        std::vector<std::string> seen;
+        for (const auto &line : body) {
+            const std::string key = lineKey(line);
+            if (ctl::shapeOf(key) == ctl::Shape::Unknown && !nativeDigital(key)) continue;
+            for (const auto &previous : seen) if (previous == key) {
+                snprintf(p->error, sizeof(p->error), "%s: duplicate action", key.c_str());
+                return;
+            }
+            seen.push_back(key);
+        }
+    }
     for (auto &bad : s.invalid) note(p, bad.first, bad.second.c_str());
 
     const ctl::Binding *steer = ctl::find(s, "steer");
@@ -262,6 +330,7 @@ extern "C" void FzeroControlsPlanLines(const char *const *lines, int count, Fzer
                  p->product);
         return;
     }
+    if (!axisProfile(p, 0, *steer, s.schema)) return;
     setKey(p, "SteeringAxis", steer->index);
     // Always write both directions: a later noninverted profile must clear a
     // prior launcher/profile inversion instead of silently inheriting it.
@@ -270,29 +339,47 @@ extern "C" void FzeroControlsPlanLines(const char *const *lines, int count, Fzer
     for (const ctl::Entry &e : s.bound) {
         const ctl::Binding &b = e.binding;
         if (e.action == "steer") continue;
-        bool sameDevice = b.dev == steer->dev;
+        bool sameDevice = b.dev == steer->dev && b.prod == steer->prod;
+        const char *identityMismatch = b.dev == steer->dev
+            ? "wheel product mismatch; rebind to selected wheel"
+            : nullptr;
         if (e.action == "throttle" || e.action == "brake") {
             if (b.kind != ctl::Kind::Axis) {
+                if (s.schema == 2) { snprintf(p->error, sizeof(p->error), "%s: Native pedals require axes", e.action.c_str()); return; }
                 note(p, e.action, "a button pedal has no F-Zero setting (pedals are axes)");
                 continue;
             }
-            if (!sameDevice) { note(p, e.action, "on another device (F-Zero reads one controller)"); continue; }
+            if (!sameDevice) {
+                if (s.schema == 2) { snprintf(p->error, sizeof(p->error), "%s: %s", e.action.c_str(), identityMismatch ? identityMismatch : "Native reads one controller"); return; }
+                note(p, e.action, identityMismatch ? identityMismatch : "on another device (F-Zero reads one controller)"); continue;
+            }
             bool gas = e.action == "throttle";
+            if (!axisProfile(p, gas ? 1 : 2, b, s.schema)) return;
             setKey(p, gas ? "AcceleratorAxis" : "BrakeAxis", b.index);
             setKey(p, gas ? "AcceleratorInvert" : "BrakeInvert", pedalInvert(b));
             continue;
         }
         const Digital *map = nullptr;
         for (const Digital &d : kDigital) if (e.action == d.action) map = &d;
-        if (!map) { note(p, e.action, "no F-Zero control"); continue; }
-        if (!sameDevice) { note(p, e.action, "on another device (F-Zero reads one controller)"); continue; }
+        if (!map) {
+            if (s.schema == 2) { snprintf(p->error, sizeof(p->error), "%s: no Native F-Zero control", e.action.c_str()); return; }
+            note(p, e.action, "no F-Zero control"); continue;
+        }
+        if (!sameDevice) {
+            if (s.schema == 2) { snprintf(p->error, sizeof(p->error), "%s: %s", e.action.c_str(), identityMismatch ? identityMismatch : "Native reads one controller"); return; }
+            note(p, e.action, identityMismatch ? identityMismatch : "on another device (F-Zero reads one controller)"); continue;
+        }
         int v = digital(e.action, b, p);
+        if (v < 0 && s.schema == 2) {
+            snprintf(p->error, sizeof(p->error), "%s: binding cannot be represented by Native", e.action.c_str());
+            return;
+        }
         if (v >= 0) setKey(p, map->key, v);
     }
     // Explicitly empty entries unbind what F-Zero has for them; steering stays (the wheel needs it).
     for (const std::string &a : s.unbound) {
-        if (a == "throttle") { setKey(p, "AcceleratorAxis", -1); continue; }
-        if (a == "brake") { setKey(p, "BrakeAxis", -1); continue; }
+        if (a == "throttle") { setKey(p, "AcceleratorAxis", -1); p->axis_profiles |= 2u; continue; }
+        if (a == "brake") { setKey(p, "BrakeAxis", -1); p->axis_profiles |= 4u; continue; }
         bool known = false;
         for (const Digital &d : kDigital) if (a == d.action) { setKey(p, d.key, -1); known = true; }
         if (!known && a != "steer") note(p, a, "unbound; no F-Zero control");
@@ -358,6 +445,9 @@ extern "C" int FzeroControlsWrite(const char *config_path, const char *guid, con
         snprintf(number, sizeof(number), "%d", p->keys[i].value);
         setInDoc(d, section, p->keys[i].key, number);
     }
+    for (int i = 0; i < 3; ++i) if ((p->axis_profiles & (1u << i)) &&
+        (p->axis_profile[i][0] || !docValue(d, section, kAxisProfileKeys[i]).empty()))
+        setInDoc(d, section, kAxisProfileKeys[i], p->axis_profile[i]);
     setInDoc(d, "Controller", "GuidP1", guid);
     setInDoc(d, "ControlsApplied", "Revision", p->revision);
     setInDoc(d, "ControlsApplied", "Device", guid);
@@ -365,8 +455,43 @@ extern "C" int FzeroControlsWrite(const char *config_path, const char *guid, con
         snprintf(number, sizeof(number), "%d", p->keys[i].value);
         if (docValue(d, section, p->keys[i].key) != number) return 0;
     }
+    for (int i = 0; i < 3; ++i) if ((p->axis_profiles & (1u << i)) &&
+        docValue(d, section, kAxisProfileKeys[i]) != p->axis_profile[i]) return 0;
     if (docValue(d, "Controller", "GuidP1") != guid || docValue(d, "ControlsApplied", "Revision") != p->revision)
         return 0;
     const std::string text = render(d);
     return text == original || replaceFile(config_path, text);
+}
+
+extern "C" void FzeroControlsNativeLoad(const char *config_path, const char *section)
+{
+    for (int i = 0; i < 3; ++i) {
+        auto &axis = g_native_axes[i];
+        axis = NativeAxisProfile{};
+        if (!config_path || !section) continue;
+        const std::string text = readValue(config_path, section, kAxisProfileKeys[i]);
+        if (text.empty()) continue;
+        axis.present = true;
+        std::string why;
+        axis.valid = ctl::parse(text, axis.binding, why, 2) && axis.binding.kind == ctl::Kind::Axis &&
+            ctl::fits(kAxisActions[i], axis.binding).empty() && axis.binding.min == 0 && axis.binding.max == 65535;
+        if (!axis.valid) fprintf(stderr, "[fzero-controls] %s is invalid; axis held neutral until repaired or reapplied\n", kAxisProfileKeys[i]);
+    }
+}
+
+extern "C" int FzeroControlsNativeNormalize(int slot, int axis, int inverted, int sdl_raw, double *value)
+{
+    if (!value || slot < 0 || slot >= 3) return -1;
+    *value = 0.0;
+    auto &profile = g_native_axes[slot];
+    if (!profile.present) return 0;
+    if (!profile.valid) return -1;
+    auto &binding = profile.binding;
+    if (binding.index != axis) return 0; // deliberate launcher reassignment; never transfer calibration to that axis
+    // Native pedals express inversion relative to the SDL axis; the contract
+    // expresses it after travel/calibration. Translate the switch, not the value.
+    binding.inverted = slot == 0 ? inverted != 0 : (binding.travel > 0) == (inverted != 0);
+    const long raw = static_cast<long>(ctl::clampd(double(sdl_raw), -32768.0, 32767.0)) + 32768;
+    *value = ctl::normalize(slot == 0 ? ctl::Shape::Centred : ctl::Shape::Pedal, binding, raw);
+    return 1;
 }

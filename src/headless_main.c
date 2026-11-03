@@ -16,6 +16,7 @@
 #include "fzero_playthrough.h"
 #include "fzero_ffb.h"
 #include "fzero_renderer.h"
+#include "fzero_surface_trace.h"
 
 #include "audio_trace.h"
 #include "common_rtl.h"
@@ -659,14 +660,11 @@ int main(int argc, char **argv) {
     }
     /* Raw contact/position evidence for distinguishing surface effects from
      * crashes or visual-only flags. Opt-in because it emits every race frame. */
-    if (getenv("FZERO_SURFACE_TRACE") && g_ram[0x54] == 2 && g_ram[0x55] >= 3)
-      fprintf(stderr, "[fzero-surface] frame=%ld x=%u y=%u c7=%02x energy=%u input=%08x\n",
-              frame,
-              (unsigned)((g_ram[0x0b70] | ((unsigned)g_ram[0x0b71] << 8)) & 0x1fff),
-              (unsigned)((g_ram[0x0b90] | ((unsigned)g_ram[0x0b91] << 8)) & 0x0fff),
-              g_ram[0xc7],
-              (unsigned)(g_ram[0xc9] | ((unsigned)g_ram[0xca] << 8)),
-              frame_input);
+    if (getenv("FZERO_SURFACE_TRACE") && g_ram[0x54] == 2 && g_ram[0x55] >= 3) {
+      char line[160];
+      if (FzeroSurfaceTraceLine(line, sizeof(line), frame, g_ram, frame_input) > 0)
+        fputs(line, stderr);
+    }
     if (getenv("FZERO_SCENE_TRACE"))
       fprintf(stderr, "scene %ld state=%02x,%02x,%02x training=%02x scenery=%02x sound=%02x,%02x,%02x,%02x,%02x msu=%02x,%02x,%02x,%02x brightness=%02x\n",
               frame, g_ram[0x54], g_ram[0x55], g_ram[0x56], g_ram[0x58], g_ram[0x81],

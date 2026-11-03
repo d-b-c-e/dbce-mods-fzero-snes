@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
@@ -109,6 +110,196 @@ class PackageTests(unittest.TestCase):
 
     def test_complete_runtime_and_dynamic_wheel(self):
         self.assertEqual(self.read(), self.files)
+
+    def deluxe(self):
+        self.source()
+        source = pack.NATIVE2_HELPER_SOURCE
+        helper = {"DbceModSetup.exe": pe(), "Start-ModSetup.ps1": b"Inert fixture",
+                  "Wheelkit.Core.dll": b"Inert BSDELX1 format-recognition literal"}
+        manifest = {"schema": 1, "kind": "private-standalone-helper", "rid": "win-x64", "selfContained": True,
+                    "sourceCommit": source, "waitForProcessContract": "fzero-exact-process-exit-1",
+                    "waitForProcessTimeoutMs": 60000, "supportedGames": [{"id": "f-zero", "scopes": ["controls"]}],
+                    "files": [{"path": n, "bytes": len(d), "sha256": pack.digest(d)} for n, d in helper.items()]}
+        helper["bundle-manifest.json"] = json.dumps(manifest).encode()
+        data = b"BSDELX1\0" + struct.pack("<I", 1024 * 1024) + b"inert cartridge delta"
+        image = self.files.pop("FZeroSNESRecomp.exe") + data
+        (self.payload / "FZeroSNESRecomp.exe").unlink()
+        actions = ["nativeX", "nativeY", "nativeL", "nativeR", "saveStateMenu", "rewind"]
+        image += b"1.7.0\0fixture-desc\0[fzero-shim]" + stage.shared_extras_contract()["declaration"].encode() + b"\0SharedExtras\0"
+        image += ("\0".join(actions + ["SteeringProfileBinding", "AcceleratorProfileBinding", "BrakeProfileBinding"]) + "\0").encode()
+        image += (pack.digest(helper["bundle-manifest.json"]) + "\0" + pack.digest(helper["DbceModSetup.exe"]) + "\0").encode()
+        launcher = "FZeroSNESRecomp-wheel-launcher.exe"
+        self.files[launcher] = image
+        self.files["FZeroSNESRecompHeadless.exe"] += data
+        self.files.update({"controls-setup/" + n: d for n, d in helper.items()})
+        self.files.update({"dbce_shim.dll": pe(), "shared-input/dbce_shim.h": b"fixture base header",
+                           "shared-input/dbce_shim_extras.h": b"fixture extras header",
+                           "shared-input/PROVENANCE.md": b"Private fixture", "tools/Recording.ps1": (self.root / "tools/Recording.ps1").read_bytes()})
+        pin = {"schema": "dbce.fzero-shared-input-pin", "version": 1, "abi": 2, "extrasAbi": 1,
+               "distribution": "private-only", "sourceRevision": "5" * 40,
+               "files": {n: pack.digest(self.files[n if n.endswith(".dll") else "shared-input/" + n])
+                         for n in ("dbce_shim.dll", "dbce_shim.h", "dbce_shim_extras.h")}}
+        self.files["shared-input/PIN.json"] = json.dumps(pin).encode()
+        self.write_payload()
+        _, setup = stage.setup_payload(self.payload / "controls-setup", image)
+        controls = stage.shared_controls_contract()
+        controls["consumer"] = launcher
+        shared = {"abi": 2, "distribution": "private-only", "extrasAbi": 1, "sourceRevision": pin["sourceRevision"],
+                  "runtimeSha256": pin["files"]["dbce_shim.dll"], "controls": controls, "extras": stage.shared_extras_contract()}
+        owned = {launcher, "WheelFfb.dll", "tools/Recording.ps1", "dbce_shim.dll"}
+        owned |= {n for n in self.files if n.startswith(("shared-input/", "controls-setup/"))}
+        installed = {"schemaVersion": 1, "controlsProfileSchema": 1, "controlsProfileAdapter": "fzero-raw-wheel-1",
+                     "sourceCommit": self.receipt["sourceRevision"], "launcher": launcher, "backup": "2026-10-23-fixture",
+                     "launcherSha256": pack.digest(image), "wheelFfbSha256": self.wheel_hash,
+                     "nativeControls": {"schema": 2, "adapter": "fzero-raw-wheel-2", "consumer": launcher},
+                     "controlsProfileActions": actions, "privateSharedInput": shared,
+                     "privateControlsSetup": {k: v for k, v in setup.items() if k not in ("manifestBytes", "exeBytes")},
+                     "files": [{"name": n, "sha256": pack.digest(self.files[n])} for n in sorted(owned)]}
+        rollback = {"schemaVersion": 1, "files": [{"name": n, "existed": False, "sha256": None}
+                    for n in sorted(owned | {"install-receipt.json"})]}
+        self.files["install-receipt.json"] = json.dumps(installed).encode()
+        self.files["private-inputs/backup-state.json"] = json.dumps(rollback).encode()
+        self.receipt.update({"bsDeluxe": True, "privateControlsSetup": setup, "privateSharedInput": shared,
+            "privateDeluxe": {"helperSource": source, "installReceiptSha256": pack.digest(self.files["install-receipt.json"]),
+                "rollbackStateSha256": pack.digest(self.files["private-inputs/backup-state.json"]),
+                "generatedSources": {"course.c": pack.digest(b"inert source"), "deluxe_namespace.h": pack.digest(b"inert namespace")},
+                "embeddedData": {"sha256": pack.digest(data), "bytes": len(data), "offset": image.index(data)}}})
+        self.write_payload()
+
+    def test_private_deluxe_reuses_deterministic_package_and_public_fence(self):
+        self.deluxe()
+        first = pack.package(self.payload, self.receipt, self.base / "first", self.root, private_deluxe=True)
+        second = pack.package(self.payload, self.receipt, self.base / "second", self.root, private_deluxe=True)
+        self.assertEqual(first.read_bytes(), second.read_bytes())
+        self.assertEqual(pack.verify(first, True)["distribution"], "private-deluxe-native2")
+        with zipfile.ZipFile(first) as archive:
+            self.assertNotIn("build-receipt.json", archive.namelist())
+            self.assertNotIn("FZeroSNESRecomp.exe", archive.namelist())
+            self.assertIn(b"FZeroSNESRecomp-wheel-launcher.exe", archive.read("Setup.cmd"))
+        with self.assertRaisesRegex(ValueError, "distribution"):
+            pack.verify(first)
+        with self.assertRaisesRegex(ValueError, "Private shared-input"):
+            pack.package(self.payload, self.receipt, self.base / "public", self.root)
+        self.assertFalse((self.base / "public").exists())
+
+    def test_private_deluxe_marker_exception_requires_exact_helper_inventory(self):
+        self.deluxe()
+        self.assertEqual(pack.read_payload(self.payload, self.receipt, "1.7.0", self.wheel_hash, True), self.files)
+        original = copy.deepcopy(self.files)
+        for name, error in (("controls-setup/Wheelkit.Core.dll", "Setup bundle file identity|Setup bundle file hash"),
+                            ("controls-setup/unlisted.dll", "Embedded private"),
+                            ("WheelFfb.dll", "Embedded private")):
+            self.files = copy.deepcopy(original)
+            self.files[name] = self.files.get(name, b"") + b"BSDELX1 tampered fixture"
+            self.write_payload()
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, error):
+                pack.read_payload(self.payload, self.receipt, "1.7.0", self.wheel_hash, True)
+            if name not in original:
+                (self.payload / name).unlink()
+
+    def test_private_deluxe_refuses_stale_native_helper_inputs_and_owner_rollback(self):
+        self.deluxe()
+        original = copy.deepcopy(self.receipt)
+        for mutation in ("helper", "source", "data", "headless", "generated", "rollback", "native"):
+            self.receipt = copy.deepcopy(original)
+            saved_files = copy.deepcopy(self.files)
+            if mutation == "helper": self.receipt["privateDeluxe"]["helperSource"] = "a" * 40
+            if mutation == "source": self.receipt["sourceRevision"] = "f" * 40
+            if mutation == "data": self.receipt["privateDeluxe"]["embeddedData"]["sha256"] = "f" * 64
+            if mutation == "headless": self.files["FZeroSNESRecompHeadless.exe"] = pe()
+            if mutation == "generated": self.receipt["privateDeluxe"]["generatedSources"] = {}
+            if mutation in ("rollback", "native"):
+                key = "private-inputs/backup-state.json" if mutation == "rollback" else "install-receipt.json"
+                value = json.loads(self.files[key])
+                if mutation == "rollback": value["files"][0]["existed"] = True
+                else: value.pop("nativeControls")
+                self.files[key] = json.dumps(value).encode()
+                self.receipt["privateDeluxe"]["rollbackStateSha256" if mutation == "rollback" else "installReceiptSha256"] = pack.digest(self.files[key])
+            self.write_payload()
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                pack.package(self.payload, self.receipt, self.base / ("rejected-" + mutation), self.root, private_deluxe=True)
+            self.assertFalse((self.base / ("rejected-" + mutation)).exists())
+            self.files = saved_files
+        self.receipt = original
+
+    def test_private_deluxe_refuses_stock_ambiguous_and_unreceipted_payloads(self):
+        with self.assertRaisesRegex(ValueError, "Deluxe build"):
+            pack.read_payload(self.payload, self.receipt, "1.7.0", self.wheel_hash, True)
+        self.deluxe()
+        for name in ("build-receipt.json", "config.ini", "FZeroSNESRecomp.exe"):
+            (self.payload / name).write_text("inert stock/owner fixture")
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, "ambiguity|Unreceipted"):
+                pack.read_payload(self.payload, self.receipt, "1.7.0", self.wheel_hash, True)
+            (self.payload / name).unlink()
+
+    def test_private_deluxe_stage_requires_explicit_inputs_without_creating_output(self):
+        with self.assertRaisesRegex(ValueError, "reviewed Native2 helper"):
+            stage.stage(self.base / "missing-build", self.base / "never", private_deluxe_install=self.base / "install")
+        self.assertFalse((self.base / "never").exists())
+
+    def test_private_deluxe_stage_binds_real_entry_point_to_scratch_receipt(self):
+        self.deluxe()
+        self.files["licenses/SDL3.txt"] = b"Fixture SDL runtime notice"
+        build, install, generated = (self.base / name for name in ("build", "scratch", "gen"))
+        for folder in (build, install, generated): folder.mkdir()
+        for name, data in self.files.items():
+            target = build / ("FZeroSNESRecomp.exe" if name == "FZeroSNESRecomp-wheel-launcher.exe" else name)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+        installed = json.loads(self.files["install-receipt.json"])
+        for name in [row["name"] for row in installed["files"]] + ["install-receipt.json"]:
+            target = install / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(self.files[name])
+        backup = install / "deployment-backups/2026-10-23-fixture/backup-state.json"
+        backup.parent.mkdir(parents=True)
+        backup.write_bytes(self.files["private-inputs/backup-state.json"])
+        (generated / "course.c").write_bytes(b"inert source")
+        (generated / "deluxe_namespace.h").write_bytes(b"inert namespace")
+        data = b"BSDELX1\0" + struct.pack("<I", 1024 * 1024) + b"inert cartridge delta"
+        (self.base / "deluxe.dat").write_bytes(data)
+        (build / "generated").mkdir()
+        (build / "generated/fzero_build.h").write_text('#define FZERO_SOURCE_REVISION "fixture-desc"\n')
+        cache = {"FZERO_DELUXE_GEN_DIR": generated, "FZERO_DELUXE_DATA_FILE": self.base / "deluxe.dat",
+                 "SNESRECOMP_ROOT": self.root / "snesrecomp", "RECOMP_UI_ROOT": self.root / "recomp-ui"}
+        (build / "CMakeCache.txt").write_text("\n".join(f"{k}:PATH={v.as_posix()}" for k, v in cache.items()))
+        inputs = {"VERSION": b"1.7.0", "lib/toolkit/native/WheelFfb.dll": self.files["WheelFfb.dll"]}
+        for name in ("snesrecomp/LICENSE", "recomp-ui/LICENSE", "recomp-ui/src/third_party/imgui/LICENSE.txt",
+                     "recomp-ui/assets/common/img/NOTICE.md", "recomp-ui/assets/common/fonts/NOTICE.md"):
+            inputs[name] = b"Fixture notice"
+        for name in pack.UI_ASSETS:
+            relative = "assets/consoles/snes/img/pad.tga" if name.endswith("/pad.tga") else "assets/common/" + ("fonts/" if name.endswith(".ttf") else "img/") + Path(name).name
+            inputs["recomp-ui/" + relative] = self.files[name]
+        for name in ("dbce_shim.h", "dbce_shim_extras.h", "PIN.json", "PROVENANCE.md"):
+            inputs["vendor/dbce-shim/" + name] = self.files["shared-input/" + name]
+        for font, (name, _) in pack.OFL_FILES.items(): inputs[name] = (pack.ROOT / name).read_bytes()
+        for name, data in inputs.items():
+            target = self.root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+        def git(root, *args):
+            if args[0] == "status": return ""
+            if args[0] == "describe": return "fixture-desc"
+            if root != self.root: return self.receipt["dependencies"][root.name]
+            return self.git(*args)
+        def font_notice(data, name): return self.files["licenses/" + Path(name).stem + ".txt"]
+        private_shared = stage.private_shared_files
+        def shared_files(build, host_controls=False): return private_shared(build, self.root, host_controls)
+        output = self.base / "staged-deluxe"
+        with patch.object(stage, "ROOT", self.root), patch.object(stage, "git", git), patch.object(stage, "font_notice", font_notice), patch.object(stage, "private_shared_files", shared_files):
+            path = stage.stage(build, output, True, True, private_deluxe_install=install)
+        receipt = json.loads(path.read_text())
+        self.assertTrue(receipt["bsDeluxe"])
+        self.assertEqual(receipt["privateDeluxe"]["helperSource"], pack.NATIVE2_HELPER_SOURCE)
+        self.assertFalse((output / "payload/build-receipt.json").exists())
+        self.assertFalse((output / "payload/FZeroSNESRecomp.exe").exists())
+        self.assertIn("FZeroSNESRecomp-wheel-launcher.exe", pack.read_payload(output / "payload", receipt, "1.7.0", self.wheel_hash, True))
+        installed["nativeControls"]["schema"] = 1
+        (install / "install-receipt.json").write_text(json.dumps(installed))
+        with patch.object(stage, "ROOT", self.root), patch.object(stage, "git", git), patch.object(stage, "font_notice", font_notice), patch.object(stage, "private_shared_files", shared_files):
+            with self.assertRaisesRegex(ValueError, "Native2 receipt"):
+                stage.stage(build, self.base / "refused-stage", True, True, private_deluxe_install=install)
+        self.assertFalse((self.base / "refused-stage").exists())
 
     def test_private_shared_receipt_and_runtime_are_not_public_payload(self):
         for value in (None, False, {}, {"distribution": "private-only"}):

@@ -2,10 +2,19 @@
 #include "fzero_analog.h"
 #include "fzero_hotkeys.h"
 #include "fzero_inject.h"
+#include "fzero_controls.h"
 #include "raw_hat_binding.h"
 
 #include <stdio.h>
+#include <math.h>
 #include <string.h>
+
+#ifdef FZERO_TEST_IDENTITY_PATH
+extern const char *FzeroTestJoystickPath(SDL_Joystick *stick);
+extern const char *FzeroTestJoystickPathForID(SDL_JoystickID id);
+#define SDL_GetJoystickPath FzeroTestJoystickPath
+#define SDL_GetJoystickPathForID FzeroTestJoystickPathForID
+#endif
 
 static char s_config[1024], s_preferred[40];
 static uint32_t s_bind[12];
@@ -130,6 +139,7 @@ static void load_raw_profile(SDL_Joystick *stick) {
   FzeroIniReadInt(s_config, section, "AcceleratorInvert", &s_gas_invert);
   FzeroIniReadInt(s_config, section, "BrakeInvert", &s_brake_invert);
   FzeroIniReadInt(s_config, section, "PedalThreshold", &s_pedal_threshold);
+  FzeroControlsNativeLoad(s_config, section);
   for (int i = 0; i < 14; ++i) {
     s_raw_buttons[i] = -1;
     FzeroIniReadInt(s_config, section, s_raw_keys[i], &s_raw_buttons[i]);
@@ -241,6 +251,42 @@ void FzeroGamepadEvent(SDL_GameController **pad, const SDL_Event *event) {
   }
 }
 
+int FzeroGamepadGetIdentity(SDL_GameController *pad, FzeroGamepadIdentity *out) {
+  if (!out) return 0;
+  memset(out, 0, sizeof(*out));
+#if SNESRECOMP_SDL3 && defined(_WIN32)
+  SDL_Joystick *stick = pad ? SDL_GetGamepadJoystick(pad) : s_raw;
+  if (!stick || !SDL_JoystickGetAttached(stick)) return 0;
+  const char *path = SDL_GetJoystickPath(stick);
+  if (!path || !path[0] || strlen(path) >= sizeof(out->path)) return 0;
+  out->instance = SDL_JoystickInstanceID(stick);
+  if (!out->instance) return 0;
+  int count = 0, matches = 0;
+  SDL_JoystickID *ids = SDL_GetJoysticks(&count);
+  if (!ids) return 0;
+  for (int i = 0; i < count; ++i) {
+    const char *candidate = SDL_GetJoystickPathForID(ids[i]);
+    if (candidate && !SDL_strcasecmp(candidate, path)) {
+      ++matches;
+      if (ids[i] != out->instance) matches += 2;
+    }
+  }
+  SDL_free(ids);
+  if (matches != 1) return 0;
+  memcpy(out->path, path, strlen(path) + 1);
+  return 1;
+#else
+  (void)pad;
+  return 0;
+#endif
+}
+
+int FzeroGamepadIdentityStillSelected(SDL_GameController *pad, const FzeroGamepadIdentity *expected) {
+  FzeroGamepadIdentity current;
+  return expected && expected->path[0] && FzeroGamepadGetIdentity(pad, &current) &&
+      current.instance == expected->instance && !strcmp(current.path, expected->path);
+}
+
 /* Test injection (fzero_inject.h): when armed, every raw read is one snapshot of the stick with the running samples
  * substituted, and all lookups below come from it. Otherwise the reads are SDL's own, as always. */
 typedef struct { int16_t axes[8]; unsigned char buttons[128]; uint8_t hats[4]; int axis_count, button_count, hat_count; } RawSnapshot;
@@ -258,11 +304,14 @@ static void raw_snapshot(RawSnapshot *s) {
   if (s->hat_count < 0) s->hat_count = 0; if (s->hat_count > 4) s->hat_count = 4;
   for (int i = 0; i < s->axis_count; ++i) s->axes[i] = SDL_JoystickGetAxis(s_raw, i);
   for (int i = 0; i < s->button_count; ++i) s->buttons[i] = SDL_JoystickGetButton(s_raw, i) ? 1 : 0;
+  /* Keep the array bound explicit across the external SDL calls. */
+  for (int i = 0; i < (int)(sizeof(s->hats) / sizeof(s->hats[0])) && i < s->hat_count; ++i) {
 #if SNESRECOMP_SDL3
-  for (int i = 0; i < s->hat_count; ++i) s->hats[i] = SDL_GetJoystickHat(s_raw, i);
+    s->hats[i] = SDL_GetJoystickHat(s_raw, i);
 #else
-  for (int i = 0; i < s->hat_count; ++i) s->hats[i] = SDL_JoystickGetHat(s_raw, i);
+    s->hats[i] = SDL_JoystickGetHat(s_raw, i);
 #endif
+  }
   char guid[40];
   joystick_guid(s_raw, guid);
   FzeroInjectPoll();
@@ -271,9 +320,15 @@ static void raw_snapshot(RawSnapshot *s) {
 static int snap_axis(const RawSnapshot *s, int axis) { return axis >= 0 && axis < s->axis_count ? s->axes[axis] : 0; }
 static int snap_button(const RawSnapshot *s, int button) { return button >= 0 && button < s->button_count && s->buttons[button]; }
 static int snap_hat(const RawSnapshot *s, int hat) { return hat >= 0 && hat < s->hat_count ? s->hats[hat] : 0; }
-static uint32_t gamepad_read(SDL_GameController *pad, bool include_pedals, bool axes) {
+enum { READ_GAMEPLAY, READ_MENU, READ_OVERLAY };
+static uint32_t gamepad_read(SDL_GameController *pad, bool include_pedals, bool axes, int read) {
   if ((!pad || !SDL_GameControllerGetAttached(pad)) &&
       (!s_raw || !SDL_JoystickGetAttached(s_raw))) return 0;
+  // Outside a race an analog profile's own zone (often 0 for proportional steering) is floored at the player's digital
+  // deadzone, so a resting stick or wheel offset cannot hold a menu or overlay direction.
+  int zone = s_deadzone;
+  if (s_analog_steering && read != READ_GAMEPLAY && zone < (s_default_deadzone * 32767 + 50) / 100)
+    zone = (s_default_deadzone * 32767 + 50) / 100;
   if (!pad) {
     uint32_t input = 0;
     RawSnapshot snap;
@@ -282,22 +337,32 @@ static uint32_t gamepad_read(SDL_GameController *pad, bool include_pedals, bool 
     int x = axes ? (injecting ? snap_axis(&snap, s_raw_axis) : SDL_JoystickGetAxis(s_raw, s_raw_axis)) : 0;
     // Invert once, before either digital or PDM mapping. Keep exact center and
     // the signed SDL range even at -32768; supplemental-only reads stay neutral.
-    if (s_steer_invert) x = FzeroAnalogInvertAxis(x);
-    if (axes && s_analog_steering)
+    double normalized = 0.0;
+    int canonical = axes ? FzeroControlsNativeNormalize(0, s_raw_axis, s_steer_invert, x, &normalized) : 0;
+    if (canonical) x = (int)lround(normalized * (normalized < 0 ? 32768.0 : 32767.0));
+    else if (s_steer_invert) x = FzeroAnalogInvertAxis(x);
+    // Pulse density only in gameplay, as the Shared route: in the game's menus a wheel offset would pulse a choice.
+    if (axes && s_analog_steering && read == READ_GAMEPLAY)
       input |= FzeroAnalogSteeringReadTuned(&s_steering, x, s_deadzone,
                                            s_range_percent, s_response_percent);
+    else if (axes && s_analog_steering && read == READ_MENU)
+      FzeroAnalogSteeringReset(&s_steering);
     else if (axes) {
-      if (x < -s_deadzone) input |= 0x0040u;
-      if (x > s_deadzone) input |= 0x0080u;
+      if (x < -zone) input |= 0x0040u;
+      if (x > zone) input |= 0x0080u;
     }
     if (include_pedals && s_gas_axis >= 0) {
       int value = injecting ? snap_axis(&snap, s_gas_axis) : SDL_JoystickGetAxis(s_raw, s_gas_axis);
-      if (s_gas_invert) value = -value;
+      if (FzeroControlsNativeNormalize(1, s_gas_axis, s_gas_invert, value, &normalized))
+        value = (int)lround(normalized * 65535.0) - 32768;
+      else if (s_gas_invert) value = -value;
       if (value > s_pedal_threshold) input |= 0x0001u;
     }
     if (include_pedals && s_brake_axis >= 0) {
       int value = injecting ? snap_axis(&snap, s_brake_axis) : SDL_JoystickGetAxis(s_raw, s_brake_axis);
-      if (s_brake_invert) value = -value;
+      if (FzeroControlsNativeNormalize(2, s_brake_axis, s_brake_invert, value, &normalized))
+        value = (int)lround(normalized * 65535.0) - 32768;
+      else if (s_brake_invert) value = -value;
       if (value > s_pedal_threshold) input |= 0x0002u;
     }
     for (int i = 0; i < 14; ++i) {
@@ -331,30 +396,36 @@ static uint32_t gamepad_read(SDL_GameController *pad, bool include_pedals, bool 
     if (s_bind[i] && (buttons & s_bind[i]) == s_bind[i]) input |= 1u << s_input_bits[i];
   int x = axes ? SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTX) : 0;
   int y = axes ? SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTY) : 0;
-  if (axes && s_analog_steering)
+  // A pad stick centres, so menus keep it as the plain threshold (stick navigation) rather than pulsing it.
+  if (axes && s_analog_steering && read == READ_GAMEPLAY)
     input |= FzeroAnalogSteeringReadTuned(&s_steering, x, s_deadzone,
                                          s_range_percent, s_response_percent);
   else if (axes) {
-    if (x < -s_deadzone) input |= 0x0040u;
-    if (x > s_deadzone) input |= 0x0080u;
+    if (s_analog_steering && read == READ_MENU) FzeroAnalogSteeringReset(&s_steering);
+    if (x < -zone) input |= 0x0040u;
+    if (x > zone) input |= 0x0080u;
   }
-  if (axes && y < -s_deadzone) input |= 0x0010u;
-  if (axes && y > s_deadzone) input |= 0x0020u;
+  if (axes && y < -zone) input |= 0x0010u;
+  if (axes && y > zone) input |= 0x0020u;
   return input;
 }
 
 uint32_t FzeroGamepadRead(SDL_GameController *pad) {
-  return gamepad_read(pad, true, true);
+  return gamepad_read(pad, true, true, READ_GAMEPLAY);
+}
+uint32_t FzeroGamepadReadFrame(SDL_GameController *pad, int gameplay) {
+  return gamepad_read(pad, true, true, gameplay ? READ_GAMEPLAY : READ_MENU);
 }
 
 uint32_t FzeroGamepadReadOverlay(SDL_GameController *pad) {
-  return gamepad_read(pad, false, true);
+  return gamepad_read(pad, false, true, READ_OVERLAY);
 }
 uint32_t FzeroGamepadReadSupplemental(SDL_GameController *pad, uint32_t mask) {
-  return gamepad_read(pad, false, false) & mask;
+  return gamepad_read(pad, false, false, READ_OVERLAY) & mask;
 }
 
 void FzeroGamepadShutdown(SDL_GameController **pad) {
+  FzeroControlsNativeLoad(NULL, NULL);
   if (pad && *pad) {
     SDL_GameControllerClose(*pad);
     *pad = NULL;
