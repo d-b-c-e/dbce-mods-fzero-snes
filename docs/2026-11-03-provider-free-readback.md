@@ -1,5 +1,9 @@
 # Provider-free F-Zero readback
 
+Audio boundary: `outputMuted` does not observe audio exclusion. See
+[audio and mute evidence](2026-11-03-audio-mute-evidence.md) for the runner's
+requested dummy driver, native device-open path and physical-silence limits.
+
 Assignment 501336; operator napo. Isolated branch
 `napo/fzero-readback-20261103`, based on local main `2eeda80`.
 Read AGENTS, the hub F-Zero profile, reconciliation `c2b63db` and publication

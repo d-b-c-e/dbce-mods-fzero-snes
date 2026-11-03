@@ -1,5 +1,12 @@
 # Toolkit standards adoption
 
+November3 audio-notes review: all49 current ledger IDs are represented. Existing
+unchecked/pending019/021/031/038/039/041/042/043/045/046/048 remain open;
+duplicate038 rows retain their historical pending/unchecked descriptions.
+STD-011 documentation returns to local main; no source/build/device/physical
+adoption is added. Force/controller/outputMuted fields are not audio exclusion
+evidence. See [audio and mute evidence](docs/2026-11-03-audio-mute-evidence.md).
+
 ## October 23 scoped Native helper admission source
 
 STD-033/035/037 source follow-up adds `nativeControls` to the Deluxe install
