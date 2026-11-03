@@ -25,7 +25,9 @@ $stream=[IO.FileStream]::new("$root/active.log",[IO.FileMode]::CreateNew,[IO.Fil
 try{
  for($i=0;$i -lt 150;$i++){
   $bytes=[Text.Encoding]::UTF8.GetBytes("writer=$i`n");$stream.Write($bytes);$stream.Flush()
-  [IO.File]::WriteAllText("$root/status.new",('{"seq":'+$i+'}'));[IO.File]::Move("$root/status.new","$root/status.json",$true)
+  [IO.File]::WriteAllText("$root/status.new",('{"seq":'+$i+'}'))
+  $until=[Environment]::TickCount64+1000
+  while($true){try{[IO.File]::Move("$root/status.new","$root/status.json",$true);break}catch [IO.IOException]{if([Environment]::TickCount64 -ge $until){throw};Start-Sleep -Milliseconds 2}}
   Start-Sleep -Milliseconds 4
  }
 }finally{$stream.Dispose()}
@@ -33,8 +35,9 @@ try{
 '@
 [IO.File]::WriteAllText("$Evidence/writer.ps1",$writer)
 $start=[Diagnostics.ProcessStartInfo]::new((Get-Process -Id $PID).Path);$start.UseShellExecute=$false;$start.CreateNoWindow=$true
+$start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
 foreach($arg in @('-NoProfile','-NonInteractive','-File',"$Evidence/writer.ps1",$Evidence)){[void]$start.ArgumentList.Add($arg)}
-$p=[Diagnostics.Process]::new();$p.StartInfo=$start;[void]$p.Start();$deadline=[DateTime]::UtcNow.AddSeconds(10);$reads=0;$replaceReads=0
+$p=[Diagnostics.Process]::new();$p.StartInfo=$start;[void]$p.Start();$stdout=$p.StandardOutput.ReadToEndAsync();$stderr=$p.StandardError.ReadToEndAsync();$deadline=[DateTime]::UtcNow.AddSeconds(10);$reads=0;$replaceReads=0
 try{
  while(-not $p.HasExited){
   if([DateTime]::UtcNow -gt $deadline){throw 'Concurrent writer timeout'}
@@ -42,7 +45,7 @@ try{
   if(Test-Path "$Evidence/status.json"){$s=Read-FzeroSharedText "$Evidence/status.json"|ConvertFrom-Json;Check ($s.seq -ge 0 -and $s.seq -lt 150) 'Replaced status malformed';$replaceReads++}
   Start-Sleep -Milliseconds 2
  }
- $p.WaitForExit();Check ($p.ExitCode -eq 0) 'Concurrent writer failed'
+ $p.WaitForExit();[IO.File]::WriteAllText("$Evidence/writer.stdout.txt",$stdout.GetAwaiter().GetResult());[IO.File]::WriteAllText("$Evidence/writer.stderr.txt",$stderr.GetAwaiter().GetResult());Check ($p.ExitCode -eq 0) 'Concurrent writer failed'
 }finally{if(-not $p.HasExited){$p.Kill();$p.WaitForExit()};$p.Dispose()}
 Check ($reads -gt 20 -and $replaceReads -gt 20) 'Active shared reads not exercised'
 Check ((Read-FzeroSharedText "$Evidence/active.log").Contains('writer=149')) 'Writer incomplete'
