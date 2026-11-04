@@ -246,7 +246,9 @@ static void dirty_key_tests(void) {
   CHECK(FzeroVideoLoad(&loaded, path) && loaded.fps == 0 && loaded.triple_compare_view == 0);
   char text[1024]; file = fopen(path, "rb"); CHECK(file);
   size_t n = fread(text, 1, sizeof(text) - 1, file); CHECK(!ferror(file) && !fclose(file)); text[n] = 0;
-  CHECK(strstr(text, "PresentationFPS=Auto") && strstr(text, "Unknown=abc\n[Other]\nThing=9") &&
+  const char *footer = strstr(text, "[Other]\nThing=9");
+  CHECK(strstr(text, "PresentationFPS=Auto") && strstr(text, "\nUnknown=abc\n") &&
+        footer && !strcmp(footer, "[Other]\nThing=9") &&
         !strstr(text, "BSDeluxe") && !strstr(text, "HDMode7"));
   CHECK(remove(path) == 0);
 
