@@ -14,6 +14,28 @@
 
 static const char *const aspect_names[] = {"4:3", "16:9", "21:9", "32:9", "Fit"};
 
+/* These native readers consume byte-oriented INI text, not UTF-16 or binary
+ * data. Refuse unsupported input before any temporary file is reserved. */
+static char *read_ini_text(const char *path, size_t *length) {
+  enum { kMaxFile = 1 << 16 };
+  if (!path || !*path) return NULL;
+  char *text = calloc(1, kMaxFile + 1);
+  if (!text) return NULL;
+  *length = 0;
+  FILE *in = fopen(path, "rb");
+  if (in) {
+    *length = fread(text, 1, kMaxFile + 1, in);
+    bool bad = ferror(in) || *length > kMaxFile;
+    if (fclose(in)) bad = true;
+    if (bad) { free(text); return NULL; }
+  } else if (errno != ENOENT) { free(text); return NULL; }
+  bool wide = *length >= 2 &&
+      (((unsigned char)text[0] == 0xff && (unsigned char)text[1] == 0xfe) ||
+       ((unsigned char)text[0] == 0xfe && (unsigned char)text[1] == 0xff));
+  if (wide || memchr(text, '\0', *length)) { free(text); return NULL; }
+  return text;
+}
+
 /* Reserve a sibling before writing it. A stale/concurrent candidate is never
  * truncated, and callers only clean up the name this call actually created. */
 static FILE *open_temporary(const char *path, char *temporary, size_t capacity,
@@ -259,6 +281,10 @@ bool FzeroVideoLoad(FzeroVideoSettings *s, const char *path) {
 }
 
 bool FzeroVideoSave(const FzeroVideoSettings *s, const char *path) {
+  size_t source_length;
+  char *source = read_ini_text(path, &source_length);
+  if (!source) return false;
+  free(source);
   char temporary[1024];
   FILE *f = open_temporary(path, temporary, sizeof(temporary), "wx");
   if (!f) return false;
@@ -369,19 +395,11 @@ static char *ini_put(char *text, size_t *length, const char *section,
 
 bool FzeroIniSaveKeys(const char *path, const char *section, int count,
                       const char *const *keys, const char *const *values) {
-  enum { kMaxFile = 1 << 16 };
   char temporary[1024];
   if (!path || !section || count < 1 || !keys || !values) return false;
-  char *text = calloc(1, kMaxFile + 1);
+  size_t length;
+  char *text = read_ini_text(path, &length);
   if (!text) return false;
-  size_t length = 0;
-  FILE *in = fopen(path, "rb");
-  if (in) {
-    length = fread(text, 1, kMaxFile + 1, in);
-    bool bad = ferror(in) || length > kMaxFile;
-    fclose(in);
-    if (bad) { free(text); return false; }
-  } else if (errno != ENOENT) { free(text); return false; }
   for (int i = 0; i < count; ++i)
     if (!keys[i] || !values[i] || !(text = ini_put(text, &length, section, keys[i], values[i])))
       { free(text); return false; }

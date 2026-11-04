@@ -107,6 +107,42 @@ static void clock_tests(void) {
   CHECK(FzeroPresentationHz(144, 60) == 144);
 }
 
+static int binary_file_is(const char *path, const unsigned char *expected, size_t bytes) {
+  FILE *file = fopen(path, "rb");
+  if (!file) return 0;
+  for (size_t at = 0; at < bytes; ++at)
+    if (fgetc(file) != expected[at]) { fclose(file); return 0; }
+  int ok = fgetc(file) == EOF && !ferror(file);
+  if (fclose(file)) ok = 0;
+  return ok;
+}
+
+static void admission_tests(void) {
+  static const unsigned char binary[] = "[FZeroVideo]\nUnknown=1\0ShowFPS=0\n";
+  static const unsigned char utf16le[] = {0xff, 0xfe};
+  static const unsigned char utf16be[] = {0xfe, 0xff, 0, '['};
+  unsigned char *large = malloc((1u << 16) + 1); CHECK(large);
+  memset(large, ';', (1u << 16) + 1);
+  const struct { const unsigned char *bytes; size_t count; } cases[] = {
+    {binary, sizeof(binary) - 1}, {utf16le, sizeof(utf16le)},
+    {utf16be, sizeof(utf16be)}, {large, (1u << 16) + 1},
+  };
+  const char *path = "test-video-admission.ini";
+  FzeroVideoSettings settings;
+  FzeroVideoDefaults(&settings);
+  const char *const key[] = {"ShowFPS"}, *const on[] = {"1"};
+  for (unsigned i = 0; i < sizeof(cases) / sizeof(*cases); ++i) {
+    FILE *file = fopen(path, "wb");
+    CHECK(file && fwrite(cases[i].bytes, 1, cases[i].count, file) == cases[i].count && !fclose(file));
+    CHECK(!FzeroVideoSave(&settings, path));
+    CHECK(binary_file_is(path, cases[i].bytes, cases[i].count));
+    CHECK(!FzeroIniSaveKeys(path, "FZeroVideo", 1, key, on));
+    CHECK(binary_file_is(path, cases[i].bytes, cases[i].count));
+  }
+  CHECK(remove(path) == 0);
+  free(large);
+}
+
 static int temporary_file_is(const char *path, const char *expected) {
   char got[2048];
   FILE *file = fopen(path, "rb");
@@ -337,6 +373,7 @@ static void config_tests(void) {
 }
 
 int main(void) {
+  admission_tests();
   temporary_tests();
   FzeroVideoSettings replay;
   FzeroVideoDefaults(&replay);
