@@ -7,6 +7,7 @@
 #include <string.h>
 
 static FzeroVideoSettings *video;
+static FzeroVideoSettings video_committed;
 static const char *config_path;
 static char error_text[128];
 static int (*report_available)(void);
@@ -498,7 +499,8 @@ static int set_option(void *ctx, const char *package, const char *feature,
 static int commit(void *ctx, const char *image) {
   (void)ctx; (void)image;
   error_text[0] = 0;
-  if (FzeroVideoSave(video, config_path)) {
+  if (FzeroVideoSaveChanges(&video_committed, video, config_path)) {
+    video_committed = *video;
     if (wheel_config && wheel_write) {
       char value[32];
       save_wheel_profile();
@@ -522,6 +524,7 @@ static const char *last_error(void *ctx) { (void)ctx; return error_text; }
 const RecompLauncherCModProvider *FzeroModsProvider(FzeroVideoSettings *settings, const char *path) {
   static RecompLauncherCModProvider provider;
   video = settings; config_path = path; error_text[0] = 0;
+  if (settings) video_committed = *settings;
   wheel_config = NULL; wheel_write = NULL;
   wheel_read_axis = NULL;
   wheel_section[0] = 0; wheel_enabled = 0; wheel_dirty = 0;

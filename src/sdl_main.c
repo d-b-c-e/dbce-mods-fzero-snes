@@ -693,6 +693,7 @@ static int launcher_steering_axis(const char *guid, int axis, int *value) {
 static int resolve_rom(const char *executable, const char *explicit_rom,
                        bool force_launcher, char *path, size_t path_size,
                        RecompLauncherCSettings *settings) {
+  const FzeroVideoSettings video_before_launcher = g_video;
   memset(settings, 0, sizeof(*settings));
   settings->window_scale = 3;
   settings->enable_audio = 1;
@@ -816,7 +817,7 @@ static int resolve_rom(const char *executable, const char *explicit_rom,
   save_launcher_settings(settings);
   /* Mod choices are settings too. recomp-ui commits its provider on Play;
    * persist a typed resolution (and other mod choices) when quitting as well. */
-  if (!FzeroVideoSave(&g_video, kVideoConfig))
+  if (!FzeroVideoSaveChanges(&video_before_launcher, &g_video, kVideoConfig))
     fprintf(stderr, "[fzero-launcher] unable to save video/mod settings\n");
   if (action == RECOMP_LAUNCHER_RESULT_CONFIGURE_CONTROLS) {
     char why[256];
@@ -2612,8 +2613,9 @@ int main(int argc, char **argv) {
     return resolve_result == 0 ? 0 : 2;
   }
   if (!g_video.enhanced) {
+    const FzeroVideoSettings before_aspect = g_video;
     g_video.aspect = launcher_aspect(launcher_settings.aspect_index);
-    if (!g_isolated_owner_state && !FzeroShimRequested() && !recorded_replay && !FzeroVideoSave(&g_video, kVideoConfig))
+    if (!g_isolated_owner_state && !FzeroShimRequested() && !recorded_replay && !FzeroVideoSaveChanges(&before_aspect, &g_video, kVideoConfig))
       fprintf(stderr, "[fzero] Unable to save video settings\n");
   }
   g_config.linear_filtering = launcher_settings.linear_filter != 0;
@@ -3197,6 +3199,7 @@ int main(int argc, char **argv) {
         const SDL_Keycode key = SNESRECOMP_SDL_EVENT_KEY(event);
         const Uint16 mod = (Uint16)SNESRECOMP_SDL_EVENT_MOD(event);
         if ((mod & KMOD_CTRL) && (key == SDLK_F6 || key == SDLK_F7)) {
+          const FzeroVideoSettings before_shortcut = g_video;
           if (key == SDLK_F6) {
             if (!g_video.enhanced) { g_video.enhanced = true; g_video.aspect = FZERO_ASPECT_16_9; }
             else if (g_video.aspect == FZERO_ASPECT_FIT) g_video.enhanced = false;
@@ -3207,7 +3210,7 @@ int main(int argc, char **argv) {
             for (unsigned i = 0; i < sizeof(rates) / sizeof(*rates); ++i)
               if (g_video.fps == rates[i]) { g_video.fps = rates[(i + 1) % 8]; break; }
           }
-          if (!FzeroVideoSave(&g_video, kVideoConfig)) fprintf(stderr, "[fzero] Unable to save video settings\n");
+          if (!FzeroVideoSaveChanges(&before_shortcut, &g_video, kVideoConfig)) fprintf(stderr, "[fzero] Unable to save video settings\n");
           next_display_check = 0;
           char title[192];
           snprintf(title, sizeof(title), "F-Zero - %s - %s%u FPS",

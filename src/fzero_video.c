@@ -393,16 +393,24 @@ static char *ini_put(char *text, size_t *length, const char *section,
   return out;
 }
 
-bool FzeroIniSaveKeys(const char *path, const char *section, int count,
-                      const char *const *keys, const char *const *values) {
+static bool ini_save_keys(const char *path, const char *section, int count,
+                          const char *const *keys, const char *const *values,
+                          bool skip_equal) {
   char temporary[1024];
   if (!path || !section || count < 1 || !keys || !values) return false;
   size_t length;
   char *text = read_ini_text(path, &length);
   if (!text) return false;
+  size_t original_length = length;
+  char *original = skip_equal ? malloc(length + 1) : NULL;
+  if (skip_equal && !original) { free(text); return false; }
+  if (original) memcpy(original, text, length);
   for (int i = 0; i < count; ++i)
     if (!keys[i] || !values[i] || !(text = ini_put(text, &length, section, keys[i], values[i])))
-      { free(text); return false; }
+      { free(original); free(text); return false; }
+  bool unchanged = original && length == original_length && !memcmp(original, text, length);
+  free(original);
+  if (unchanged) { free(text); return true; }
   FILE *f = open_temporary(path, temporary, sizeof(temporary), "wbx");
   if (!f) { free(text); return false; }
   bool ok = fwrite(text, 1, length, f) == length;
@@ -417,6 +425,53 @@ bool FzeroIniSaveKeys(const char *path, const char *section, int count,
   }
   if (!ok) remove(temporary);
   return ok;
+}
+
+bool FzeroIniSaveKeys(const char *path, const char *section, int count,
+                      const char *const *keys, const char *const *values) {
+  return ini_save_keys(path, section, count, keys, values, false);
+}
+
+bool FzeroVideoSaveChanges(const FzeroVideoSettings *before,
+                           const FzeroVideoSettings *after, const char *path) {
+  if (!before || !after || !path || !*path) return false;
+  const char *keys[20], *values[20];
+  char text[20][16];
+  int count = 0;
+#define PUT(key, ...) do { \
+  if (count >= (int)(sizeof(keys) / sizeof(*keys))) return false; \
+  int n = snprintf(text[count], sizeof(text[count]), __VA_ARGS__); \
+  if (n < 0 || n >= (int)sizeof(text[count])) return false; \
+  keys[count] = key; values[count] = text[count]; ++count; \
+} while (0)
+#define CHANGE(field, key, ...) do { if (before->field != after->field) PUT(key, __VA_ARGS__); } while (0)
+  CHANGE(enhanced, "EnhancedRenderer", "%d", after->enhanced);
+  CHANGE(aspect, "Aspect", "%s", FzeroAspectName(after->aspect));
+  /* The old combined checkpoint derives an absent FPS flag from EnhancedRenderer.
+   * Preserve the separate FPS choice when changing that discriminator. */
+  if (before->fps_enabled != after->fps_enabled || before->enhanced != after->enhanced)
+    PUT("PresentationEnabled", "%d", after->fps_enabled);
+  if (after->fps) { CHANGE(fps, "PresentationFPS", "%u", after->fps); }
+  else { CHANGE(fps, "PresentationFPS", "%s", "Auto"); }
+  CHANGE(bs_deluxe, "BSDeluxe", "%d", after->bs_deluxe);
+  CHANGE(hd_mode7, "HDMode7", "%d", after->hd_mode7);
+  CHANGE(hd_scale, "HDMode7Scale", "%u", FzeroValidHdScale(after->hd_scale) ? after->hd_scale : 2u);
+  CHANGE(diagnostics, "Diagnostics", "%d", after->diagnostics);
+  CHANGE(triple_screen, "TripleScreen", "%d", after->triple_screen);
+  CHANGE(triple_output_mode, "TripleOutputMode", "%s", after->triple_output_mode == FZERO_TRIPLE_OUTPUT_SEPARATE ? "Separate" : "Span");
+  CHANGE(triple_panel_width_mm, "TriplePanelWidthMm", "%u", after->triple_panel_width_mm);
+  CHANGE(triple_eye_distance_mm, "TripleEyeDistanceMm", "%u", after->triple_eye_distance_mm);
+  CHANGE(triple_left_yaw_deg, "TripleLeftAngleDeg", "%u", after->triple_left_yaw_deg);
+  CHANGE(triple_right_yaw_deg, "TripleRightAngleDeg", "%u", after->triple_right_yaw_deg);
+  CHANGE(triple_bezel_gap_mm, "TripleBezelGapMm", "%u", after->triple_bezel_gap_mm);
+  CHANGE(triple_eye_height_mm, "TripleEyeHeightMm", "%u", after->triple_eye_height_mm);
+  CHANGE(reduce_crash_flash, "ReduceCrashFlash", "%d", after->reduce_crash_flash);
+  CHANGE(show_fps, "ShowFPS", "%d", after->show_fps);
+  CHANGE(triple_curve_radius_mm, "TripleCurveRadiusMm", "%u", after->triple_curve_radius_mm);
+  CHANGE(triple_compare_view, "TripleCompareView", "%u", after->triple_compare_view >= 1 && after->triple_compare_view <= 3 ? after->triple_compare_view : 0u);
+#undef CHANGE
+#undef PUT
+  return !count || ini_save_keys(path, "FZeroVideo", count, keys, values, true);
 }
 
 bool FzeroVideoSaveKey(const char *path, const char *key, const char *value) {

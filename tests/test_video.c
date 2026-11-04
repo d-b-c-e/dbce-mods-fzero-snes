@@ -202,6 +202,87 @@ static void temporary_tests(void) {
   CHECK(remove(path) == 0 && remove(legacy) == 0 && remove(occupied) == 0);
 }
 
+static void dirty_key_tests(void) {
+  const char *path = "test-video-dirty.ini";
+  FzeroVideoSettings before, after, loaded;
+  FzeroVideoDefaults(&before); after = before;
+  remove(path);
+  CHECK(FzeroVideoSaveChanges(&before, &after, path));
+  FILE *file = fopen(path, "rb"); CHECK(!file);
+  after.show_fps = true;
+  CHECK(FzeroVideoSaveChanges(&before, &after, path));
+  CHECK(temporary_file_is(path, "[FZeroVideo]\nShowFPS=1\n"));
+  CHECK(remove(path) == 0);
+
+  static const char original[] = "; owner\r\n[FZeroVideo]\n  ShowFPS \t= 0 ; keep\n"
+      "TripleCompareView=3\r\nTripleEyeHeightMm=137\nUnknown=abc\n[Other]\nThing=9";
+  static const char changed[] = "; owner\r\n[FZeroVideo]\n  ShowFPS \t= 1 ; keep\n"
+      "TripleCompareView=3\r\nTripleEyeHeightMm=137\nUnknown=abc\n[Other]\nThing=9";
+  file = fopen(path, "wb"); CHECK(file && fputs(original, file) >= 0 && !fclose(file));
+  CHECK(FzeroVideoLoad(&before, path)); after = before; after.show_fps = true;
+  CHECK(FzeroVideoSaveChanges(&before, &after, path) && temporary_file_is(path, changed));
+#ifdef _WIN32
+  CHECK(SetFileAttributesA(path, FILE_ATTRIBUTE_READONLY));
+  WIN32_FILE_ATTRIBUTE_DATA stamp, repeated;
+  CHECK(GetFileAttributesExA(path, GetFileExInfoStandard, &stamp));
+  /* Launcher exit may repeat a delta already persisted by provider commit. */
+  CHECK(FzeroVideoSaveChanges(&before, &after, path));
+  CHECK(GetFileAttributesExA(path, GetFileExInfoStandard, &repeated));
+  CHECK(CompareFileTime(&stamp.ftLastWriteTime, &repeated.ftLastWriteTime) == 0 &&
+        temporary_file_is(path, changed));
+  FzeroVideoSettings failed = after; failed.show_fps = false;
+  CHECK(!FzeroVideoSaveChanges(&after, &failed, path) && temporary_file_is(path, changed));
+  CHECK(SetFileAttributesA(path, FILE_ATTRIBUTE_NORMAL));
+  CHECK(FzeroVideoSaveChanges(&after, &failed, path) && temporary_file_is(path, original));
+#endif
+  /* A multi-key edit leaves absent optional fields and unowned bytes alone. */
+  CHECK(FzeroVideoLoad(&before, path)); after = before;
+  after.fps = 144; after.fps_enabled = false; after.aspect = FZERO_ASPECT_21_9;
+  CHECK(FzeroVideoSaveChanges(&before, &after, path));
+  CHECK(FzeroVideoLoad(&loaded, path) && loaded.fps == 144 && !loaded.fps_enabled &&
+        loaded.aspect == FZERO_ASPECT_21_9 && loaded.triple_compare_view == 3 && loaded.triple_eye_height_mm == 137);
+  before = loaded; after = before; after.fps = 0; after.triple_compare_view = 0;
+  CHECK(FzeroVideoSaveChanges(&before, &after, path));
+  CHECK(FzeroVideoLoad(&loaded, path) && loaded.fps == 0 && loaded.triple_compare_view == 0);
+  char text[1024]; file = fopen(path, "rb"); CHECK(file);
+  size_t n = fread(text, 1, sizeof(text) - 1, file); CHECK(!ferror(file) && !fclose(file)); text[n] = 0;
+  CHECK(strstr(text, "PresentationFPS=Auto") && strstr(text, "Unknown=abc\n[Other]\nThing=9") &&
+        !strstr(text, "BSDeluxe") && !strstr(text, "HDMode7"));
+  CHECK(remove(path) == 0);
+
+  /* The legacy absent FPS flag follows EnhancedRenderer. A widescreen-only edit
+   * must keep the separate FPS state after reload, without other defaults. */
+  file = fopen(path, "wb");
+  CHECK(file && fputs("[FZeroVideo]\nEnhancedRenderer=0\nUnknown=7\n", file) >= 0 && !fclose(file));
+  CHECK(FzeroVideoLoad(&before, path) && !before.enhanced && !before.fps_enabled);
+  after = before; after.enhanced = true;
+  CHECK(FzeroVideoSaveChanges(&before, &after, path));
+  CHECK(temporary_file_is(path, "[FZeroVideo]\nEnhancedRenderer=1\nUnknown=7\nPresentationEnabled=0\n"));
+  CHECK(FzeroVideoLoad(&loaded, path) && loaded.enhanced && !loaded.fps_enabled);
+  CHECK(remove(path) == 0);
+
+  /* Exercise every typed field through the real consumer, without relying on
+   * struct padding or the full-schema serializer to populate missing keys. */
+  FzeroVideoStock(&before); FzeroVideoDefaults(&after);
+  after.fps = 165; after.hd_mode7 = true; after.hd_scale = 4; after.diagnostics = true;
+  after.triple_screen = true; after.triple_output_mode = FZERO_TRIPLE_OUTPUT_SEPARATE;
+  after.triple_panel_width_mm = 620; after.triple_eye_distance_mm = 780;
+  after.triple_left_yaw_deg = 55; after.triple_right_yaw_deg = 65;
+  after.triple_bezel_gap_mm = 12; after.triple_eye_height_mm = 137;
+  after.triple_curve_radius_mm = 1500; after.triple_compare_view = 3;
+  after.reduce_crash_flash = true; after.show_fps = true;
+  CHECK(FzeroVideoSaveChanges(&before, &after, path) && FzeroVideoLoad(&loaded, path));
+  CHECK(loaded.enhanced && loaded.aspect == after.aspect && loaded.fps == 165 && loaded.fps_enabled &&
+        loaded.bs_deluxe && loaded.hd_mode7 && loaded.hd_scale == 4 && loaded.diagnostics &&
+        loaded.triple_screen && loaded.triple_output_mode == after.triple_output_mode &&
+        loaded.triple_panel_width_mm == 620 && loaded.triple_eye_distance_mm == 780 &&
+        loaded.triple_left_yaw_deg == 55 && loaded.triple_right_yaw_deg == 65 &&
+        loaded.triple_bezel_gap_mm == 12 && loaded.triple_eye_height_mm == 137 &&
+        loaded.triple_curve_radius_mm == 1500 && loaded.triple_compare_view == 3 &&
+        loaded.reduce_crash_flash && loaded.show_fps);
+  CHECK(remove(path) == 0);
+}
+
 static void config_tests(void) {
   FzeroVideoSettings a, b;
   FzeroVideoDefaults(&a);
@@ -375,6 +456,7 @@ static void config_tests(void) {
 int main(void) {
   admission_tests();
   temporary_tests();
+  dirty_key_tests();
   FzeroVideoSettings replay;
   FzeroVideoDefaults(&replay);
   CHECK(FzeroReplayConfigure("0:8,10-20:1,15:256", "0:16:9,12:32:9,22:4:3"));

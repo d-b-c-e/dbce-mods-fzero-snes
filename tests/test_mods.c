@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #define CHECK(e) do { if (!(e)) { fprintf(stderr, "%d: %s\n", __LINE__, #e); exit(1); } } while (0)
 static int wrote_wheel_range, wrote_rewind, wrote_ffb, wrote_steering, wrote_impact, wrote_brake_invert, wrote_steer_invert;
 static char wrote_device[256], wrote_impact_type[32];
@@ -195,9 +198,75 @@ static void test_selection_rebind(void) {
   CHECK(!strcmp(option.value, "12")); /* Rebind doesn't reload/enable force state. */
   remove("selection.ini"); remove("selection-video.ini");
 }
+#ifdef _WIN32
+static int dirty_writes;
+static void dirty_write(const char *path, const char *section, const char *key, const char *value) {
+  (void)path; (void)section; (void)key; (void)value;
+  ++dirty_writes;
+}
+#endif
+static int provider_file_is(const char *path, const char *expected) {
+  char text[1024]; FILE *file = fopen(path, "rb");
+  if (!file) return 0;
+  size_t n = fread(text, 1, sizeof(text) - 1, file);
+  int ok = !ferror(file) && feof(file); fclose(file); text[n] = 0;
+  return ok && !strcmp(text, expected);
+}
+static void provider_write_file(const char *path, const char *text) {
+  FILE *file = fopen(path, "wb"); CHECK(file && fputs(text, file) >= 0 && !fclose(file));
+}
+static void test_dirty_video_commit(void) {
+  const char *path = "test-mods-dirty.ini";
+  static const char original[] = "; owner\r\n[FZeroVideo]\nShowFPS = 0 ; keep\n"
+      "Unknown=9\r\nTripleCompareView=3\nTripleEyeHeightMm=137";
+  static const char changed[] = "; owner\r\n[FZeroVideo]\nShowFPS = 1 ; keep\n"
+      "Unknown=9\r\nTripleCompareView=3\nTripleEyeHeightMm=137";
+  FzeroVideoSettings video;
+  provider_write_file(path, original); CHECK(FzeroVideoLoad(&video, path));
+  const RecompLauncherCModProvider *p = FzeroModsProvider(&video, path);
+  CHECK(p->commit(NULL, NULL));
+  CHECK(provider_file_is(path, original)); /* Actual old provider destroys unowned text. */
+  CHECK(remove(path) == 0);
+  FzeroVideoDefaults(&video); p = FzeroModsProvider(&video, path);
+  CHECK(p->commit(NULL, NULL));
+  FILE *file = fopen(path, "rb"); CHECK(!file); /* No edit creates no schema. */
+
+  provider_write_file(path, original); CHECK(FzeroVideoLoad(&video, path));
+  p = FzeroModsProvider(&video, path);
+  RecompLauncherCModFeature fps; CHECK(p->feature_get(NULL, 1, &fps));
+  CHECK(p->feature_set_option(NULL, fps.package_id, fps.id, "ShowFPS", "true"));
+  CHECK(p->commit(NULL, NULL) && provider_file_is(path, changed));
+#ifdef _WIN32
+  CHECK(SetFileAttributesA(path, FILE_ATTRIBUTE_READONLY));
+  CHECK(p->commit(NULL, NULL) && provider_file_is(path, changed));
+  CHECK(SetFileAttributesA(path, FILE_ATTRIBUTE_NORMAL));
+  CHECK(FzeroVideoLoad(&video, path));
+  p = FzeroModsProviderWheel(&video, path, "wheel-options.ini",
+      "030000004c0500006802000000000000", dirty_write, list_ffb, read_live_axis);
+  CHECK(p->feature_set_option(NULL, fps.package_id, fps.id, "ShowFPS", "false"));
+  dirty_writes = 0;
+  CHECK(SetFileAttributesA(path, FILE_ATTRIBUTE_READONLY));
+  CHECK(!p->commit(NULL, NULL) && dirty_writes == 0 && provider_file_is(path, changed));
+  CHECK(SetFileAttributesA(path, FILE_ATTRIBUTE_NORMAL));
+  /* Failed commit must retain its opening baseline for this successful retry. */
+  CHECK(p->commit(NULL, NULL) && dirty_writes > 0 && provider_file_is(path, original));
+  /* A successful commit advances the baseline: no new edit must not restore
+   * the old requested value over a subsequent external change. */
+  provider_write_file(path, changed);
+  CHECK(SetFileAttributesA(path, FILE_ATTRIBUTE_READONLY));
+  CHECK(p->commit(NULL, NULL) && provider_file_is(path, changed));
+  CHECK(SetFileAttributesA(path, FILE_ATTRIBUTE_NORMAL));
+#endif
+  CHECK(remove(path) == 0);
+}
+
 int main(void) {
+  test_dirty_video_commit();
   test_report_dispatch();
   FzeroVideoSettings s, loaded; FzeroVideoStock(&s); /* start from nothing enabled to test each toggle */
+  /* Persist the declared Stock opening fixture. Delta saves no longer force
+   * untouched Stock values into a missing file whose reader defaults differ. */
+  CHECK(FzeroVideoSave(&s, "test-mods.ini"));
   const RecompLauncherCModProvider *p = FzeroModsProvider(&s, "test-mods.ini");
   RecompLauncherCModFeature w, f;
   RecompLauncherCModOption option;

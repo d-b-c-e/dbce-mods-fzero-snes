@@ -68,6 +68,11 @@ FzeroRect FzeroDestination(FzeroViewport viewport, int width, int height);
 int FzeroHudAnchorX(FzeroViewport viewport, int x, int anchor);
 bool FzeroVideoLoad(FzeroVideoSettings *settings, const char *path);
 bool FzeroVideoSave(const FzeroVideoSettings *settings, const char *path);
+/* Persist this edit's typed fields, plus the legacy FPS flag when changing
+ * EnhancedRenderer would otherwise alter it on reload. Empty/already-saved
+ * deltas do not rewrite a file; unrelated keys/defaults remain untouched. */
+bool FzeroVideoSaveChanges(const FzeroVideoSettings *before,
+                           const FzeroVideoSettings *after, const char *path);
 
 /* Monotonic time in seconds. Simulation debt is never discarded here.
  * Hosts explicitly reset on pause/minimize/load, and bound catch-up batches
