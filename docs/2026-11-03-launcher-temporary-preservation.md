@@ -10,11 +10,17 @@ Both writers now reserve their own sibling `<destination>.tmp.<pid>.<sequence>` 
 
 Microsoft documents `x` as failure when the file exists, equivalent to `_O_EXCL`, in its [CRT fopen reference](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/fopen-wfopen?view=msvc-170). Qualification must exercise that behavior on the actual local toolchain; the API reference is not a passing test.
 
-## Focused fixtures, pending CPU GO
+## Focused fixture result
 
 The existing video executable calls a new temporary-file regression before its other save cases. It creates both a legacy `.tmp` marker and the first candidate name, then invokes the actual full writer. Both markers must remain byte-exact, the saved config must read back, and the successful candidate must be consumed by replacement. The same test invokes the actual narrow writer and checks both markers and readback again. On Windows, readonly destination failures through both writers must preserve the destination and both foreign markers, and a scoped filename enumeration must show no leftover candidate owned by the test saves. Fixture cleanup removes only the synthetic files it created.
 
-Planned CPU: original writer from `c79e0b5` with the new video regression must fail the legacy-marker preservation check; changed video and existing panel executables must pass. Three sequential compiler invocations and three direct fixture roots, one worker, synthetic files only, with exact candidate/source pins and independent scoped process audit before release. No full game/package/CMake build or replay. Existing F6 scalar evidence is retained and will not be rerun beyond the affected panel fixture.
+CPU GO **508407** (delivery #508410), tested source **`4fc76e5bc89ec61dcb6fb8c291fd3ff16a77eb07`**: original writer exported from `c79e0b5` with the new video regression compiled, then exited 1 at `tests/test_video.c:140`, `temporary_file_is(legacy, "legacy marker")`. Actual baseline destination bytes are retained as `baseline-witness.ini`. Changed video and existing panel executables both exited 0. Three sequential GCC `-std=c11 -Wall -Wextra -Werror` compiles had empty stderr; total CPU runner interval **9.285166s**, one worker, synthetic files only. This qualifies the exclusive-create behavior on the local Windows UCRT toolchain, not the unexecuted POSIX path.
+
+Evidence is retained in this worktree under `.local/launcher-temporary-cpu/`: frozen runner SHA-256 `02A6057B5C7C84FBDF73412AAF5B5260B6AE46C7FF2E9CE630292DD79D0528C6`, plan `215C7D2E223B2ADC4B329CFFE7F80D5BBD2B52302EB2977283B27C2F8564AD2C`, original writer export, and `cpu-508407/` logs/binaries/result/audit/closure. Result SHA-256 `1D4726A490BCE8E04BB1ECF2D82BAE94E4D3145F406C8DF016A27EC4226B9469`. All 15 qualification input pins were independently rechecked unchanged after the run.
+
+Six held direct roots exited normally, including the expected-red exit 1; observed descendants were tracked by the existing helper. Full descendant-job containment remains **unqualified**. Independent **all-image** scoped OS audit at `2026-11-04T01:26:55.9763922Z` found all 19 observed original identities absent and zero remaining scoped processes, SHA-256 `2ADDA98075CCC068F82D2E31F91A3050C927EC2277AA91942D5E88AD190B3179`. Only then was exact named lease `soba-fzero-launcher-cpu-508407`, token suffix `974aba5684ee4c53bc4ce211dc1546a9`, released at `2026-11-04T01:27:11.4993237Z`; named receipt absent, no custody remains. Entire lease interval was below 180 seconds.
+
+No full game/package/CMake build or replay. Existing F6 scalar evidence was retained, with only the affected panel fixture rerun. No installed/owner files, UI, input, devices or public push; rendered launcher behavior and owner acceptance remain unqualified. Retain the clean worktree/branch and ignored evidence until coordinator integration/retention is decided.
 
 ## STD-044 remains partial
 
