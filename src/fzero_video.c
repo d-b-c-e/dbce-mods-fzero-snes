@@ -7,9 +7,39 @@
 #include <string.h>
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <stdatomic.h>
+#include <unistd.h>
 #endif
 
 static const char *const aspect_names[] = {"4:3", "16:9", "21:9", "32:9", "Fit"};
+
+/* Reserve a sibling before writing it. A stale/concurrent candidate is never
+ * truncated, and callers only clean up the name this call actually created. */
+static FILE *open_temporary(const char *path, char *temporary, size_t capacity,
+                            const char *mode) {
+  if (!path || !*path) return NULL;
+#ifdef _WIN32
+  static volatile LONG sequence;
+  unsigned long process = GetCurrentProcessId();
+#else
+  static atomic_ulong sequence;
+  unsigned long process = (unsigned long)getpid();
+#endif
+  for (unsigned attempt = 0; attempt < 32; ++attempt) {
+#ifdef _WIN32
+    unsigned long serial = (unsigned long)InterlockedIncrement(&sequence);
+#else
+    unsigned long serial = atomic_fetch_add_explicit(&sequence, 1, memory_order_relaxed) + 1;
+#endif
+    int n = snprintf(temporary, capacity, "%s.tmp.%lu.%lu", path, process, serial);
+    if (n < 0 || (size_t)n >= capacity) return NULL;
+    FILE *file = fopen(temporary, mode); /* C11 x: exclusive creation, no truncation. */
+    if (file) return file;
+    if (errno != EEXIST) return NULL;
+  }
+  return NULL;
+}
 
 static bool parse_bounded_unsigned(const char *text, unsigned low,
                                    unsigned high, unsigned *out) {
@@ -230,8 +260,7 @@ bool FzeroVideoLoad(FzeroVideoSettings *s, const char *path) {
 
 bool FzeroVideoSave(const FzeroVideoSettings *s, const char *path) {
   char temporary[1024];
-  if (snprintf(temporary, sizeof(temporary), "%s.tmp", path) >= (int)sizeof(temporary)) return false;
-  FILE *f = fopen(temporary, "w");
+  FILE *f = open_temporary(path, temporary, sizeof(temporary), "wx");
   if (!f) return false;
   bool ok = fprintf(f, "[FZeroVideo]\nEnhancedRenderer=%d\nAspect=%s\nPresentationEnabled=%d\nPresentationFPS=%u\nBSDeluxe=%d\nHDMode7=%d\nHDMode7Scale=%u\nDiagnostics=%d\nTripleScreen=%d\nTripleOutputMode=%s\nTriplePanelWidthMm=%u\nTripleEyeDistanceMm=%u\nTripleLeftAngleDeg=%u\nTripleRightAngleDeg=%u\nTripleBezelGapMm=%u\nTripleEyeHeightMm=%u\nReduceCrashFlash=%d\n",
                     s->enhanced, FzeroAspectName(s->aspect), s->fps_enabled, s->fps, s->bs_deluxe,
@@ -342,8 +371,7 @@ bool FzeroIniSaveKeys(const char *path, const char *section, int count,
                       const char *const *keys, const char *const *values) {
   enum { kMaxFile = 1 << 16 };
   char temporary[1024];
-  if (!path || !section || count < 1 || !keys || !values ||
-      snprintf(temporary, sizeof(temporary), "%s.tmp", path) >= (int)sizeof(temporary)) return false;
+  if (!path || !section || count < 1 || !keys || !values) return false;
   char *text = calloc(1, kMaxFile + 1);
   if (!text) return false;
   size_t length = 0;
@@ -357,7 +385,7 @@ bool FzeroIniSaveKeys(const char *path, const char *section, int count,
   for (int i = 0; i < count; ++i)
     if (!keys[i] || !values[i] || !(text = ini_put(text, &length, section, keys[i], values[i])))
       { free(text); return false; }
-  FILE *f = fopen(temporary, "wb");
+  FILE *f = open_temporary(path, temporary, sizeof(temporary), "wbx");
   if (!f) { free(text); return false; }
   bool ok = fwrite(text, 1, length, f) == length;
   free(text);

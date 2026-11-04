@@ -7,6 +7,8 @@
 #include <string.h>
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <unistd.h>
 #endif
 
 /* Do not use assert: Release builds must execute all validation. */
@@ -103,6 +105,65 @@ static void clock_tests(void) {
   CHECK(FzeroPresentationHz(0, NAN) == 60);
   CHECK(FzeroPresentationHz(0, 0) == 60);
   CHECK(FzeroPresentationHz(144, 60) == 144);
+}
+
+static int temporary_file_is(const char *path, const char *expected) {
+  char got[2048];
+  FILE *file = fopen(path, "rb");
+  if (!file) return 0;
+  size_t count = fread(got, 1, sizeof(got) - 1, file);
+  int ok = !ferror(file) && feof(file);
+  fclose(file); got[count] = 0;
+  return ok && !strcmp(got, expected);
+}
+
+static void temporary_tests(void) {
+  /* First save in this process: occupy candidate 1 as well as the legacy temp.
+   * Both writers must reserve their own name instead of overwriting either. */
+  const char *path = "test-video-temporary.ini";
+  const char *legacy = "test-video-temporary.ini.tmp";
+  char occupied[128], released[128];
+#ifdef _WIN32
+  unsigned long process = GetCurrentProcessId();
+#else
+  unsigned long process = (unsigned long)getpid();
+#endif
+  snprintf(occupied, sizeof(occupied), "%s.tmp.%lu.1", path, process);
+  snprintf(released, sizeof(released), "%s.tmp.%lu.2", path, process);
+  FILE *file = fopen(legacy, "wb");
+  CHECK(file && fputs("legacy marker", file) >= 0 && !fclose(file));
+  file = fopen(occupied, "wb");
+  CHECK(file && fputs("occupied marker", file) >= 0 && !fclose(file));
+  FzeroVideoSettings settings, back;
+  FzeroVideoDefaults(&settings);
+  CHECK(FzeroVideoSave(&settings, path));
+  CHECK(temporary_file_is(legacy, "legacy marker"));
+  CHECK(temporary_file_is(occupied, "occupied marker"));
+  CHECK(FzeroVideoLoad(&back, path) && !back.show_fps);
+  file = fopen(released, "rb");
+  CHECK(!file); /* Successful replacement consumed only our candidate 2. */
+  const char *const key[] = {"ShowFPS"}, *const on[] = {"1"};
+  CHECK(FzeroIniSaveKeys(path, "FZeroVideo", 1, key, on));
+  CHECK(temporary_file_is(legacy, "legacy marker") && temporary_file_is(occupied, "occupied marker"));
+  CHECK(FzeroVideoLoad(&back, path) && back.show_fps);
+#ifdef _WIN32
+  char original[2048];
+  file = fopen(path, "rb"); CHECK(file);
+  size_t count = fread(original, 1, sizeof(original) - 1, file);
+  CHECK(!ferror(file) && feof(file) && !fclose(file)); original[count] = 0;
+  CHECK(SetFileAttributesA(path, FILE_ATTRIBUTE_READONLY));
+  CHECK(!FzeroVideoSave(&settings, path));
+  CHECK(!FzeroIniSaveKeys(path, "FZeroVideo", 1, key, on));
+  CHECK(temporary_file_is(path, original));
+  CHECK(temporary_file_is(legacy, "legacy marker") && temporary_file_is(occupied, "occupied marker"));
+  char pattern[128]; snprintf(pattern, sizeof(pattern), "%s.tmp.%lu.*", path, process);
+  WIN32_FIND_DATAA found;
+  HANDLE search = FindFirstFileA(pattern, &found); CHECK(search != INVALID_HANDLE_VALUE);
+  do { CHECK(!strcmp(found.cFileName, occupied)); } while (FindNextFileA(search, &found));
+  CHECK(GetLastError() == ERROR_NO_MORE_FILES && FindClose(search));
+  CHECK(SetFileAttributesA(path, FILE_ATTRIBUTE_NORMAL));
+#endif
+  CHECK(remove(path) == 0 && remove(legacy) == 0 && remove(occupied) == 0);
 }
 
 static void config_tests(void) {
@@ -276,6 +337,7 @@ static void config_tests(void) {
 }
 
 int main(void) {
+  temporary_tests();
   FzeroVideoSettings replay;
   FzeroVideoDefaults(&replay);
   CHECK(FzeroReplayConfigure("0:8,10-20:1,15:256", "0:16:9,12:32:9,22:4:3"));
