@@ -492,17 +492,17 @@ Compared the current shared ledger with this file before preparing the isolated
 runner. STD-019 remains unchecked; STD-021/031 physical normalization remain
 pending; STD-037 remains partial. Existing partial/pending rows stay open.
 
-| Standard | State | Scope in this change |
-| --- | --- | --- |
-| STD-041 | unchecked | Current corrected triple camera behavior needs fresh graphical qualification. Replay runner changes no product camera. |
-| STD-042 | unchecked | Per-camera saved framing/naming is outside this replay check. |
-| STD-043 | unchecked | Held-key/hotkey behavior needs ordinary input; replay bypasses it. |
-| STD-044 | partial | Runner snapshots preserve exact bytes, attributes and UTC ticks; product settings-writer adoption remains unqualified. |
-| STD-045 | pending | Saved owner force choice is preserved. New-install On migration is not implemented here; unattended replay latches output off. |
-| STD-046 | unchecked | Camera starting choices and offsets need separate implementation/qualification. |
-| STD-047 | partial | This scratch replay uses one window, without qualifying production triple-span policy or geometry. No separate-window test or owner layout change. |
-| STD-048 | unchecked | Ordinary numpad direction/custom-binding migration is outside replay. |
-| STD-049 | n/a | SNES 2D vehicle representation has no bonnet camera or cab-over mesh placement route. |
+| Standard | Title | State | Scope in this change |
+|---|---|---|---|
+| STD-041 | Triple framing: always corrected; Game or Realistic per mounted camera | unchecked | Current corrected triple camera behavior needs fresh graphical qualification. Replay runner changes no product camera. |
+| STD-042 | Every camera's view is adjustable, remembered and named on screen | unchecked | Per-camera saved framing/naming is outside this replay check. |
+| STD-043 | Hotkeys wait only for their own keys; a held H-pattern gate wins | unchecked | Held-key/hotkey behavior needs ordinary input; replay bypasses it. |
+| STD-044 | A write changes only what it owns, and keeps the file's bytes | partial | Runner snapshots preserve exact bytes, attributes and UTC ticks; product settings-writer adoption remains unqualified. |
+| STD-045 | Force feedback is On by default; My Rig decides and Apply writes it | pending | Saved owner force choice is preserved. New-install On migration is not implemented here; unattended replay latches output off. |
+| STD-046 | Triple cameras: a starting choice per camera, tweaks as offsets | unchecked | Camera starting choices and offsets need separate implementation/qualification. |
+| STD-047 | One borderless window across all screens; eye distance to the panel-edge plane | partial | This scratch replay uses one window, without qualifying production triple-span policy or geometry. No separate-window test or owner layout change. |
+| STD-048 | Numpad + zooms in, − zooms out | unchecked | Ordinary numpad direction/custom-binding migration is outside replay. |
+| STD-049 | Cab-over vehicles: the bonnet camera sits on the roof front edge | n/a | SNES 2D vehicle representation has no bonnet camera or cab-over mesh placement route. |
 
 See docs/2026-11-03-provider-free-readback.md for candidate identity and evidence
 boundaries. Public source/binary distribution and owner acceptance are unchanged.
