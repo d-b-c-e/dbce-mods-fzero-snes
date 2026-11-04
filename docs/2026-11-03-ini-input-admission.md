@@ -1,6 +1,6 @@
 # Settings-save input admission: binary, UTF-16 and size refusal
 
-Kole #508529, 2026-11-03. Bounded game-side source/fixture slice on `eee32b8576791e5a88054caa0a3cab6193d91ae1`, after local integration of the qualified exclusive-temp slice. Worktree `E:/Source/_work/soba-fzero-ini-admission-20261103`, branch `soba/fzero-ini-admission-20261103`. CPU is separately requested; no tests have run for this candidate yet. No installed/owner files, UI, game, devices or public push.
+Kole #508529, 2026-11-03. Bounded game-side source/fixture slice on `eee32b8576791e5a88054caa0a3cab6193d91ae1`, after local integration of the qualified exclusive-temp slice. Worktree `E:/Source/_work/soba-fzero-ini-admission-20261103`, branch `soba/fzero-ini-admission-20261103`. CPU GO508621 qualified source `6ad59adaeea4cc4a2f81b9f30e379cb6b26ec015`; source and all qualification inputs remain unchanged. Local commits only; no main integration, installed/owner files, UI, game, devices or public push.
 
 ## Defect and chosen increment
 
@@ -10,11 +10,15 @@ A shared bounded binary read now precedes both writers. An absent file still mea
 
 This is representation admission, **not** a new INI grammar or strict UTF-8 validator. Existing UTF-8 BOM-before-comment, per-line endings/EOF, scalar writes, legacy sectionless values, exact video key matching and distinct launcher first-match behavior are unchanged. Empty/missing files remain eligible for normal creation. Unsupported input returns the existing save-failure result and follows current caller reporting/rollback; no silent conversion or reset is attempted.
 
-## Focused fixture, pending CPU GO
+## Focused fixture result
 
 The existing video executable first writes four synthetic invalid inputs: an embedded NUL in otherwise INI-like bytes, UTF-16LE BOM only, UTF-16BE bytes, and 65,537 bytes. Each actual full and narrow save must return false, with an exact byte comparison after each refusal. The existing collision/readonly, video/F9 and panel/fullscreen cases remain the affected regression checks; the panel fixture already contains valid UTF-8 BOM-before-comment and mixed-ending preservation cases.
 
-Planned qualification: original writer from `eee32b8` with new video fixture must fail the first full-save refusal assertion; changed video and existing panel fixtures must pass. Three sequential GCC compiles/three direct fixture roots, one worker, copied synthetic files only, with separate CPU GO and independent all-image scoped audit before exact release. No full game/package/CMake build or runtime action. Failed original output will be retained as a byte witness.
+CPU GO **508621** (delivery #508624), **9.2116855 seconds**, one worker: three sequential GCC `-std=c11 -Wall -Wextra -Werror` compiles had empty stderr. Original writer exported from `eee32b8` with the new video fixture compiled, then exited 1 at `tests/test_video.c:137`, `!FzeroVideoSave(&settings, path)`: the old full writer accepted/overwrote the NUL-bearing source. Its actual output is retained as `baseline-witness.ini`. Changed video and existing panel executables exited 0, covering all four invalid inputs through both writers with exact byte preservation, plus affected valid video/F9/temp collision/readonly/F6/fullscreen regressions. No full game/package/CMake build or runtime action.
+
+Raw evidence remains under this worktree's `.local/ini-admission-cpu/`: frozen runner SHA-256 `175C11478EE09836FCB2A78394046132ED46DF5F8C5F7AD1C61524A7C334C6E5`, plan `7A12C311F31B9E43C5E635A3B1E25BAAD57CB3C34B7F860D87BBF4B84B7BE8DC`, original writer export and `cpu-508621/` logs/binaries/result/audit/closure. Result SHA-256 `5FB1E9C137F15FC86CF219CE9A135629D279387894DE61645E8D419E45A83AA3`; all 15 qualification pins were independently rechecked unchanged after the run.
+
+Six held direct roots exited normally, including expected-red exit 1; observed descendants were tracked by the existing helper. Full descendant-job containment remains **unqualified**. Independent **all-image** scoped OS audit at `2026-11-04T01:35:34.0912386Z` found all 18 observed original identities absent and zero scoped processes, SHA-256 `43DBB3DA2B498561B9D96AFA47E1E6B62204C211A04590D5AF5C17CD57590457`. Exact named lease `soba-fzero-admission-cpu-508621`, token suffix `a6d2631a0a7f426ab1d3ffcc7f133831`, was released only afterward at `2026-11-04T01:35:49.9652750Z`; named receipt absent and no custody remains. The full lease interval stayed under 180 seconds. This is Windows source/fixture evidence, not cross-platform, installed, rendered or owner acceptance. Retain the clean worktree/branch and ignored evidence until coordinator integration/retention is decided.
 
 ## Remaining STD-044 boundaries
 
