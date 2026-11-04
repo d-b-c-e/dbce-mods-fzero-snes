@@ -272,7 +272,7 @@ const char *FzeroCompareName(unsigned step) {
                                                        : "Angle + curve correction";
 }
 
-/* Replace or add one Key=value in the buffer: the key's last line in
+/* Replace a scalar value or add one Key=value in the buffer: the key's last line in
  * [section] (the one FzeroVideoLoad reads), else the end of that section,
  * else a new section at the end. Frees text and returns NULL on failure. */
 static char *ini_put(char *text, size_t *length, const char *section,
@@ -296,7 +296,16 @@ static char *ini_put(char *text, size_t *length, const char *section,
       if (end - p > key_length && !strncmp(text + p, key, key_length)) {
         size_t q = p + key_length;
         while (q < end && (text[q] == ' ' || text[q] == '\t')) ++q;
-        if (q < end && text[q] == '=') { found = at; found_end = end; }
+        if (q < end && text[q] == '=') {
+          /* Keep the key spelling, indentation, spacing, comment and this line's
+           * terminator. Both callers write scalar tokens, not whole INI lines. */
+          found = q + 1;
+          while (found < end && (text[found] == ' ' || text[found] == '\t')) ++found;
+          found_end = found;
+          while (found_end < end && text[found_end] != ' ' && text[found_end] != '\t' &&
+                 text[found_end] != '\r' && text[found_end] != ';' && text[found_end] != '#')
+            ++found_end;
+        }
       }
     }
     at = next;
@@ -305,9 +314,8 @@ static char *ini_put(char *text, size_t *length, const char *section,
   size_t at, cut;
   int written;
   if (found != (size_t)-1) {
-    if (found_end > found && text[found_end - 1] == '\r') --found_end;
     at = found; cut = found_end;
-    written = snprintf(line, sizeof(line), "%s=%s", key, value);
+    written = snprintf(line, sizeof(line), "%s", value);
   } else if (section_end != (size_t)-1) {
     at = cut = section_end;
     written = snprintf(line, sizeof(line), "%s%s=%s%s",

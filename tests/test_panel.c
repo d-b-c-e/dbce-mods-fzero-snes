@@ -40,6 +40,41 @@ static int value_is(const FzeroVideoSettings *s, int row, const char *text) {
 int main(void) {
   FzeroVideoSettings s;
   FzeroVideoDefaults(&s);
+  /* STD-044: the real panel save owns the scalar, not its line's formatting or
+   * comment. Mixed endings, the original EOF and other sections stay exact. */
+  {
+    static const struct { const char *before, *after; } cases[] = {
+      {"; mine\r\n[FZeroVideo]\n \tShowFPS \t= \t0 \t; keep me\r\n[Other]\nValue=7",
+       "; mine\r\n[FZeroVideo]\n \tShowFPS \t= \t1 \t; keep me\r\n[Other]\nValue=7"},
+      {"[FZeroVideo]\r\nShowFPS = 0 \t",
+       "[FZeroVideo]\r\nShowFPS = 1 \t"},
+      {"\xef\xbb\xbf; UTF-8 comment\n[FZeroVideo]\nShowFPS=0 # note\n",
+       "\xef\xbb\xbf; UTF-8 comment\n[FZeroVideo]\nShowFPS=1 # note\n"},
+      {"[FZeroVideo]\nShowFPS = 0 ; first stays\nShowFPS\t= 0 \t# last wins\n",
+       "[FZeroVideo]\nShowFPS = 0 ; first stays\nShowFPS\t= 1 \t# last wins\n"},
+    };
+    FzeroVideoSettings chosen = s;
+    chosen.show_fps = true;
+    for (unsigned i = 0; i < sizeof(cases) / sizeof(*cases); ++i) {
+      write_file("test-panel-preservation.ini", cases[i].before);
+      CHECK(FzeroPanelSave(&chosen, 1u << FZERO_PANEL_SHOW_FPS,
+                          "test-panel-preservation.ini", "unused-config.ini", FzeroIniReadInt) == FZERO_PANEL_SAVED);
+      CHECK(file_is("test-panel-preservation.ini", cases[i].after));
+      FzeroVideoSettings back;
+      CHECK(FzeroVideoLoad(&back, "test-panel-preservation.ini") && back.show_fps);
+    }
+    remove("test-panel-preservation.ini");
+    /* Turning triples on also edits the launcher's file through the same writer. */
+    chosen.triple_screen = true;
+    write_file("test-panel-preservation.ini", "[FZeroVideo]\nTripleScreen=0\n");
+    write_file("test-panel-fullscreen.ini", "[Graphics]\r\n \tFullscreen \t= \t0 \t; owner\n[Other]\nX=9");
+    CHECK(FzeroPanelSave(&chosen, 1u << FZERO_PANEL_TRIPLE,
+                        "test-panel-preservation.ini", "test-panel-fullscreen.ini", FzeroIniReadInt) == FZERO_PANEL_SAVED);
+    CHECK(file_is("test-panel-fullscreen.ini", "[Graphics]\r\n \tFullscreen \t= \t1 \t; owner\n[Other]\nX=9"));
+    CHECK(fullscreen("test-panel-fullscreen.ini"));
+    remove("test-panel-preservation.ini");
+    remove("test-panel-fullscreen.ini");
+  }
   for (int row = 0; row < FZERO_PANEL_ROWS; ++row) CHECK(FzeroPanelLabel(row)[0]);
   CHECK(FzeroPanelNextStart(FZERO_PANEL_TRIPLE) && FzeroPanelNextStart(FZERO_PANEL_FLASH) &&
         !FzeroPanelNextStart(FZERO_PANEL_CURVE) && !FzeroPanelNextStart(FZERO_PANEL_ASPECT));

@@ -165,8 +165,8 @@ static void config_tests(void) {
        "; mine\n[FZeroVideo]\nTripleScreen=1\nUnknownKey=7\n\nTripleCompareView=2\n[Other]\nTripleCompareView=9\n",
        "; mine\n[FZeroVideo]\nTripleScreen=1\nUnknownKey=7\n\nTripleCompareView=3\n[Other]\nTripleCompareView=9\n"},
       {"[FZeroVideo]\r\nTripleCompareView = 1\r\nAspect=Fit\r\n",
-       "[FZeroVideo]\r\nTripleCompareView=2\r\nAspect=Fit\r\n",
-       "[FZeroVideo]\r\nTripleCompareView=3\r\nAspect=Fit\r\n"},
+       "[FZeroVideo]\r\nTripleCompareView = 2\r\nAspect=Fit\r\n",
+       "[FZeroVideo]\r\nTripleCompareView = 3\r\nAspect=Fit\r\n"},
       {"; no section", "; no section\n[FZeroVideo]\nTripleCompareView=2\n",
        "; no section\n[FZeroVideo]\nTripleCompareView=3\n"},
       /* An empty section right before another gets the key, not a second section. */
