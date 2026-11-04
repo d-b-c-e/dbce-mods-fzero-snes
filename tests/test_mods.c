@@ -71,7 +71,8 @@ static void test_shared_launcher_selection(void) {
   CHECK(!game.mods->feature_set_option(NULL, "fzero-wheel", "wheel", "SteeringAxis", "0"));
   CHECK(!game.mods->feature_enable(NULL, "fzero-ffb", "force-feedback", 1));
   CHECK(game.mods->commit(NULL, NULL)); // video settings only; callbacks above must remain untouched
-  CHECK(remove("shared-launcher-video.ini") == 0);
+  FILE *unchanged = fopen("shared-launcher-video.ini", "rb");
+  CHECK(!unchanged); /* An unchanged Shared commit must not create video settings. */
   // Native explicitly clears the opt-in and retains its existing device/preview provider.
   FzeroModsConfigureLauncherInput(&game, 0, &video, "native-launcher-video.ini",
       "native-launcher-controls.ini", "030000004c0500006802000000000000",
