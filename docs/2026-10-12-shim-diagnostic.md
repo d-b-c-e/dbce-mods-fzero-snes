@@ -1,5 +1,9 @@
 # Shared shim: private F-Zero diagnostic
 
+> 2026-11-07: the runner scripts named below (`tools/Invoke-ShimDiagnosticCopy.ps1`,
+> `tests/Test-ShimDiagnosticCopy.ps1` and `tools/fzero_shim_practice_route.py`) took the
+> retired rig lease and were deleted. They remain in git history.
+
 Built from the active `dbce-mods-fzero-snes` source, starting at `e77d0f99`.
 This adds an **off-by-default diagnostic**, not a replacement player control
 backend. No installed file, accepted tune, geometry, binding or recording was

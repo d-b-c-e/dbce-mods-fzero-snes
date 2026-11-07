@@ -5,7 +5,8 @@ unchecked/pending019/021/031/038/039/041/042/043/045/046/048 remain open;
 duplicate038 rows retain their historical pending/unchecked descriptions.
 STD-011 documentation returns to local main; no source/build/device/physical
 adoption is added. Force/controller/outputMuted fields are not audio exclusion
-evidence. See [audio and mute evidence](docs/2026-11-03-audio-mute-evidence.md).
+evidence. The audio and mute evidence note was deleted with `tools/rig` on 2026-11-07;
+it remains in git history.
 
 ## October 23 scoped Native helper admission source
 
@@ -504,5 +505,5 @@ pending; STD-037 remains partial. Existing partial/pending rows stay open.
 | STD-048 | Numpad + zooms in, − zooms out | unchecked | Ordinary numpad direction/custom-binding migration is outside replay. |
 | STD-049 | Cab-over vehicles: the bonnet camera sits on the roof front edge | n/a | SNES 2D vehicle representation has no bonnet camera or cab-over mesh placement route. |
 
-See docs/2026-11-03-provider-free-readback.md for candidate identity and evidence
-boundaries. Public source/binary distribution and owner acceptance are unchanged.
+The provider-free readback note and its runners were deleted with `tools/rig` on
+2026-11-07; they remain in git history. Public source/binary distribution and owner acceptance are unchanged.
