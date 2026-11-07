@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
-Record or replay from boot using the existing .fzpt CLI. Never edits configuration.
+Developer tool (STD-050): record or replay from boot using the existing .fzpt CLI.
+Sets DBCE_DEV=1 for the game it starts. Never edits configuration.
 .EXAMPLE
 ./tools/Recording.ps1 Record -Rom ./fzero.sfc -Tape ./recordings/my-drive.fzpt
 .EXAMPLE
@@ -296,6 +297,7 @@ function InvokeInstalledSession {
     if ($Record) { [void][IO.Directory]::CreateDirectory($recordingRoot) }
     $start = [Diagnostics.ProcessStartInfo]::new((Join-Path $root $receipt.launcher))
     $start.WorkingDirectory = $root; $start.UseShellExecute = $false
+    $start.Environment['DBCE_DEV'] = '1'
     $start.RedirectStandardOutput = $true; $start.RedirectStandardError = $true
     foreach ($arg in @($(if ($Record) { '--record' } else { '--replay' }), $tapePath, '--session-id', $RequestId,
             '--session-status', (Join-Path $folder 'status.json'), $Rom)) { $start.ArgumentList.Add($arg) }
@@ -345,7 +347,7 @@ function InvokeInstalledSession {
                     $timedOut = $true
                 }
                 if ($timedOut -and $elapsed -gt $deadline + 5) { [void](SessionProcess $launch).CloseMainWindow() }
-                if ($timedOut -and $elapsed -gt $deadline + 20) { throw 'Owned game did not close normally; retain the rig lease for recovery.' }
+                if ($timedOut -and $elapsed -gt $deadline + 20) { throw 'Owned game did not close normally; close it before the next run.' }
             }
             Start-Sleep -Milliseconds 100
         }
@@ -380,7 +382,7 @@ function InvokeInstalledSession {
         if ($p.HasExited) {
             [IO.File]::WriteAllText((Join-Path $folder 'game.stdout.log'), $out.GetAwaiter().GetResult())
             [IO.File]::WriteAllText((Join-Path $folder 'game.stderr.log'), $err.GetAwaiter().GetResult())
-        } else { [IO.File]::WriteAllText((Join-Path $folder 'close-pending.txt'), "Exact owned process $($launch.processId)/$($launch.processCreationFileTime) remains live. Retain the shared lease.") }
+        } else { [IO.File]::WriteAllText((Join-Path $folder 'close-pending.txt'), "Exact owned process $($launch.processId)/$($launch.processCreationFileTime) remains live. Close it before the next run.") }
         $p.Dispose()
     }
 }
@@ -406,6 +408,7 @@ try {
         Write-Host 'Replaying recorded input with forces and UDP delivery off. Keep the original ROM and game configuration.'
     }
     Push-Location -LiteralPath $packageRoot
+    $env:DBCE_DEV = '1'
     try {
         & $exe ('--' + $Action.ToLowerInvariant()) $tapePath $romPath | Out-Host
         $gameExit = $LASTEXITCODE

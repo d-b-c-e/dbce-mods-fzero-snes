@@ -14,6 +14,14 @@ typedef struct {
 bool FzeroSessionParse(int argc, char *const argv[], bool conflicting_environment,
                       FzeroSessionOptions *out, const char **error);
 
+/* STD-050: recording, replay and the muted shared-profile preview are
+ * developer tools. DBCE_DEV enables them when set to anything but "" or "0". */
+bool FzeroSessionDevEnabled(const char *dbce_dev);
+/* True when the command line or one of the recording, replay or shim run
+ * environment variables asks for a session, so DBCE_DEV is required. */
+bool FzeroSessionNeedsDev(const FzeroSessionOptions *options, const char *record_env,
+                          const char *replay_env, const char *shim_env);
+
 typedef bool (*FzeroSessionLiveInput)(void *context, uint32_t *input);
 /* Tape owns the input boundary before any physical read or live host-button
  * side effect. The live callback is never invoked during recorded playback. */

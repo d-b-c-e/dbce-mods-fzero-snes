@@ -87,6 +87,16 @@ bool FzeroSessionParse(int argc, char *const argv[], bool conflicting_environmen
   return true;
 }
 
+bool FzeroSessionDevEnabled(const char *value) {
+  return value && *value && strcmp(value, "0") != 0;
+}
+
+bool FzeroSessionNeedsDev(const FzeroSessionOptions *options, const char *record_env,
+                          const char *replay_env, const char *shim_env) {
+  return (options && options->mode != FZERO_SESSION_NONE) ||
+      (record_env && *record_env) || (replay_env && *replay_env) || (shim_env && *shim_env);
+}
+
 bool FzeroSessionReadInput(FzeroPlaythrough *p, FzeroSessionLiveInput live,
                            void *context, uint32_t *input) {
   if (!p || !input) return false;

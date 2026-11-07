@@ -23,6 +23,29 @@ int main(void) {
   char *record[] = {"game", "--record", "new folder/drive.fzpt", "rom.sfc"};
   char *replay[] = {"game", "rom.sfc", "--replay", "drive.fzpt"};
   char *preview[] = {"game", "--shared-profile-preview", "E:/fz-preview", "rom.sfc"};
+  /* STD-050: sessions need the developer opt-in; ordinary play never does. */
+  CHECK(!FzeroSessionDevEnabled(NULL));
+  CHECK(!FzeroSessionDevEnabled(""));
+  CHECK(!FzeroSessionDevEnabled("0"));
+  CHECK(FzeroSessionDevEnabled("1"));
+  {
+    FzeroSessionOptions o;
+    const char *error = NULL;
+    CHECK(FzeroSessionParse(1, normal, false, &o, &error));
+    CHECK(!FzeroSessionNeedsDev(&o, NULL, NULL, NULL));
+    CHECK(!FzeroSessionNeedsDev(&o, "", "", ""));
+    CHECK(FzeroSessionNeedsDev(&o, "E:/a.fzpt", NULL, NULL));
+    CHECK(FzeroSessionNeedsDev(&o, NULL, "E:/a.fzpt", NULL));
+    CHECK(FzeroSessionNeedsDev(&o, NULL, NULL, "E:/fz-run"));
+    CHECK(FzeroSessionParse(3, launcher, false, &o, &error));
+    CHECK(!FzeroSessionNeedsDev(&o, NULL, NULL, NULL));
+    CHECK(FzeroSessionParse(4, record, false, &o, &error));
+    CHECK(FzeroSessionNeedsDev(&o, NULL, NULL, NULL));
+    CHECK(FzeroSessionParse(4, replay, false, &o, &error));
+    CHECK(FzeroSessionNeedsDev(&o, NULL, NULL, NULL));
+    CHECK(FzeroSessionParse(4, preview, false, &o, &error));
+    CHECK(FzeroSessionNeedsDev(&o, NULL, NULL, NULL));
+  }
   parse(true, false, 1, normal, FZERO_SESSION_NONE);
   parse(true, true, 3, launcher, FZERO_SESSION_NONE); /* old environment requests unchanged */
   parse(true, false, 4, record, FZERO_SESSION_RECORD);

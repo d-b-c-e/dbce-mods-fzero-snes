@@ -2477,11 +2477,19 @@ int main(int argc, char **argv) {
   }
   FzeroSessionOptions options;
   const char *option_error;
+  const bool dev_tools = FzeroSessionDevEnabled(getenv("DBCE_DEV"));
   if (!FzeroSessionParse(argc, argv, conflicting_environment, &options, &option_error)) {
-    fprintf(stderr, "%s\nusage: FZeroSNESRecomp [--launcher] [rom.sfc]\n"
-                    "       FZeroSNESRecomp --record fresh.fzpt rom.sfc\n"
-                    "       FZeroSNESRecomp --replay recording.fzpt rom.sfc\n"
-                    "       FZeroSNESRecomp --shared-profile-preview fresh-folder rom.sfc\n", option_error);
+    fprintf(stderr, "%s\nusage: FZeroSNESRecomp [--launcher] [rom.sfc]\n", option_error);
+    if (dev_tools)
+      fprintf(stderr, "       FZeroSNESRecomp --record fresh.fzpt rom.sfc\n"
+                      "       FZeroSNESRecomp --replay recording.fzpt rom.sfc\n"
+                      "       FZeroSNESRecomp --shared-profile-preview fresh-folder rom.sfc\n");
+    return 2;
+  }
+  /* STD-050: the in-app record and replay UI is developer-only. */
+  if (!dev_tools && FzeroSessionNeedsDev(&options, getenv("FZERO_RECORD_PLAYTHROUGH"),
+          getenv("FZERO_REPLAY_PLAYTHROUGH"), getenv("FZERO_SHIM_DIAGNOSTIC_RUN"))) {
+    fprintf(stderr, "Recording, replay and preview are developer tools; set DBCE_DEV=1 to use them\n");
     return 2;
   }
   const char *explicit_rom = options.rom;
