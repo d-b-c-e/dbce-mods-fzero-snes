@@ -1,32 +1,45 @@
-Desktop routes (2026-11-03): follow the [route ladder](../../dbce-project-mgmt/skills/automated-testing/references/desktop-routes.md) and run `pwsh E:\Source\dbce-project-mgmt\tools\Test-DesktopRoutes.ps1`; if a route is down, continue on the next route within existing authorization and game safeguards.
+# F-Zero (SNES) — agent guide
 
-**FFB comparison (2026-10-06):** `docs/FFB-COMPARISON.md` documents the new offline tools and remaining physical acceptance. No installed tune/default was changed. Coordinate normalization with the shared toolkit findings before changing gains.
+Portfolio rules: `E:\Source\dbce-project-mgmt\HOW-WE-WORK.md` (read first; it replaces older process, lease, review and testing instructions). Current focus: `E:\Source\dbce-project-mgmt\NOW.md`. Feature status lives in the portfolio grid (`python E:\Source\dbce-project-mgmt\tools\portfolio_grid.py plan fzero`), not in this file. Grid id: `fzero`.
 
-Public packaging review (2026-10-05): read docs/PUBLIC-PACKAGING.md. Public fork main b7eb125 includes the integration; 24 package tests pass. No new binary release. Deluxe is compiled with embedded cartridge data; a stock-only ZIP cannot gain Deluxe just by adding a patch. Preserve owner builds/assets and confirm the distribution route before packaging Deluxe.
+## Project
 
-# Agent notes
+Native PC static recompilation of F-Zero (SNES, USA) plus an optional embedded BS F-Zero Deluxe. Public fork of `mstan/FZeroSNESRecomp` (upstream 1.8.3; `VERSION` is the upstream base). Repo: `d-b-c-e/dbce-mods-fzero-snes` (PUBLIC; the owner pushes). Top-level source is MIT; the assembled product is not MIT-only (see `LICENSE`, `licenses/`).
 
-October 13 private Shared checkpoint: clean local source `9604802` and unchanged
-native `9B8A036F` have a muted ordinary Deluxe Practice drive from launch,
-sealed at 1,838 frames, and a later cold replay that verified all 1,838 WRAM
-checkpoints with normal exit. The route used explicitly synthetic keyboard
-input; the first runner's neutral-tail guard refused before replay, and the
-first replay-only wrapper was refused before game launch on SHA text case.
-Those failed results remain separate evidence. Read
-`docs/2026-10-12-recording-cli.md` and `docs/2026-10-12-delivery-readiness.md`
-before further qualification. This is not physical binding, force, owner
-installation, public distribution, or owner-attended visual acceptance.
-Keep public origin untouched and private assets out of this source repository.
+## Build
 
-## Toolkit standards
+- Stock: `.\build.ps1` (Ninja + MSVC, output in `build`). Needs your own USA ROM at `fzero.sfc` and generated sources (`bash tools/regen.sh`).
+- Deluxe (what the Stream Deck copy runs): `.\build.ps1 -Deluxe -Test` builds in `build-merge`. Needs the private generated sources in `captures\bs-deluxe\gen` (`tools/regen_bs_deluxe.py`).
+- Clone with `--recurse-submodules`.
 
-At the start of every session, compare the wheel toolkit's ledger
-(`E:\Source\toolkits\dbce-wheel-mod-toolkit\STANDARDS.md`) with this repo's
-`TOOLKIT-ADOPTION.md`. Report any entry that is `pending`, `unchecked` or missing
-from the adoption file, and bring it in when your work touches that area. When you
-adopt one (or find it does not apply), update `TOOLKIT-ADOPTION.md` in the same
-commit. When you set a new family-wide standard, append it to the toolkit ledger
-and commit it in the same turn; do not leave it only in an uncommitted file.
+## Test
+
+- ROM-free suites: `ctest --test-dir build --output-on-failure` (or `.\build.ps1 -Deluxe -Test`).
+- Needs a ROM and an interactive desktop: `tests/test_msu_integration.py`, `tests/test_desktop_integration.py`, `tests/test_rom_persistence.py`, `tests/test_launcher_options.py`.
+- Save states and settings live beside the exe (`saves/`, see README "Where states are kept"). Back up and restore them around a run.
+
+## Install / run on the rig
+
+`.\tools\Install-StreamDeck.ps1 -Label <name>` installs the Deluxe build into the Stream Deck copy with a backup and receipt. Run the exe from that copy.
+
+## Shared code
+
+Toolkit code is in `lib/toolkit` and `vendor/dbce-shim`. Change shared code in the toolkit and re-sync; never edit the vendored copy.
+
+## Project-specific rules
+
+- No ROM, BS Deluxe data or other private assets in the repo (`fzero.sfc`, `captures/`, generated sources and builds are git-ignored).
+- Deluxe is compiled with embedded cartridge data; a stock-only package cannot gain Deluxe by adding a patch.
+- Do not substitute an upstream 1.8.3 ZIP for the DBCE build.
+- MSU-1 music and shaders are user-supplied; nothing is bundled.
+
+## Key docs
+
+- `README.md` (setup, settings, build)
+- `docs/UNIFIED-PRODUCT.md`, `docs/PRODUCT-IDENTITY.md`, `docs/PUBLIC-PACKAGING.md`
+- `docs/FFB-COMPARISON.md`
+- `TOOLKIT-ADOPTION.md`
+
 
 <!-- BEGIN project-file-location -->
 ## Project files and temporary work
