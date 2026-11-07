@@ -84,6 +84,9 @@ class PackageTests(unittest.TestCase):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("Fixture source\n")
+        # The private Deluxe stage still carries the owner's developer companion.
+        (self.root / "tools").mkdir(parents=True, exist_ok=True)
+        (self.root / "tools/Recording.ps1").write_text("Fixture developer companion\n")
         (self.root / "VERSION").write_text("1.7.0\n")
         product = json.loads((pack.ROOT / 'game-product.json').read_text())
         product['upstreamBaseVersion'] = '1.7.0'
@@ -705,8 +708,10 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(result["build"]["sourceRevision"], self.receipt["sourceRevision"])
         with zipfile.ZipFile(first) as archive:
             self.assertEqual(archive.read("Setup.cmd"), pack.SETUP)
-            self.assertIn("tools/Recording.ps1", archive.namelist())
-            self.assertIn("docs/RECORDING-QUICKSTART.md", archive.namelist())
+            # STD-050: no recording or replay helper or doc in the player package.
+            for name in ("tools/Recording.ps1", "tools/fzero_replay_adapter.py",
+                         "docs/RECORDING-QUICKSTART.md", "docs/PLAYTHROUGH_RECORDING.md"):
+                self.assertNotIn(name, archive.namelist())
             self.assertNotIn("dbce_shim.dll", archive.namelist())
             self.assertNotIn("config.ini", archive.namelist())
             self.assertNotIn('assets/img/boxart.tga',archive.namelist())

@@ -1,5 +1,9 @@
 # Record and replay a drive
 
+> **Developer tool (STD-050, 2026-11-07).** Recording and replay are not player features.
+> The game starts them only with `DBCE_DEV=1` set; `tools/Recording.ps1` sets it for you.
+> This doc and the helper are not in the player package.
+
 Use a candidate with the explicit recording CLI. The helper never edits settings;
 ordinary recording retains the game's normal settings/save behavior. It starts
 at boot, includes menu navigation,

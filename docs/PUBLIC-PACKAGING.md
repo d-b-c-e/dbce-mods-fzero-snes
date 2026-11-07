@@ -4,9 +4,10 @@ The DBCE source fork is already public at [dbce-mods-fzero-snes](https://github.
 
 ## Recommended player package
 
-October 12 delivery follow-up: packages now include `tools/Recording.ps1` and
-[the recording quickstart](RECORDING-QUICKSTART.md) for the existing direct-ROM
-CLI and REC/Saved/Replay status. No input default or owner setting is changed.
+2026-11-07 (STD-050): recording and replay are developer tools behind `DBCE_DEV`.
+The player package no longer includes `tools/Recording.ps1`, the replay adapter or
+the recording docs. (October 12 had added them for the direct-ROM CLI and
+REC/Saved/Replay status.) No input default or owner setting is changed.
 The helper is also the straightforward command boundary for a future Wheelkit
 entry; Wheelkit discovery/integration is not implemented here.
 

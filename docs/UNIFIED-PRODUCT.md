@@ -1,7 +1,7 @@
 # DBCE F-Zero SNES Unified Preview
 
 F-Zero SNES and optional BS Deluxe use one native host, existing launcher,
-settings set and version. Wheel, FFB, telemetry, recording/replay and experimental
+settings set and version. Wheel, FFB, telemetry and experimental
 triples are internal features. F-Zero X is a different product. The source
 folders in E:/Source are attached development worktrees, not separate products
 to merge. The in-place rename to `dbce-mods-fzero-snes` is complete, retaining the fork relationship,
@@ -69,14 +69,12 @@ runtime build must stage every imported non-system DLL with reviewed notices.
 The tooling refuses to assume that a runtime installed on the build machine
 will also exist on another user's computer.
 
-Required payload: FZeroSNESRecomp.exe, its FZeroSNESRecompHeadless.exe replay
+Required payload: FZeroSNESRecomp.exe, its FZeroSNESRecompHeadless.exe
 companion, WheelFfb.dll, approved build runtime DLLs,
 checked-in assets/shaders, the pinned launcher fonts/images, licenses and
 dependency/font notices. The staging tool reads CMake's exact dependency roots,
 verifies clean gitlinks and the build's source stamp, and pins those assets.
-The included replay adapter uses externally supplied pinned toolkit tools only
-for optional normalized force observations; game recording and headless replay
-do not require private toolkit access. No toolkit implementation is copied.
+No toolkit implementation is copied.
 Receipt example and fields are documented in tools/package_unified.py.
 The numeric upstream base comes from VERSION. The preview name/artifact stem
 and canonical links come from game-product.json and are checked by the
@@ -89,16 +87,14 @@ reviewed and repinned explicitly; they are not silently treated as v0.13.0.
 
 ## Validation boundaries
 
-Physical FFB is opt-in and requires attended acceptance. Replay compares game
-simulation and normalized software force requests without wheel actuation.
-The current BS replay adapter refuses Deluxe cases until their extra data is
-pinned. Three-window diagnostic replay inside Surround does not validate
+Physical FFB is opt-in and requires attended acceptance. Three-window
+diagnostic testing inside Surround does not validate
 three physical monitors, scanout, focus or seams. Side world sprites/effects
 remain incomplete; keep experimental availability in the product manifest.
 No current installed payload, monitor profile or saved tune is changed by this
 candidate work.
 
-The approved interactive stock replay at `21f2605` completed 11,364 frames
+The approved interactive stock test run at `21f2605` completed 11,364 frames
 and rendered the original CRT preset on three separate monitors, with FFB
 disabled and the staged wheel DLL excluded. Placement, desktop capture and
 sampled CPU/GL backbuffer evidence were retained. Center keyboard/foreground

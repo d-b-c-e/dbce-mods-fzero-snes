@@ -28,7 +28,10 @@ OFL_FILES = {
     "LatoLatin-Regular.ttf": ("licenses/fonts/Lato-OFL.txt", "74ba064d03f1f1c4a952da936c3eb71866c34404916734de3cae73b34357e59e"),
     "NotoSansSymbols2-Regular.ttf": ("licenses/fonts/Noto-OFL.txt", "b118dd41337806a5d4797052c77caf3bd096aed783e5eb21b4d11154351e1ac0"),
 }
-DOCS = ("SETUP.md", "UNIFIED-PRODUCT.md", "PLAYTHROUGH_RECORDING.md", "RECORDING-QUICKSTART.md",
+# STD-050: recording and replay are developer tools, so their docs and helpers
+# (PLAYTHROUGH_RECORDING.md, RECORDING-QUICKSTART.md, tools/Recording.ps1,
+# tools/fzero_replay_adapter.py) stay out of the player package.
+DOCS = ("SETUP.md", "UNIFIED-PRODUCT.md",
         "TRIPLE_SCREEN_FEASIBILITY.md", "TELEMETRY_SIGNALS.md",
         "ADAPTIVE_RENDERER.md", "BS_DELUXE_EXPLORATION.md", "HD_MODE7.md",
         "HD_MODE7_PERFORMANCE.md", "PERFORMANCE_DIAGNOSTICS.md", "SAVE_STATES.md",
@@ -36,7 +39,7 @@ DOCS = ("SETUP.md", "UNIFIED-PRODUCT.md", "PLAYTHROUGH_RECORDING.md", "RECORDING
 SOURCE_FILES = ("README.md", "LICENSE", "VERSION", "game-product.json",
                 "lib/toolkit/MANIFEST.txt", "lib/toolkit/VERSION", "lib/toolkit/LICENSE.txt",
                 "lib/toolkit/SOURCE-PROVENANCE.json", "lib/toolkit/source-to-binary-manifest.json",
-                "tools/fzero_replay_adapter.py", "tools/Recording.ps1", "assets/README.md")
+                "assets/README.md")
 UI_ASSETS = tuple("assets/img/" + n for n in (
     "brand_mark.tga", "flags.png", "pad.tga", "verdict_bad.tga",
     "verdict_none.tga", "verdict_ok.tga", "verdict_warn.tga")) + tuple(

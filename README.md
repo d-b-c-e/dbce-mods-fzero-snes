@@ -7,7 +7,7 @@ Based on upstream [FZeroSNESRecomp](https://github.com/mstan/FZeroSNESRecomp)
 the upstream fork relationship, attribution and history. The DBCE preview
 identity distinguishes this combined product from upstream and historical releases.
 
-This fork keeps wheel, force feedback, telemetry, recording/replay and
+This fork keeps wheel, force feedback, telemetry and
 experimental triples inside this one native app and launcher. See
 [unified product](docs/UNIFIED-PRODUCT.md), [setup](docs/SETUP.md) and
 [product/version identity](docs/PRODUCT-IDENTITY.md)
@@ -56,7 +56,7 @@ Use the reviewed source/receipt, the DBCE preview ZIP identity and
 `VERSION=1.8.3` is the numeric upstream base. The full preview identity adds
 its exact source revision, as described in [identity policy](docs/PRODUCT-IDENTITY.md).
 
-The approved stock replay at `21f2605` rendered the original CRT preset across
+The approved stock test run at `21f2605` rendered the original CRT preset across
 three separate monitors with FFB disabled and the staged wheel DLL excluded.
 Center keyboard/foreground focus failed acceptance, so full rig acceptance
 remains pending. The optional softer CRT preset added in `14ea520` has only

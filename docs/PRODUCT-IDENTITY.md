@@ -4,8 +4,8 @@
 
 Human name: **DBCE F-Zero SNES Unified Preview**. Stable product ID:
 `fzero-snes-recomp`. Stock F-Zero SNES and optional private/build-dependent
-BS Deluxe share one native host and launcher. Wheel, FFB, telemetry,
-recording/replay and experimental triples are internal features, not separate
+BS Deluxe share one native host and launcher. Wheel, FFB, telemetry
+and experimental triples are internal features, not separate
 owned game products. F-Zero X remains a different game target.
 
 Canonical metadata: [game-product.json](../game-product.json).
@@ -16,7 +16,7 @@ Default `main` and the retained approved source lane
 both contain reviewed source `14ea520bf97700f6bd5bb832b1daf1fdb6483f50`
 as verified on 2026-10-02. The metadata's `sourceBranch` retains that lane.
 The one package tool is `tools/package_unified.py` and one `Setup.cmd` opens
-`FZeroSNESRecomp.exe --launcher`. The headless companion is the replay runner,
+`FZeroSNESRecomp.exe --launcher`. The headless companion is a developer test runner,
 not a second product/install flow. No new installer or game binary is made
 by this metadata/organization pass.
 
@@ -114,12 +114,12 @@ since completed; worktree coordination and the remaining gates still apply.
    retirement. Their current tips match their existing remote branches.
 4. Keep the historical BS-equipped release script as a legacy route, not the
    stock preview route. Rights review is required before any BS/public binary
-   consolidation; private generated data/configs/replays stay excluded.
+   consolidation; private generated data/configs/test captures stay excluded.
 5. Agree support intake and finish distribution/attended acceptance gates
    before tester rollout. No Issues/Discussions, device/display, install or
    release settings are changed by this pass.
 
-Software evidence covers one sampled physical layout/replay/CRT preset;
+Software evidence covers one sampled physical layout/test run/CRT preset;
 complete side sprites/effects, scanout/comfort, temporal presets and attended
 rig/FFB/ROM acceptance remain gated. This organization milestone does not
 claim those features complete or the assembled product MIT-only.
@@ -131,7 +131,7 @@ The publication readback for `14ea520` reported zero hosted workflow runs,
 check runs and commit-status contexts; the aggregate status was `pending`,
 not a CI pass. Local build/test evidence is separate from hosted checks.
 
-The approved `21f2605` stock replay rendered the original CRT preset on three
+The approved `21f2605` stock test run rendered the original CRT preset on three
 separate monitors with FFB disabled and the staged wheel DLL excluded. Center
 keyboard/foreground focus failed acceptance; an attended check remains pending.
 The `14ea520` optional softer preset retains the original/default and has

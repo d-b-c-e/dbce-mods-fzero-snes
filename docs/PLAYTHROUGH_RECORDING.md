@@ -1,5 +1,9 @@
 # Recorded F-Zero drives (experimental)
 
+> **Developer tool (STD-050, 2026-11-07).** Recording and replay are not player features.
+> The game starts them only with `DBCE_DEV=1` set; `tools/Recording.ps1` sets it for you.
+> This doc and the helper are not in the player package.
+
 **October 12:** the private shared-shim BS Deluxe Practice original now has exact
 2,351-frame consumed-input and cold WRAM replay proof; see the
 [diagnostic evidence](2026-10-12-shim-diagnostic.md). New explicit CLI recording,

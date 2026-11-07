@@ -1,6 +1,6 @@
 # DBCE F-Zero SNES Unified Preview setup
 
-One product, one launcher: wheel/FFB/telemetry/replay/triples are internal
+One product, one launcher: wheel/FFB/telemetry/triples are internal
 features. Check the provided preview's manifest/source receipt against the
 [identity policy](PRODUCT-IDENTITY.md). Historical upstream 1.8.3 packages are
 not interchangeable with the unified preview. Existing executable/settings
@@ -43,8 +43,7 @@ even when Skip launcher on boot was saved. Select your own F-Zero USA ROM.
 If a device or display layout changes, reopen the launcher and reselect the
 saved device/layout. Use a single screen and Shader None to isolate rendering
 problems. Retain all config files and saves when updating; open the launcher
-with --launcher instead of deleting settings. Recorded replay instructions and
-their software-only force boundaries are in [PLAYTHROUGH_RECORDING.md](PLAYTHROUGH_RECORDING.md).
+with --launcher instead of deleting settings.
 
 ## Wheelkit-free private install and bind path
 
