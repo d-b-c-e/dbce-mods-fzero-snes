@@ -24,6 +24,12 @@ if ($Deluxe) {
 $steps = @("cmake $($configure -join ' ')", "cmake --build `"$Build`" --config Release --parallel")
 if ($Test) { $steps += "ctest --test-dir `"$Build`" --output-on-failure" }
 
+# cmd truncates a PATH over 8191 characters, and vcvars then leaves INCLUDE without the Windows SDK (float.h and rc go
+# missing). With a long PATH, keep only what the build needs.
+if ($env:PATH.Length -gt 8000) {
+    $keep = 'git', 'cmake', 'ninja', 'python', 'pwsh', 'dotnet' | ForEach-Object { (Get-Command $_ -ErrorAction SilentlyContinue | Select-Object -First 1).Source } | Where-Object { $_ } | ForEach-Object { Split-Path $_ }
+    $env:PATH = (@("$env:WINDIR\System32", $env:WINDIR, "$env:WINDIR\System32\WindowsPowerShell\v1.0", "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer") + $keep | Select-Object -Unique) -join ';'
+}
 if (Get-Command cl.exe -ErrorAction SilentlyContinue) {
     foreach ($s in $steps) { cmd /c $s; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } }
     exit 0
