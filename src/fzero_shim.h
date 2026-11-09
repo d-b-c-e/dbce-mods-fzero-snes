@@ -4,16 +4,17 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-/* Environment opt-in: FZERO_SHIM_DIAGNOSTIC_RUN names a fresh absolute run
+/* Optional [Input] Backend=Shared selects ordinary input. Native remains the
+ * default. Environment opt-in: FZERO_SHIM_DIAGNOSTIC_RUN names a fresh absolute run
  * folder. Prepare runs before any launcher/force initialization and latches
- * force off even when diagnostic admission fails. Shared input is the default. */
+ * force off even when diagnostic admission fails. Default Native does nothing. */
 int FzeroShimPrepare(const char *config, int explicit_rom_without_launcher,
                      int recorded_replay, int scripted_replay, int explicit_recording,
                      int qualified_keyboard_mouse_launcher);
 int FzeroShimRequested(void);
-/* Requested retains its diagnostic meaning. UsingInput includes the ordinary
- * shared input option; it does not imply private saves, mandatory capture,
- * deadline or suppressed keyboard. */
+/* Requested retains its diagnostic meaning. UsingInput includes the explicit
+ * ordinary [Input] Backend=Shared option; it does not imply private saves,
+ * mandatory capture, deadline or suppressed keyboard. Native is the default. */
 int FzeroShimUsingInput(void);
 int FzeroShimOrdinary(void);
 /* Presentation capability only: the admitted ordinary handle has the four-slot declaration.

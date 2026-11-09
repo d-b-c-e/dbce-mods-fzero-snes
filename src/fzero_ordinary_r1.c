@@ -55,7 +55,7 @@ int FzeroOrdinaryOpen(const char *config){
   if(!FzeroOrdinaryReadValue(snapshot,"port",text,sizeof(text))||!decimal(text,&requested_port)||requested_port>65535)return -1;port=(unsigned)requested_port;
   if(!FzeroTelemetryRestrictLoopback(port))return -1;
   if(!FzeroIniReadInt(config,"ForceFeedback","Enabled",&enabled)||enabled)return -1;
-  (void)backend;
+  if(!FzeroIniReadString(config,"Input","Backend",backend,sizeof(backend))||strcmp(backend,"Native"))return -1;
   if(!FzeroSessionCreatePrivateRoot(root,"keybinds.ini"))return -1;
   snprintf(status,sizeof(status),"%s/status.json",root);snprintf(temporary,sizeof(temporary),"%s/status.tmp",root);
   char path[128];snprintf(path,sizeof(path),"%s/frames.jsonl",root);trace=fopen(path,"wbx");if(!trace)return -1;

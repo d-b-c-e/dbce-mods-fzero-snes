@@ -55,7 +55,8 @@ int FzeroShimMapFrame(FzeroShimMap *s, const dbce_shim_frame *frame, uint32_t *w
 int FzeroShimMapOverlayFrame(FzeroShimMap *s, const dbce_shim_frame *frame, uint32_t *word);
 /* SDL supplements buttons only. Keep SNES extras/host actions, plus generic
  * buttons explicitly Unbound in Core. Never fall back for missing/faulted
- * bindings. */
+ * bindings; no legacy steering or pedal axes are read by this lane. */
+uint32_t FzeroShimLegacyButtonMask(const dbce_shim_frame *frame);
 /* The two game channels passed to dbce_shim_record AFTER RtlRunFrame. The input
  * is the final word after host filters, not an earlier adapter preview. */
 void FzeroShimConsumedValues(uint64_t simulation_frame, uint32_t input, double out[2]);
@@ -67,7 +68,8 @@ int FzeroShimMenuValues(const uint8_t *ram, size_t ram_size,
 /* RtlRunFrame clears opposing direction pairs before consumption. Apply that
  * exact reduction before both diagnostic recorders see the final word. */
 uint32_t FzeroShimGuestWord(uint32_t input);
-/* Pending profile writes must never run on either replay path or the shim path. */
+/* Pending profile writes must never run on either replay path or the shim
+ * path. The Native backend retains its existing startup writer. */
 int FzeroControlsStartupMayWrite(int scripted_replay, int recorded_replay, int shim_requested);
 
 #ifdef __cplusplus

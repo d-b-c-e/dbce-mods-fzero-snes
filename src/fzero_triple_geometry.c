@@ -12,6 +12,21 @@ static double dot3(FzeroTripleVec3 a, FzeroTripleVec3 b) {
   return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
+bool FzeroTripleChordEyeDistance(double glass_eye_mm, double chord_mm,
+                                 double curve_radius_mm, double *out) {
+  if (!out || !isfinite(glass_eye_mm) || !isfinite(chord_mm) ||
+      !isfinite(curve_radius_mm) || glass_eye_mm <= 0 || chord_mm <= 0 ||
+      curve_radius_mm < 0 ||
+      (curve_radius_mm > 0 && chord_mm > 2 * curve_radius_mm)) return false;
+  const double h = chord_mm / 2;
+  /* Sagitta in the cancellation-free form the toolkit uses. */
+  const double sag = curve_radius_mm > 0 ? h * h / (curve_radius_mm +
+      sqrt(curve_radius_mm * curve_radius_mm - h * h)) : 0;
+  if (glass_eye_mm - sag <= 0) return false;
+  *out = glass_eye_mm - sag;
+  return true;
+}
+
 bool FzeroTripleBuild(const FzeroTripleRig *rig, FzeroTripleSurface panels[3]) {
   if (!rig || !panels || !(rig->width_mm > 0 && rig->height_mm > 0 &&
       rig->eye_distance_mm > 0 && rig->bezel_gap_mm >= 0 &&

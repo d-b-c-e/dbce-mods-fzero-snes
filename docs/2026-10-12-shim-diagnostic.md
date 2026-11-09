@@ -1,0 +1,764 @@
+# Shared shim: private F-Zero diagnostic
+
+> 2026-11-07: the runner scripts named below (`tools/Invoke-ShimDiagnosticCopy.ps1`,
+> `tests/Test-ShimDiagnosticCopy.ps1` and `tools/fzero_shim_practice_route.py`) took the
+> retired rig lease and were deleted. They remain in git history.
+
+Built from the active `dbce-mods-fzero-snes` source, starting at `e77d0f99`.
+This adds an **off-by-default diagnostic**, not a replacement player control
+backend. No installed file, accepted tune, geometry, binding or recording was
+changed. Private title/attract recording and cold replay are now checked below;
+no physical force test or player-controlled race is claimed.
+
+The capture-only first slice is `eca6ac4`. The follow-up adds latched command
+admission and exact private Deluxe replay identities. Its first private
+title/attract runtime evidence is recorded below.
+
+## First slice (eca6ac4)
+
+- `FZERO_SHIM_DIAGNOSTIC_RUN` must name a fresh absolute run directory. Without
+  it the existing launch/input/FFB path is unchanged and the shared DLL is never
+  loaded. A diagnostic requires an explicit ROM argument and refuses the
+  launcher, other recording/replay modes and state/viewport/overlay scripts.
+- A diagnostic request latches physical force off before admission, launcher
+  code or FFB initialization. Even a refused request cannot fall into normal
+  force-enabled play. The existing process latch is reused; force settings and
+  force-model files are untouched.
+- The shared ABI 2 provider owns controller reading. The diagnostic does not
+  initialize SDL's controller subsystem, open an SDL pad/wheel, run the old raw
+  test-injection reader, or merge debug-server input. Keyboard guest bindings
+  are retained. Host save/rewind/reset/video hotkeys are excluded; Escape closes.
+- The exact `[Controls]` bytes are copied to `controls.ini` in the new run.
+  Core owns identity, per-device resolution, calibration, availability and
+  rearm. There is no DI-to-SDL product/name join. No game config is rewritten.
+- `fzero_shim_map.c` consumes one shared frame per **emulated simulation frame**,
+  independent of presentation FPS. Finite Live values alone reach the game.
+  Missing/stale/rearming input is neutral, with no fallback to old wheel input;
+  duplicate/out-of-order Core frames refuse instead of advancing steering twice.
+- Steering reuses `FzeroAnalogSteeringReadTuned`: Core supplies calibrated
+  normalized steering, then F-Zero's existing range/response and digital pulse
+  modulator apply. Core's deadzone is not applied a second time. Range/response
+  and pedal threshold are read from the selected existing Controller section;
+  nothing is written. This is not yet an owner-accepted feel comparison.
+- Basic controls are steer, throttle, brake, confirm, back, start, select and
+  four navigation directions. The other generic actions have explicit reasons
+  in the native unsupported inventory. Throttle maps to SNES B, brake to Y,
+  confirm to A and back to B, matching the existing reader. **ABI 2 has no
+  independent SNES X/Y/L/R, save or rewind binding actions.** No unrelated
+  racing action is repurposed for them. The
+  diagnostic must not be advertised as complete F-Zero wheel controls.
+- Both recordings use the **final consumed input**: `original.fzpt` plus its
+  initial state and WRAM checks, and the shared capture's `game.inputWord` and
+  `game.simulationFrame` after `RtlRunFrame`. A pending input must be consumed
+  before the next tick. Record/stop failures exit nonzero and do not finalize a
+  successful original. The diagnostic suppresses final SRAM writes.
+- The first slice opens **capture only**, not ABI 2's latched command worker.
+  It cannot yet perform an unattended injected drive. The capture is bounded
+  to 240 seconds (the native recorder's maximum is 300), checked on input ticks;
+  a runtime wrapper must independently bound a minimized/suspended process.
+
+The recorded-playback startup fix is separate and narrow: neither synthetic
+nor `.fzpt` playback runs the pending controls-profile writer or legacy test
+injection initializer. Use an explicit ROM without `--launcher` for read-only
+playback; interactive launcher edits are not blocked by this change.
+
+## Offline validation and build
+
+The ROM-free `fzero_shim_map` test compares the production PDM at every frame,
+checks every unavailable status and finite-value handling, exercises monotonic
+sequence admission, and writes/replays 120 final consumed words through the
+existing `.fzpt` codec with keyboard bits included.
+
+The eight `fzero_shim_host_*` tests compile the **production host** against a
+separate fake ABI DLL. They check off/default behavior, pre-launch no-force
+latching, preserved config bytes, exact profile handoff, ABI refusal, missing
+consumption, refused record and unresolved stop. The fake has no device code
+and lives in `build-*/shim-fixture`, away from the game DLL.
+
+Validation here: all **13 targeted CTest suites passed**, including 783 mapper
+checks, 132 production-host checks and the existing controller, profile
+(187 checks), analog and recording suites. Private graphical and matching
+headless Deluxe builds both succeeded. The desktop translation unit retains
+the existing `HIBYTE` macro-redefinition warning between Windows and runner
+headers; no force/geometry source was changed to address it in this slice.
+
+```powershell
+cmake -S . -B build-shim-unit -G Ninja -DFZERO_BUILD_GAME=OFF -DCMAKE_BUILD_TYPE=Release
+cmake --build build-shim-unit --target fzero_shim_map_tests fzero_shim_host_tests
+ctest --test-dir build-shim-unit -R fzero_shim --output-on-failure
+```
+
+For the private game candidate, use the existing pinned SNESRecomp/recomp-ui
+and private generated stock/Deluxe sources. Add
+`-DFZERO_SHIM_DLL=<reviewed f49cfc5 DLL>` to the normal configure command.
+CMake checks the DLL's exact SHA-256. The default is empty: normal builds and
+public package allowlists do not gain a provisional binary dependency.
+See `vendor/dbce-shim/PROVENANCE.md`.
+
+## Next private muted Deluxe qualification
+
+This first-slice plan is retained for context. The **staged first latched pilot**
+below supersedes its ordinary-launch and capture-only steps; no extra baseline
+launch or private tune rewrite is needed for that pilot.
+
+1. Stage a **fresh private copy**, retaining the accepted config/video/keyboard
+   settings and private ROM/music/save inputs. Use this candidate graphical
+   executable, matching headless executable, existing WheelFfb and the pinned
+   shim. Pin source tree, both executable hashes, ROM/effective-cartridge
+   identity, generated Deluxe module/data, MSU patch when used and viewport.
+   Do not overwrite the installed Stream Deck copy.
+2. First inspect an ordinary no-shim launch of that copy with force muted in
+   the copy, then an opt-in short at-rest shim capture. Use the shared rig
+   lease and owner-idle policy. The child environment is:
+   `FZERO_SHIM_DIAGNOSTIC_RUN=<fresh absolute output>` and
+   `SNESRECOMP_SAVE_ROOT=<private save directory>`. Launch
+   `FZeroSNESRecomp.exe <private fzero.sfc>` without `--launcher`.
+   Do not also set `FZERO_RECORD_PLAYTHROUGH`; the diagnostic owns
+   `<run>/original.fzpt` and `<run>/original.fzpt.state`.
+3. Verify no native force initialization, expected device/action availability,
+   no SDL controller lane, exact config preservation and normal exit. The
+   shared native capture requires its existing out-of-process P21 finalizer
+   with the observed process-exit evidence; do not infer a seal from exit 0.
+4. For a moving original, either drive attended with force muted, or add the
+   shared latched command-session admission as the next source slice, using
+   this no-force/save fence. A synthetic input script bypasses the mapper and
+   cannot qualify shim delivery. Missing SNES extras remain a separate scope.
+5. Add separately pinned Deluxe data to `tools/fzero_replay_adapter.py` rather
+   than removing its current refusal. Keep the tape/state immutable. Cold
+   headless replay must match every WRAM checksum; cold rendered replay must
+   use the same effective cartridge, snapshot and centre viewport. Compare
+   each `.fzpt` input word with `game.inputWord` at the same simulation frame.
+   Then use the existing device-free force model export; a shared capture or
+   condition coefficient alone is not physical FFB normalization evidence.
+
+No Deluxe replay, full action coverage, rendered validation, physical wheel
+feel, Wheelkit Apply closed loop, release capability or public distribution
+claim follows from these source/offline checks.
+
+
+## Latched follow-up: same mapper, no physical or network delivery
+
+Set all three additional variables before launch to opt in:
+
+- `FZERO_SHIM_SESSION_NONCE`: exact 8–64 letter/digit nonce.
+- `FZERO_SHIM_SESSION_FILE`: absolute path to an existing `inject.on`.
+- `FZERO_SHIM_BATCH_FILE`: absolute path to a distinct existing `inject.txt`.
+
+A partial set refuses. Without these, ordinary capture-only diagnostics remain
+available with keyboard guest input retained. With them, `open2` uses
+`LATCHED|CAPTURE`; the shared worker validates the actual session, expiry,
+nonce, ordered batches and owned devices. There is no secondary input-script
+path and no synthesized action frame. Latched input suppresses physical and
+keyboard guest actions for the whole admitted lane, including waiting and
+terminal frames. Only Core Live values marked injected may reach the mapper.
+Escape/window close remains available, but an interrupted latched run fails.
+An explicit `end` batch produces one recorded neutral simulation frame and
+then a normal exit. Expired/refused/failed/Inert sessions, unresolved stops and
+recording failures abort the original and exit nonzero.
+
+The following are actual code gates before command admission, not flags
+asserted independently of implementation:
+
+| Path | Diagnostic behavior |
+| --- | --- |
+| Native FFB initialization | Process no-force latch held in Prepare; host skips Init; Start rechecks latch. |
+| UDP telemetry/motion delivery | Process delivery latch before Init; no socket or WSA startup; Frame and Shutdown cannot send. |
+| Debug server | No initialization; no pause/input/save/load callback dispatch. |
+| SRAM migration/read | `RtlReadSram` skipped because it can migrate/write legacy files. Fresh originals start from guest boot state. |
+| SRAM final write | `RtlWriteSram` skipped. At pinned engine `59d2966`, `RtlRunFrame` has no autosave or SRAM file write callback. Guest cartridge writes stay in emulated memory. |
+| Save/rewind/reset keys and gestures | Host hotkeys blocked except Escape; diagnostic actions cannot open save/rewind; scripted state modes refused. |
+| Config/profile/video writes | Startup writer and launcher skipped; direct-launch video persistence skipped; missing keybinds are not generated. |
+| Save directory | Always fresh `<run>/saves`, ignoring inherited save-root choice; Start checks the actual engine root including exact Deluxe/MSU suffixes. Base path limited to 68 bytes for engine fixed buffers. Only explicit original `.state` is written. |
+| Engine extra callbacks | Builds with netplay, co-sim or engine external mods cannot admit this diagnostic. Current build has all three off. |
+
+The diagnostic freezes `config.ini`, the exact `controls.ini`, and `origin.txt`
+inside its fresh output. The latter distinguishes `diagnostic-injected` from
+`diagnostic-owner`; the shared capture context does too. PDM and force settings
+come from the frozen config. The software observation runs the existing
+`FzeroFfbComputeSteering` and `FzeroTelemetryBuild` after each actual simulation
+frame, with the recorded tune. Channels include the final input word, WRAM
+scene state, constant fallback, spring/damper/road requests, crash trigger and
+requested magnitude/duration/frequency, speed and distance. A spring coefficient
+is software intent, not measured torque. No force model or accepted tune changed.
+Opposing direction pairs are reduced exactly as `RtlRunFrame` does before both
+recorders, so conflicted navigation still records what was consumed.
+
+Offline evidence: 23 targeted CTest suites passed, including the production
+host against a fake ABI library (latched terminal success, expired session,
+missing injected provenance, partial session arguments and wrong save-root
+refusal). No fake library is staged beside the game. Nine Python adapter tests
+passed. The private Deluxe payload was read, reconstructed and hashed without
+launching a game: `552159a19955e88a8337f7c473ccc53e5dcef15b87daab8e89e1894694542fe6`.
+Graphical and matching headless builds pass. These are source/offline results.
+
+## Bounded copy-only runtime recipe (pending source review and rig slot)
+
+Do not run this in the Stream Deck install or overwrite it. Use a fresh short
+private directory, for example `E:/fz-probe-<nonce>`, with subdirectories `app`
+and `control`; leave `run` absent so Prepare can create it. Copy only runtime
+assets, shaders, ROM and configs from the accepted install, the reviewed
+candidate graphical/headless executables and exact shared shim. Stage the
+private Deluxe `.dat` under `app/mods`. Copy music files when used, never a
+writable junction back into the owner install. Exclude saves, backups and old
+recordings. Hash the installed source config/video/keybinds/ROM/executable
+before and after the run; keep those hashes and staged file hashes in a receipt.
+Owner files, FFB tune, geometry, launcher and game selection stay unchanged.
+Check `[Controls]` exists in the private config; do not invent unbound actions
+or silently repurpose an SNES extra. The binding's exact device must be available.
+
+Hold the existing shared rig lease and apply the owner-idle policy before any
+launch. Clear inherited `FZERO_*` and `SNESRECOMP_*` in the **child environment**,
+then supply the four shim variables plus explicit `FZERO_DELUXE_DATA` when used.
+Launch `app/FZeroSNESRecomp.exe app/fzero.sfc`, without `--launcher`, with its
+working directory set to the private app. Capture stdout/stderr and exact PID,
+start time and executable hash. The game itself records to `run/original.fzpt`.
+No `FZERO_RECORD_PLAYTHROUGH` or synthetic `SNESRECOMP_INPUT_SCRIPT` is allowed.
+
+Immediately before launch, write `control/inject.on` as UTF-8 without BOM:
+
+```text
+nonce=<the exact nonce>
+expires=<current Unix seconds plus 210>
+```
+
+Start with the neutral batch below; once Core is ready, publish batches with a
+temporary sibling followed by atomic replace. The first command file is:
+
+```text
+nonce=<the exact nonce>
+batch=1
+inject action start 1 ms=250
+```
+
+Inspect the actual game-window frame before the next menu command; a route has
+not yet been qualified and must not be described as unattended race entry.
+Only supported, profile-bound actions are usable. Each new file increments
+`batch`; simultaneous commands belong in the same file. For an observed race,
+a first modest diagnostic segment can use `inject action throttle 0.65 ms=1000`
+and `inject action steer 0.10 ms=1000`. Do not write guest poses or mutate WRAM.
+Finish the short pilot with a new batch containing **only** `end` after the two
+header lines. Keep the first attempt under 90 seconds. The generic ABI grammar
+and limits are the pinned shim's, not the former raw F-Zero injector's grammar.
+
+The external supervisor must have a 220-second wall deadline (the internal
+240-second bound advances only when input ticks run). At deadline it requests
+`CloseMainWindow` on the exact child and waits up to 10 seconds. If it remains,
+report unresolved and retain the lease for explicit recovery; do not kill a
+replacement, reseal evidence or mark timeout as success. Normal completion
+requires exit 0, explicit Core Completed, successful recorder/host stop, no
+native FFB initialization or UDP delivery, and unchanged owner pins. Finalize
+the shared native capture only through the pinned P21 out-of-process finalizer
+with actual process-exit evidence. An `.fzpt` complete flag alone does not seal
+the shared native capture.
+
+## Exact Deluxe replay admission
+
+`tools/fzero_replay_adapter.py create` now accepts a Deluxe case only with all
+of `--deluxe-data`, `--deluxe-data-sha256`, `--deluxe-runner` and
+`--deluxe-runner-sha256`. Pins are exact reviewed candidate hashes, not a
+`--skip-check` option. It validates the stock ROM identity, full BSDELX1 payload,
+reconstructed Deluxe cartridge and any MSU IPS against the original tape's
+effective cartridge digest. It snapshots the data and a module-identity artifact
+which pins the exact capture executable, exact headless executable (the native
+Deluxe module is statically linked), original ROM, data and effective ROM.
+Stock cases remain compatible. No ROM, generated code, data or binary should
+be committed or publicly distributed by this diagnostic work.
+
+Place the immutable tape/state, ROM and snapshots inside one fresh private
+case root. Use `--capture-receipt` only with an actual clean build receipt;
+otherwise provenance remains conservatively dirty/unverified. An example,
+after inserting the actual hashes and paths:
+
+```powershell
+py -3 tools/fzero_replay_adapter.py create --case E:/fz-case/case.json `
+  --drive E:/fz-case/original.fzpt --state E:/fz-case/original.fzpt.state `
+  --config E:/fz-case/config.ini --video E:/fz-case/fzero-video.ini `
+  --rom E:/fz-case/fzero.sfc --msu-pack E:/fz-case/music `
+  --capture-exe <exact-graphical-exe> --source-revision <exact-commit> `
+  --case-id fzero-shim-deluxe-private-01 `
+  --deluxe-data <exact-private-dat> --deluxe-data-sha256 <reviewed-sha256> `
+  --deluxe-runner <exact-headless-exe> --deluxe-runner-sha256 <reviewed-sha256>
+py -3 tools/fzero_replay_adapter.py observe --case E:/fz-case/case.json `
+  --toolkit E:/Source/toolkits/dbce-wheel-mod-toolkit --runner <exact-headless-exe> `
+  --rom E:/fz-case/fzero.sfc --output E:/fz-case/force.jsonl --timeout 300
+```
+
+Observe revalidates all pins, sets the exact Deluxe data path, isolates the
+headless save root, has a bounded child deadline and rehashes the artifacts
+again after replay. The actual game still has to match every WRAM checksum.
+A real moving producer, shared final-consumed-word equality, cold WRAM proof,
+rendered Deluxe replay and complete SNES controls remain unqualified.
+
+## Reviewed private-copy wrapper
+
+`tools/Invoke-ShimDiagnosticCopy.ps1` prepares and supervises one fresh private
+copy. The fresh retry is `E:/fz-probe-1012b`, with 70 app files, 16 copied
+helper files and 77 original-install file/absence pins in `prepared.json`.
+The installed config, controls, video geometry, FFB tuning and music are copied
+unchanged. Saves and old recordings are excluded. The private Deluxe data is
+copied from the source archive; the installed build embeds its own data and
+does not have that file. Nothing is written in the owner install.
+
+Candidate binaries remain the clean `4f43f1a7a2224d06c4d3020a624f371dd89d2579`
+build, tree `3561a32c32deaae879ded0f435746e8c49fd4615`:
+
+| File | SHA-256 |
+| --- | --- |
+| FZeroSNESRecomp.exe | `0a37843731a672e305040ef673fc4c7618ce81f61637017ba54b55f840b2cef5` |
+| FZeroSNESRecompHeadless.exe | `e55c48f39cc43fb5c9d7a832698d97a67a24e4ad41f7a8a5d740426574e01103` |
+| dbce_shim.dll | `9b8a036f664cf8f45cccf82b98e5e4376f93215b60eac50b6db965bf498015d8` |
+| WheelFfb.dll | `3f6cc51444879d01feb900098b2de94242594d093f523e3c34bd511d69c0d946` |
+| mods/bs-deluxe.dat | `a9e31fd3a32103cc6591e70c31e4a182b631989b7ab31b21cb5aec6c5c1bc02b` |
+| P21Finalizer.dll | `dbc88857794be0b6f1ce5afa3c356497533abe4b2f43578cf57f71f4acb4d08e` |
+
+After the coordinator grants the rig slot, start **Run in a separate supervised
+PowerShell 7 process/tool session**, so the reviewer can capture and inspect
+frames while it runs:
+
+```powershell
+$runner = 'E:/Source/games/.worktrees/fzero-shim-source/tools/Invoke-ShimDiagnosticCopy.ps1'
+$probe = 'E:/fz-probe-1012b'
+pwsh -NoProfile -File $runner -Action Check -Probe $probe # read-only
+pwsh -NoProfile -File $runner -Action Run -Probe $probe
+```
+
+Run requires five owner-idle minutes and acquires the shared lease itself. It
+never changes display topology or sends OS input. `process.json` identifies the
+exact child. The run starts with neutral batch 1 (`inject action start 0 ms=50`); **no menu route is built
+in**. In the reviewer's other tool session:
+
+```powershell
+& $runner -Action Status -Probe $probe
+& $runner -Action Capture -Probe $probe # lists this child's windows
+& $runner -Action Capture -Probe $probe -WindowHandle <centre-window-decimal-handle>
+# Inspect the returned PNG before sending one scene-appropriate action:
+& $runner -Action Command -Probe $probe -Commands 'inject action start 1 ms=250' `
+  -InspectedFrame '<returned-PNG-path>'
+# Repeat Capture + visual inspection before each subsequent action.
+# Only after a race is actually visible, a bounded moving diagnostic may use:
+& $runner -Action Command -Probe $probe `
+  -Commands @('inject action throttle 0.65 ms=1000','inject action steer 0.10 ms=1000') `
+  -InspectedFrame '<fresh-returned-PNG-path>'
+& $runner -Action Command -Probe $probe -Commands 'end'
+```
+
+Command admission requires the same leased child and a capture receipt less
+than 30 seconds old. It checks the PNG hash, PID and creation time, bounds each
+command to three seconds, and publishes one nonce-matched monotonic batch by
+atomic rename. Commands go only to production Core's existing action injector,
+then through the production F-Zero mapper/PDM and actual emulated game frames.
+There is no synthetic guest-input or WRAM write path in this runner.
+
+Run sends only `end` automatically at 75 seconds. At 90 seconds it requests
+normal window close from the exact child if needed; at 100 seconds an unresolved
+child is reported and its lease retained. The outer budget is 220 seconds,
+including bounded journal validation and P21 helpers. A helper timeout also
+retains its identity and the lease; neither a helper nor game is killed. The
+coordinator must resolve such a process before releasing that lease. Nonzero
+exit, missing Completed, unresolved host or rejected P21 is a failed pilot.
+Sealing happens only after actual observed exit 0, valid Completed journal,
+resolved host and unchanged owner pins. `result.json` still labels
+`runtimeQualified=false`: a seal alone does not establish moving gameplay or
+cold WRAM equality. Finalizer validation output is `validated.tsv`; raw original
+and initial WRAM are `run/original.fzpt` and `run/original.fzpt.state`.
+
+Keyboard audit: the diagnostic KEYDOWN guard runs before save/rewind, pause,
+reset, F-key save/load, video/FPS and fullscreen shortcuts. The latched guest
+keyboard lane is also suppressed. **Escape and window-close are deliberate
+emergency exits**; an unfinished latched run then fails rather than becoming a
+successful recording.
+
+Offline wrapper validation (`tests/Test-ShimDiagnosticCopy.ps1 -Probe ...`)
+exercised production Check: exact pins pass, changed private config and helper
+bytes refuse, an extra runtime file refuses, and restored bytes pass. Harmless
+PowerShell helper children verified normal output and timeout/identity retention.
+No game, device, lease or desktop input was involved. The copied finalizer also
+read an already sealed shared fake-provider fixture: five rows, 217 checks.
+That fixture result is tool compatibility evidence, not F-Zero runtime evidence.
+
+### First pilot and neutral-start correction
+
+Private pilot `E:/fz-probe-1012a` launched PID 77464 and exited 9 after two
+emulated frames. The exact R12 was admitted in epoch 1 with 11 usable bindings,
+but Core correctly refused the existing empty `inject.txt`. The invalid original
+and unresolved host report remain untouched and unsealed; no menu action was
+sent. The supervisor observed exit and rechecked all owner pins before releasing
+the lease. Current 2560x1440 display produced the logged stock-view fallback;
+no display or geometry was changed.
+
+The wrapper now publishes nonce-matched batch 1 with only
+`inject action start 0 ms=50`, then manual commands start at batch 2. The actual
+pinned production parser requires at least 50 ms (a 1 ms proposal was refused by
+the offline fixture before retry). `tests/shim_neutral_batch.cpp`, linked against
+f49cfc5 production Core/parse and its fake provider, consumes the wrapper's exact
+emitted bytes. Nine checks show admission with a physically held fake Start,
+zero value and no down/up edge on activation and expiry, a working press/release
+positive control, and explicit Completed. No DirectInput or game is in that test.
+The existing wrapper test can run it using `-NativeCoreFixture <neutral.exe>`.
+Private compile evidence is `E:/fz-neutral-check` (build.cmd, neutral.txt, exe).
+
+## Private runtime result: 1012b, 2026-10-12
+
+**PASS for the title/attract diagnostic and cold game replay only.** Graphical
+PID 73552 started at 08:57:48 UTC from the exact reviewed `4f43f1a` executable.
+The wrapper was `b35e100`; native runtime bytes did not change for the retry.
+It opened the actual R12 through Core, epoch 1, 11 usable bindings. Initial batch
+1 held Start at zero for 50 ms. The observed title offered Grand Prix/Practice;
+by the next frame the game had entered its attract demo. An inspected NavDown
+100 ms and Start 150 ms reached Core and the final game input. No throttle was
+sent and **no player-controlled race entry is established**. The final capture
+after Start was a black transition. Automatic batch 4 ended at the 75-second
+bound; the process exited 0, without forced close, and the host resolved.
+
+Evidence is private at `E:/fz-probe-1012b`:
+
+- `result.json`: exit observed, code 0, no errors, sealed, owner pins unchanged,
+  lease not retained; all 77 original-install file/absence pins checked.
+- `frames/085806781.png`, `085822205.png`, `085844507.png`: title, attract demo,
+  and transition respectively; each published user action has a recent exact
+  child/capture receipt. The menu timed out between screenshots, so these
+  commands are not a qualified navigation recipe.
+- `journal-result.json`: valid complete journal, exactly one terminal event,
+  `completed: end command in batch 4`. `run/host-shutdown.json` reports resolved,
+  recorder and control worker joined, input released, no unresolved entries.
+- `seal.log`: P21 validated 4,467 shared rows with 71,751 checks. A later strict
+  read after cold replay passed another 35,879 checks; the seal stayed intact.
+- `consumed-input-check.json`: **4,466 valid game rows match every simulation
+  index and final input word in `.fzpt` exactly**, zero mismatches. The extra
+  shared row is the explicit shutdown tick with `game.valid=0`; it is not an
+  emulated frame. Recorded words include seven NavDown frames and nine Start
+  frames, with the remaining 4,450 carrying no guest control button.
+- `runtime-observed.json`: during the owned process, WheelFfb was absent from
+  its module list and the process had no UDP endpoint. Admission required the
+  actual no-force and socket-absent latches; origin records software-only force
+  and telemetry. This is not a numeric delivery-call counter or torque test.
+- The source recording and state are unchanged after cold replay:
+  `.fzpt` SHA-256 `9935ba483eb61b284a60a6509dcbc5829a835127352ec03ac85ea15f8bbd4d26`;
+  state SHA-256 `18bda07046cd36c3dceca4ca26d38fa0d7317ed325ff29390af34c54dc8042db`.
+  Shared source SHA-256 is
+  `d9fb661c2445852fd05f2625e878cbfa626ef2e3c301138b41acc43950c1fae3`.
+
+Cold case `E:/fz-cold-1012b/case.json` copies the immutable original, state,
+config, video, stock ROM and music, pins the clean capture build receipt and
+exact Deluxe data/headless executable, and reconstructs the MSU-patched cartridge
+identity `419eed641cfa20013d1e9b8270062d90155051a441441a2118bf23846ac8d747`.
+`fzero_replay_adapter.py observe --timeout 60` exited 0 and verified **all 4,466
+per-frame WRAM checksums**, producing `force.jsonl`. Case SHA-256:
+`dd0af71ad733de8c26f984eccdaba2f494d76fa868bd369f9e05484d38b39c8d`.
+Both graphical and headless processes were gone and the lease absent before
+the explicit handoff to the next rig test.
+
+Remaining qualification: a fresh scene-inspected original that actually enters
+Practice and applies short throttle/steering while the player is in control,
+then the same cold equality checks. Independent SNES X/Y/L/R remain unsupported
+by generic ABI 2. The current desktop was 2560x1440; the accepted span-only triple
+setting deliberately fell back to stock view. This run does not qualify triples,
+physical wheel feel, FFB normalization, complete controls, or a public release.
+
+### Navigation evidence and next private pilot
+
+Read-only analysis of the sealed 1012b source resolves the apparent Start issue:
+Start reached the guest and returned the demo to the title. The black screenshot
+was the transition, not evidence of a missed binding. The existing legacy mapper
+and the shared mapper both assign Start to bit 3 and NavDown to bit 5.
+
+| Frame | Capture seconds | State `$54/$55/$56` | Observed meaning |
+| --- | ---: | --- | --- |
+| 131 | 2.175 | 0/1/0 | Title; later screenshot shows Grand Prix/Practice |
+| 1459 | 24.272 | 2/3/0 | Attract race begins without any pressed input |
+| 1931 | 32.129 | 2/3/0 | Seven consumed NavDown frames, already in attract |
+| 3277 | 54.523 | 2/4/0 | First of nine consumed Start frames |
+| 3278 | 54.540 | 3/4/0 | Race exit transition |
+| 3309 | 55.056 | 0/0/0 | Title initialization |
+| 3348 | 55.704 | 0/1/0 | Title again through the end of the recording |
+
+`game.ffb.racing` is 1 during the attract race too: its existing predicate is
+`$54 == 2 && $55 >= 3`. This channel indicates a race scene, **not player control**.
+The next pilot must prove selection, countdown and input-responsive movement from
+inspected frames and consumed words; that flag alone cannot qualify live driving.
+
+The next copy uses the same reviewed executable and 75-second automatic end.
+Capture the title promptly, publish one NavDown while that scene is fresh, then
+inspect the selection before Confirm. Inspect each subsequent menu before a single
+appropriate action. If the title has already timed out, Start returns from attract;
+wait for the title to be visible before choosing Practice. Never apply throttle to
+an attract demo or infer player control solely from a moving picture. Only after
+observed player selection/countdown may short bounded throttle and steering use
+the same Core mapper. Each action still needs an owned-window capture receipt;
+no pre-timed menu macro, OS input, focus change, reset, or saved-state edit is used.
+
+Keep failed/incomplete attempts and the existing sealed 1012b original unchanged.
+Any next moving original needs its own completed journal, P21 seal, owner-pin
+readback, exact final-consumed-word comparison and cold per-frame WRAM check.
+
+The prior legacy-reader pilot's inspected frames
+(`E:/Source/_archive/2026-10-10/fzero-inject-040316`) provide menu context:
+Practice → Blue Falcon → Yes → rival → Knight League → Mute City I.
+They used Confirm after the Practice selection, which maps to SNES A / bit 8 in
+both readers. This is background for interpreting a fresh frame, not permission
+to replay that sequence blindly. Fresh copy `E:/fz-probe-1012c` was staged at
+09:11:55 UTC with the same runtime pins, 70 app files, 16 tool files and 77 owner
+file/absence pins; no launch yet. It waits for the coordinated rig queue.
+
+### 1012c result: cold replay passes; Practice entry still unqualified
+
+The staged copy ran at 09:27:15 UTC (PID 70036) with the same executable and
+wrapper. Each screenshot-to-command round trip took about 11–14 seconds; both
+NavDown attempts landed after the title had timed out. Start again exited the
+attract scene. No throttle or steering was sent. This is a navigation-workflow
+limit, not a qualified Practice route or evidence of a missed input mapping.
+
+The 75-second automatic end was batch 5. Normal exit 0, completed journal,
+resolved host, all 77 owner pins unchanged and lease released are recorded in
+`E:/fz-probe-1012c/result.json`. P21 sealed 4,474 rows (71,863 checks).
+`consumed-input-check.json` matches all 4,473 valid frame indexes and final input
+words to the original tape, with one separate shutdown row: 4,450 neutral words,
+13 NavDown words, 10 Start words, zero mismatches. Cold case
+`E:/fz-cold-1012c/case.json` replayed all 4,473 per-frame WRAM checksums exactly.
+
+- Original SHA-256: `ecd455c03c00e8998f668854ba9aaad386dedafd88d67a750d529879e4a35d2d`
+- Initial-state SHA-256: `18bda07046cd36c3dceca4ca26d38fa0d7317ed325ff29390af34c54dc8042db`
+- Shared-source SHA-256: `e30b6aa275577de3a48dd3441790c934253ecf82aa84aab8f6b30643385cbd24`
+- Cold-case SHA-256: `b46ded21863fbb16c3eba65c50a09693c1d769d1fcf35c017d95300ce94fd431`
+
+Before another launch, replace the manual round-trip route with a bounded
+state-driven route: identify exact native menu state and selected item, retain
+a fresh owned-window capture, and publish only the expected offline action.
+Unknown state must stop. This must not freeze emulation, edit guest state, change
+the owner configuration or turn a repeated timed button sequence into a claimed
+state-checked test. The original 1012b and 1012c captures remain unchanged.
+
+### Source-checked Practice route (candidate, not yet run)
+
+Adapter `fzero-shim-diagnostic-3` adds twelve read-only post-frame guest fields.
+It changes no input, force, telemetry model, geometry or owner configuration.
+`tools/fzero_shim_practice_route.py` reads these from the ordinary shared source
+stream. It never attaches a memory reader or writes guest state. This private
+route requires the original tape's effective cartridge SHA-256 to be exactly
+`419eed641cfa20013d1e9b8270062d90155051a441441a2118bf23846ac8d747`
+(the existing pinned Deluxe data plus the owner's MSU patch). Other ROMs are
+refused rather than assumed to share menu state.
+
+Read-only decoding of that exact private cartridge identified these seams:
+
+- `$03:8127` title handler selects `$5A`; Confirm copies it to `$58` and clears
+  `$5B`. Selection 1 means Practice. Attract mode does not establish that route.
+- Deluxe `$1E:DD55` dispatches scene 1 / phase 1 by `$56`: 0 car, 1 Yes/No,
+  3 Practice rival, 4 league. Substate 2 is the GP branch and is refused.
+- Bank 7F words `$4C84/$4C8A/$4C92/$4C98` expose car/rival/panel/acceptance;
+  byte `$4C27` selects the course. `$60` must finish its transition before input.
+- `$00:8AC0` dispatches Practice course selection; `$1E:BBF7` confirms it.
+  Player route proof requires `$58=1`, `$5B=0`, observed 2/2/2 native countdown
+  (`$00:8CBD`), then 2/3/0 with the expected car/league/course, not `ffb.racing`
+  alone. Substates 2/2/0 and 2/2/1 prepare the line; attract skips substate 2.
+
+The only route is Practice → Blue Falcon → Yes → default rival → Knight League
+→ Mute City I. Before every positive batch the runner waits for the exact state
+and selected item, records a fresh owned-window WGC frame, rereads advancing
+source data, and rechecks the guard. It requires a 150 ms neutral consumed-word
+interval between commands. Unexpected state, stale source, missing provenance,
+wrong cartridge or lost ownership ends the session; no blind retries are sent.
+Nine positive batches at most: seven selection actions, two seconds of throttle,
+then one second of throttle plus 0.25 steering, only after player countdown and
+movement are observed. The route has a 70-second deadline; the existing supervisor
+still ends at 75 seconds and retains its normal-close/owner-pin/lease behavior.
+
+Launch the reviewed copy supervisor and this route concurrently in separate
+hidden child processes during an approved shared rig slot:
+
+```powershell
+pwsh -NoProfile -File tools/Invoke-ShimDiagnosticCopy.ps1 -Action Run -Probe E:/fz-probe-<fresh>
+py -3 tools/fzero_shim_practice_route.py --probe E:/fz-probe-<fresh>
+```
+
+`route.json` retains each exact source snapshot, frame and command receipt,
+including the final observation on refusal. Its player-drive result is separate
+from a successful journal seal and from a cold WRAM comparison. Existing sealed
+originals retain their older adapter version and are never rewritten to fit it.
+ROM-free router tests exercise the production guard, route, refusal paths and
+incremental source reader; native fixtures cover exact-width read-only RAM
+extraction and all recorded channels. No new player capability is advertised.
+
+The exact driving commands also pass 17 checks linked against the pinned shared
+Core's production `core.cpp` and `parse.cpp`, with its fake device provider
+(`tests/shim_neutral_batch.cpp`). Both action-form axis commands resolve through
+the profile into owned raw objects, then the ordinary normalizer; the fixture
+checks delivered raw/normalized values, injected provenance and timed release.
+There is no F-Zero-specific shortcut around the shared mapper.
+
+### 1012d result: Practice navigation works; supervisor contention stopped run
+
+Candidate `91b6f40` (graphical SHA-256
+`ad78b6b0279a22da5924af07442857affb5f6633d51f91f6c0034b17ec7d3c0e`)
+ran from `E:/fz-probe-1012d` at 09:58:47 UTC, PID 79184. The state-checked route
+issued five positive batches: select Practice, enter Practice, Blue Falcon,
+Yes, default rival. Each had its expected live source guard and fresh WGC frame;
+the last successful frame shows the rival selection menu. No throttle or steering
+was issued, and no player-driving claim follows from this partial route.
+
+At about 21 seconds the supervisor's lease assertion collided with the child
+capture assertion: both read the same token using `FileShare.None`. The supervisor
+closed its exact game normally; the incomplete diagnostic intentionally exited 9
+and invalidated its tape because no explicit `end` batch had completed. This was
+a supervisor file-sharing error, not a game crash. `result.json` records all
+77 owner file/absence pins unchanged, no forced termination and lease released.
+The original remains unsealed and is not a cold-replay qualification case.
+
+Toolkit `ad81439` changes only read-only assertion sharing to `FileShare.Read`.
+Exclusive lease creation/replacement/release remain unchanged. The actual held-read
+fixture passes with correct ownership, still refuses wrong tokens and ownership
+mutations, and fails with the original sharing mode. The next private copy keeps
+the exact same game/router pins and starts a fresh original after that helper fix.
+
+### 1012e: player Practice and exact cold replay pass
+
+Fresh copy `E:/fz-probe-1012e` ran at 10:08:44 UTC (05:08:44 Central), PID 30188,
+with the same `91b6f40`/`AD78B6B0...D3C0E` graphical candidate and router
+`a3f285d`. The canonical lease helper included the read-sharing fix as `0930a42`.
+It followed all seven selected menu actions, observed the real player countdown,
+then delivered two seconds of throttle and one second of throttle plus 0.25
+steering. A fresh WGC frame preceded each command; batch 11 ended the original.
+
+The route evidence separates three results:
+
+1. **Player route:** `$58=1`, `$5B=0`; countdown 2/2/2 at frame 1636, then
+   live state 2/3/0 at frame 1816. The recording contains 535 player frames
+   (8.889 seconds). Every nonzero driving action belongs to that confirmed
+   Practice context. It is a labelled injected original, not an owner drive.
+2. **Consumed input and response:** all 2,351 final input words and frame indexes
+   equal the shared recorder's 2,351 valid game rows, plus one shutdown row;
+   zero mismatches. Throttle is Live/injected for 182 frames, steering for 61;
+   the existing PDM emits 30 right-steering guest pulses. Observed telemetry
+   starts at zero speed, peaks at 95.376 m/s and advances about 495 m. These are
+   the game's reported values, not a real-distance calibration.
+3. **Cold replay:** the pinned Deluxe headless runner replays all 2,351 per-frame
+   WRAM checksums exactly from the immutable original/state. This is actual
+   input replay through emulation, not pose playback or guest-state correction.
+
+The final inspected window frame is
+`E:/fz-probe-1012e/frames/100923521.png`: Blue Falcon is moving on Mute City I,
+with the player timer/HUD. The pre-throttle frame is
+`E:/fz-probe-1012e/frames/100916510.png`. Full per-step state/frame/batch receipts
+are in `route.json`; independent comparison is in `consumed-input-check.json`.
+
+Normal exit 0, resolved recorder/control workers, Completed journal and P21 seal
+(2,352 rows / 37,911 checks) pass. All 77 owner file/absence pins are unchanged;
+the lease is released. The diagnostic no-force/software-telemetry fences remained
+active; recorded settings remained steering 12, impact 50 Constant. No physical
+force/telemetry delivery, tune change, owner install or display change was made.
+The supervisor's broad `runtimeQualified` stays false: this evidence qualifies
+this short diagnostic Practice route and replay, not the whole game/mod.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Original `.fzpt` | `4955c7ef6a6887c86d8de060bb99f64ebcfa8c3bc4e3e4da09ab2ea3712870d3` |
+| Initial state | `18bda07046cd36c3dceca4ca26d38fa0d7317ed325ff29390af34c54dc8042db` |
+| Shared source JSONL | `49894b58c125b1780a36e29c9f59f2056e2149993b28f2b013fe9be9de9a0529` |
+| `E:/fz-cold-1012e/case.json` | `9685fcb63230d529a9f4792652af17cc948107162abc5a6ab7e74549154715d6` |
+
+Re-run the already-created cold case only into a **new** output:
+
+```powershell
+py -3 tools/fzero_replay_adapter.py observe --case E:/fz-cold-1012e/case.json `
+  --toolkit E:/Source/toolkits/dbce-wheel-mod-toolkit `
+  --runner E:/fz-probe-1012e/app/FZeroSNESRecompHeadless.exe `
+  --rom E:/fz-cold-1012e/fzero.sfc --output <fresh-force-jsonl> --timeout 60
+```
+
+At that October 12 checkpoint, remaining product gaps were ordinary non-latched shared-profile entry,
+record/play UI and status, unsupported independent SNES X/Y/L/R/host extras,
+representative owner driving, and physical/output/triple-screen acceptance.
+The successful diagnostic does not silently enable the shared backend or replace
+the owner's normal launcher. Earlier failed/unsealed originals remain intact.
+
+## October 13: stock Applied Controls, diagnostic Practice and fresh replay
+
+The clean stock source `51999e39265e4b4395394c915a68a0c29c588cc2` was built and
+privately staged at `E:/fz-stock-stage-51999e3`. Native source
+`f49cfc559f065b778967a7c94068a75df538ec69` and DLL `9B8A036F...015D8` are unchanged.
+The existing private stager receipt declares the actual Shared Controls contract;
+the production Wheelkit writer from `09c9223` uses `SharedShimProfile.Plan`.
+It admits an already selected Shared backend, requires FFB disabled, preserves
+Native/force settings, and reports 11 delivered and 20 unsupported actions.
+
+The earlier `E:/fz-probe-stock-apply-02` production Controls Apply and ordinary
+900-frame boot/idle recording admitted revision
+`B081640CE3DD13E690B4D225A1C773308C1FD3AC6FE12B0554C07BF063AA1E0F`
+and exact Controls bytes
+`A983D5A7791188866A2848738AEAFCDA50E2938DFC544D52EDA962DAEAF79467`.
+That case's fresh replay passed. Attempt04 below reused those exact bytes in a
+latched diagnostic; it does not convert the ordinary idle case into ordinary
+driving or qualify Wheelkit's Play With Recording UI.
+
+### Stock route and observed result
+
+Private `StockPracticeRoute.py` (`87A69F22...B85386C`) adapts the existing
+`tools/fzero_shim_practice_route.py`, retaining its source reader, Core command
+transport and Capture wrapper. The stock menu table comes from the exact ROM,
+not the Deluxe bank-7F selectors. It selects Practice, Blue Falcon, Yes, the
+default rival and Mute City I; stock Practice has no league-selection step.
+The two prompt animations require 42 consecutive neutral, unfaded guest-frame
+advances before confirmation. Every command has fresh source/owned-frame proof;
+unknown states, stale source and missing player countdown refuse. Images are
+retained for review without an agent round trip in the transient menu loop.
+
+Attempts01/02 remain inconclusive neutral-only recordings. Attempt03 consumed
+Practice selection/entry but stopped at a private guard that checked selection
+before car phase0 initialized it. Its 728 words match exactly. The narrow fix
+checks selection only in the initialized car/rival phases1/4; seven fixtures
+include its retained 39 transition frames and refusal of a changed stable
+selection. No game/native rebuild was needed, and original attempt03 bytes remain.
+
+Attempt04 (`E:/fz-probe-stock-drive-04`) and fresh graphical replay
+(`E:/fz-probe-stock-drive-replay-04`) held one shared lease from
+15:37:10.355 to 15:41:18.994 UTC, October 13. Both exited normally with code0.
+The owner-activity override was honored explicitly; no idle observation was
+fabricated. Both preserved all 77 owner file/absence pins. Exact game, supervisor
+and helper identities were gone before verified lease release.
+
+- All 2,213 final SNES words/frame indexes equal the 2,213 valid Shared game rows,
+  plus one terminal row: zero mismatches. P21 seal passed 2,214 rows/35,703 checks.
+- Native player countdown2/2/2 precedes gameplay2/3/0, training1/state5B0.
+  There are 559 player frames (9.289 seconds), 182 Live/injected throttle frames,
+  61 steering frames and 30 consumed right PDM pulses. Software-reported speed
+  and distance increase; these are not physical calibration measurements.
+- The fresh process replays the immutable `.fzpt`/`.fzpt.state` pair and reports
+  `Replay verified: 2213 frames`. Per-frame WRAM checkpoints pass; there is no
+  pose correction, live input backend or physical output during replay.
+- Original recorder/control workers joined and resolved with held0/inputReleased;
+  the no-force latch and native SDL suppression remained active. Ordinary Shared
+  keyboard passthrough was not exercised by this intentionally latched case.
+
+### Visual scope and capture limitation
+
+`frames/153848787.png` in the original shows Blue Falcon driving, the player
+timer/HUD and REC36.0s. Replay `frames/burst/frame-0001.png` shows active
+REPLAY2047/2213 with FORCES OFF; `frame-0128.png` shows REPLAY VERIFIED2213.
+The replay capture helper nevertheless exited **4**: 128 images saved, 93
+observed frames skipped, then process/window identity or visibility changed at
+target close. This is a partial failed capture burst, not successful capture or
+performance qualification. The game/replay result is independently exit0 and
+verified. No replay was repeated to replace those missing images.
+
+| Artifact | SHA-256 |
+|---|---|
+| Stock graphical executable | `7b2cf655e4442b05da79fa05ff1228137dc2ebfb230afdbd8543262f7a222d5e` |
+| Existing private stage receipt | `6cbf815995c5ac53fe1fb855d5e84cb70b8f1d8f0af8913de353a6898e413d51` |
+| Original `.fzpt` | `f76816a860a21686ad8b254bdaad01b3672eac933d652b1c444a5c2b75551212` |
+| Initial state | `1db8aa96932ef63c12bde849f64a8473ce7d38f08d7254fdbd61ef72bf230ccc` |
+| Shared source JSONL | `9b1cff5ceca2fc0196321057e5487585969e02b4c17d3f9298ca8f0cd063eb75` |
+| `state-route-outcome.json` in original | `026477b39d4aa28166bcf2333a956c7277610a09b6e65e9c2813121a291677e8` |
+| `consumed-input-check.json` | `b26c958266f19832c2111e2d75bd728392dc3a74c31e87384b0cfb4a411df623` |
+| Fresh replay `result.json` | `f2ba36f151ba1c0148851ebef77613be3b495ec3ffc01ff246155aa5f92e0e87` |
+
+The private recipe `StockState-Commands.attempt04.ps1.txt` is pinned as
+`CB9FFBC7630F82DDFF931316F9FD81ACCCFC622F0DE772AA80715AF25BEA7E31`.
+Its unchanged wrappers are `5815B51D...12529E` (diagnostic) and
+`846A6487...E8A32` (ordinary/replay); original recipe/router/comparator bytes
+are copied into the original's evidence directory. No ROM, private DLL or tape
+is added to this repository. No public branch, payload or owner install changed.
+
+This qualifies the short **stock diagnostic Practice consumed-input and fresh
+snapshot replay** path. Remaining parity and promotion requirements are listed
+in [delivery readiness](2026-10-12-delivery-readiness.md); broad
+`runtimeQualified` remains false deliberately.

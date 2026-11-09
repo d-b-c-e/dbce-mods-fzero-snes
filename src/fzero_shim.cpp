@@ -133,7 +133,8 @@ bool read_profile(const char *path) {
 bool ordinary_force_disabled() {
   int enabled = 0;
   FzeroIniReadInt(config_path.c_str(), "ForceFeedback", "Enabled", &enabled);
-  return enabled || refuse("Shared input requires explicitly enabled force feedback");
+  if(use_force_bridge)return enabled || refuse("SharedForceBridge requires explicitly enabled force feedback");
+  return !enabled || refuse("Shared input with ForceFeedback Enabled is not yet supported: the force/read ownership bridge is pending; use Native for force feedback");
 }
 #ifdef _WIN32
 template<class T> T entry(HMODULE module, const char *name) {
@@ -212,15 +213,30 @@ int FzeroShimPrepare(const char *config, int direct_rom, int replay, int script,
                      int qualified_launcher) {
   const char *run = std::getenv("FZERO_SHIM_DIAGNOSTIC_RUN");
   if (!present(run)) {
-    // A recorded/scripted replay never opens an input backend.
+    // A recorded/scripted replay never opens an input backend, even when the
+    // captured config selected Shared and normal play had force enabled.
     if (replay || script) return 1;
+    char backend[32] = "Native";
+    FzeroIniReadString(config, "Input", "Backend", backend, sizeof(backend));
+    std::string selection = backend;
+    for (char &c : selection) if(c>='A' && c<='Z') c += 'a'-'A';
+    if (selection == "native") return 1;
+    if (selection != "shared") return refuse("Input Backend must be Native or Shared");
     ordinary = true;
     config_path = config;
-    use_force_bridge = true;
-    use_extras = true;
-    use_host_controls = true;
-    if (explicit_recording)
-      return 1; // recording/preview mode: don't open shared input
+    int bridge=0;FzeroIniReadInt(config,"Input","SharedForceBridge",&bridge);
+    if(bridge!=0 && bridge!=1)return refuse("SharedForceBridge must be 0 or 1");
+    use_force_bridge=bridge==1;
+    if(use_force_bridge && explicit_recording)return refuse("SharedForceBridge is ordinary play only; recording stays separate");
+    int extras = 0;
+    FzeroIniReadInt(config, "Input", "SharedExtras", &extras);
+    if (extras != 0 && extras != 1) return refuse("SharedExtras must be 0 or 1");
+    use_extras = extras == 1;
+    int hosts=0;FzeroIniReadInt(config,"Input","SharedHostControls",&hosts);
+    if(hosts!=0 && hosts!=1)return refuse("SharedHostControls must be 0 or 1");
+    use_host_controls=hosts==1;
+    if(use_host_controls && (!use_extras || explicit_recording))
+      return refuse("SharedHostControls requires SharedExtras=1 and ordinary play without recording");
     // Only the paired keyboard/mouse UI plus qualified bundled helper may
     // reach a launcher. An old/missing setup bundle keeps the prior refusal.
     if (!direct_rom && !qualified_launcher)
@@ -229,7 +245,9 @@ int FzeroShimPrepare(const char *config, int direct_rom, int replay, int script,
       return refuse("Shared recording/preview requires an explicit ROM without the launcher");
     deferred_launcher_profile = !direct_rom;
     if (!ordinary_force_disabled()) return 0;
-    if (!FzeroLatchNoForce()) return refuse("force owner already initialized");
+    // Refuse an independent force owner for the lifetime of Shared input. This
+    // is an ownership limitation, not a changed force model or saved setting.
+    if (!use_force_bridge && !FzeroLatchNoForce()) return refuse("force owner already initialized");
     for (const char *key : {"FZERO_SHIM_SESSION_NONCE", "FZERO_SHIM_SESSION_FILE", "FZERO_SHIM_BATCH_FILE"})
       if (present(std::getenv(key))) return refuse("injection files require an explicit diagnostic, not ordinary Shared input");
 #ifndef _WIN32
@@ -243,6 +261,8 @@ int FzeroShimPrepare(const char *config, int direct_rom, int replay, int script,
    * into a normal force-enabled launch. */
   if (!FzeroLatchNoForce()) return refuse("force already initialized");
   if (!FzeroTelemetryLatchNoDelivery()) return refuse("telemetry delivery already initialized");
+  int hosts=0;FzeroIniReadInt(config,"Input","SharedHostControls",&hosts);
+  if(hosts)return refuse("SharedHostControls is ordinary play only, not a diagnostic/capture route");
   if (!direct_rom || replay || script || explicit_recording)
     return refuse("requires an explicit ROM, no launcher and no other record/replay mode");
   for (const char *key : {"FZERO_STATE_SAVE_AT", "FZERO_STATE_LOAD_AT", "FZERO_VIEWPORT_SCRIPT", "FZERO_OVERLAY_SELFTEST"})
@@ -292,12 +312,28 @@ int FzeroShimPrepare(const char *config, int direct_rom, int replay, int script,
 }
 int FzeroShimStart(void *window, const char *legacy_guid) {
   if (!FzeroShimUsingInput()) return 1;
-  if (failed || !FzeroNoForceLatched())
+  if (failed || (!use_force_bridge && !FzeroNoForceLatched()) || (use_force_bridge && FzeroNoForceLatched()))
     return refuse("shared input not admitted or force ownership guard missing");
+  if(ordinary) {
+    int bridge=0;FzeroIniReadInt(config_path.c_str(),"Input","SharedForceBridge",&bridge);
+    if(bridge!=(use_force_bridge?1:0))return refuse("SharedForceBridge changed after startup; restart required");
+    int hosts=0;FzeroIniReadInt(config_path.c_str(),"Input","SharedHostControls",&hosts);
+    if(hosts!=(use_host_controls?1:0))return refuse("SharedHostControls changed after startup; restart required");
+  }
   const bool fences = host_persistence && host_debug && FzeroTelemetryDeliveryBlocked();
   if (requested && !fences) return refuse("host persistence/debug/telemetry fences not established");
   if (ordinary && !ordinary_force_disabled()) return 0; // launcher may have changed it
   if (ordinary && deferred_launcher_profile) {
+    char backend[32] = "Native";
+    FzeroIniReadString(config_path.c_str(), "Input", "Backend", backend, sizeof(backend));
+    std::string selection = backend;
+    for (char &c : selection) if (c >= 'A' && c <= 'Z') c += 'a'-'A';
+    if (selection != "shared") return refuse("launcher input backend changed; restart to use the saved selection");
+    int extras = 0;
+    FzeroIniReadInt(config_path.c_str(), "Input", "SharedExtras", &extras);
+    if (extras != 0 && extras != 1) return refuse("SharedExtras must be 0 or 1");
+    use_extras = extras == 1;
+    if(use_host_controls && !use_extras)return refuse("SharedHostControls requires SharedExtras=1");
     if (!read_profile(config_path.c_str())) return 0;
   }
 #ifdef _WIN32
@@ -396,7 +432,7 @@ int FzeroShimStart(void *window, const char *legacy_guid) {
     if (use_extras) std::fprintf(stderr, "[fzero-shim] declared X/Y/L/R extras enabled; same owned tick; no legacy binding fallback\n");
     std::fprintf(stderr, "[fzero-shim] ABI 2 %s opened; steering range=%d response=%d; Core calibration; keyboard=%s; %s\n",
       ordinary ? "ordinary input" : "capture", range, response, latched ? "suppressed" : "retained",
-      ordinary ? "SDL devices disabled; X/Y/L/R extras; dedicated save/rewind host controls; force bridge; keyboard retained" : "SDL controller lane disabled");
+      ordinary ? "SDL devices disabled; X/Y/L/R require declared SharedExtras; dedicated save/rewind require declared SharedHostControls; no legacy button fallback; keyboard retained; physical FFB requires explicit SharedForceBridge and qualified owned snapshots" : "native SDL controller lane disabled");
     return 1;
   } catch (const std::exception &e) { return refuse(e.what()); }
 #else

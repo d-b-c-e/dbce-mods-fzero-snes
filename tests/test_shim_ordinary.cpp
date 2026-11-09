@@ -31,19 +31,17 @@ int main(int argc,char **argv) {
  auto cfg=root/"config.ini";
  const std::string profile="[Controls]\r\nSchema=1\r\nProfile=fixture\r\nsteer = axis 0 dev={11111111-2222-3333-4444-555555555555} "
   "prod={0006346e-0000-0000-0000-504944564944} range=0..65535 rest=32768 travel=-1\r\n";
- const bool force=mode=="force" || mode=="replay";
+ const bool force=mode=="force" || mode=="replay" || mode=="native";
  const bool hosts=mode.rfind("hosts",0)==0;
  const bool extras=mode.rfind("extras",0)==0 || hosts;
  const std::string extras_profile="[Extras]\r\nSchema=1\r\nGame=fzero-snes\r\nDeclaration=c4ffc4c85f1b7f72437e5871bdec57f9d5b997a62a9fdd3fd2208fefa0d98fb1\r\nfzero-snes.x=button 9 dev={11111111-2222-3333-4444-555555555555}\r\n";
  std::string extra_section=extras && mode!="extrasnosection" ? extras_profile : "";
  if(hosts){auto at=extra_section.find("c4ffc4c85f1b7f72437e5871bdec57f9d5b997a62a9fdd3fd2208fefa0d98fb1");extra_section.replace(at,64,"761789a517b35b88395d6b3ba06e2d2ba60628168abda6637e69d581a7a51cf7");}
  const bool extras_first=mode=="extrasfirst" || mode=="extrasbom";
- const bool force_success=force || mode.rfind("launcher",0)==0 || mode.rfind("hosts",0)==0 || mode.rfind("extras",0)==0 || mode=="configlimit" || mode=="configoversize" || mode=="extrasconfiglimit" || mode=="extrasconfigoversize";
  std::string original=(mode=="extrasbom"?std::string("\xef\xbb\xbf"):"")+
-  (extras_first?extra_section:"")+
-  "[ForceFeedback]\r\nEnabled="+(force_success?"1":"0")+"\r\nStrength=12\r\n[Telemetry]\r\nEnabled=1\r\n"+
-  (mode=="launcherempty"?"":profile)+(extras_first?"":extra_section)+
-  (mode=="extrasduplicate"?extras_profile:"");
+  (extras_first?extra_section:"")+"[Input]\r\nBackend="+std::string(mode=="native"?"Native":mode=="unknown"?"Typo":"Shared")+
+  "\r\nSharedHostControls="+(hosts?"1":"0")+"\r\nSharedExtras="+(mode=="hostsnoflag"?"0":extras || mode=="native" || mode=="replay"?"1":"0")+"\r\n"+(mode=="launcherempty"?"":profile)+(extras_first?"":extra_section)+
+  (mode=="extrasduplicate"?extras_profile:"")+"[ForceFeedback]\r\nEnabled="+(force?"1":"0")+"\r\nStrength=12\r\n[Telemetry]\r\nEnabled=1\r\n";
  const bool config_limit=mode=="configlimit" || mode=="extrasconfiglimit";
  const bool config_oversize=mode=="configoversize" || mode=="extrasconfigoversize";
  if(config_limit || config_oversize) {
@@ -55,20 +53,16 @@ int main(int argc,char **argv) {
  {std::ofstream f(cfg,std::ios::binary);f<<original;}
  if(mode=="session") _putenv_s("FZERO_SHIM_SESSION_NONCE","noordinaryinjection");
  const bool launcher_mode=mode.rfind("launcher",0)==0;
- const bool prerecord=mode=="replay" || (hosts ? mode=="hostsrecord" : false);
  bool prepared=FzeroShimPrepare(cfg.string().c_str(),!launcher_mode,mode=="replay",0,
-     prerecord,
+     (hosts ? mode=="hostsrecord" : !launcher_mode || mode=="launcherrecord"),
      launcher_mode && mode!="launcher")!=0;
- if(mode=="replay") {
+ if(mode=="native" || mode=="replay") {
   CHECK(prepared && !FzeroShimUsingInput() && !FzeroNoForceLatched());
   CHECK(FzeroShimStart(nullptr,"fixture") && FzeroShimStop());
  } else if(mode=="launcherempty") {
   CHECK(prepared && FzeroShimOrdinary() && FzeroNoForceLatched());
   CHECK(!std::filesystem::exists(root/"diagnostics") && FzeroShimStop()); // Configure/quit has no owner to stop
- } else if(mode=="hostsrecord") {
-  CHECK(prepared && !FzeroShimUsingInput() && !FzeroNoForceLatched());
-  CHECK(FzeroShimStart(nullptr,"fixture") && FzeroShimStop());
- } else if(mode=="unknown" || mode=="session" || mode=="launcher" || mode=="extrasnosection" || mode=="extrasduplicate" || mode=="hostsnoflag" || config_oversize) {
+ } else if(mode=="force" || mode=="unknown" || mode=="session" || mode=="launcher" || mode=="launcherrecord" || mode=="extrasnosection" || mode=="extrasduplicate" || mode=="hostsnoflag" || mode=="hostsrecord" || config_oversize) {
   CHECK(!prepared && !std::filesystem::exists(root/"diagnostics"));
   CHECK(!FzeroTelemetryDeliveryBlocked());
   if(config_oversize) {
@@ -82,15 +76,22 @@ int main(int argc,char **argv) {
   CHECK(!FzeroLatchForceOutput()); // the real native-force admission latch refuses a second owner
   CHECK(!*FzeroShimRecordingPath() && !*FzeroShimSaveRoot());
   CHECK(!std::filesystem::exists(root/"diagnostics")); // Prepare is read-only
-  if(mode=="forcechanged") {
+  if(mode=="forcechanged" || mode=="hostschanged") { // edit existing key, not a duplicate-section test
    auto changed=original;
-   changed.replace(changed.find("Enabled=0"),9,"Enabled=1");
+   if(hosts) changed.replace(changed.find("SharedHostControls=1"),20,"SharedHostControls=0");
+   else changed.replace(changed.find("Enabled=0"),9,"Enabled=1");
    std::ofstream f(cfg,std::ios::binary);f<<changed;
   }
   std::string applied_profile=profile;
   if(mode=="launchersaved") {
    applied_profile.replace(applied_profile.find("Profile=fixture"),std::strlen("Profile=fixture"),"Profile=launcher-saved");
    auto changed=original;changed.replace(changed.find(profile),profile.size(),applied_profile);
+   std::ofstream f(cfg,std::ios::binary);f<<changed;
+  }
+  if(mode=="launcherbackendchanged" || mode=="launcherbadextras") {
+   auto changed=original;
+   if(mode=="launcherbackendchanged") changed.replace(changed.find("Backend=Shared"),std::strlen("Backend=Shared"),"Backend=Native");
+   else changed.replace(changed.find("SharedExtras=0"),std::strlen("SharedExtras=0"),"SharedExtras=3");
    std::ofstream f(cfg,std::ios::binary);f<<changed;
   }
   if(mode=="profile") _putenv_s("FZERO_FAKE_BAD_PROFILE","1");
@@ -110,7 +111,7 @@ int main(int argc,char **argv) {
    CHECK(startup.find("revision=fixture-revision\n")!=std::string::npos);
    CHECK(startup.find("sha256=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n")!=std::string::npos);
   } else CHECK(startup.find(accepted)==std::string::npos);
-  if(mode=="forcechanged" || mode=="extrasabi") {
+  if(mode=="forcechanged" || mode=="hostschanged" || mode=="extrasabi" || mode=="launcherbackendchanged" || mode=="launcherbadextras") {
    CHECK(!started && !std::filesystem::exists(root/"diagnostics"));
    CHECK(!FzeroShimStop());
    {std::ofstream f(cfg,std::ios::binary);f<<original;}
@@ -138,14 +139,54 @@ int main(int argc,char **argv) {
      if(mode=="missing") {
       CHECK((word&0xc0)==0); // no steering fallback
       CHECK((FzeroShimSupplementalMask()&0x100)==0); // missing Confirm never falls back
+      CHECK(FzeroShimSupplementalMask()==0); // even Unbound cannot open/read a legacy wheel
      }
-     CHECK(FzeroShimConsumed(std::numeric_limits<uint64_t>::max(),word,scene,sizeof(scene)));
-     CHECK(!FzeroShimStop());
+     if(hosts) {
+      uint32_t held=0,pressed=0;
+      word=FzeroHostButtonsTake(word,&held,1,&pressed);
+      CHECK(pressed==FZERO_HOST_BUTTON_MASK && !(word&FZERO_HOST_BUTTON_MASK));
+      FzeroShimNeutral(); // browser cancels the pending guest sample before its own Core reads
+      CHECK(FzeroShimOverlayInput(&word) && word==0xe02u);
+      CHECK(FzeroShimInput(&word,scene,sizeof(scene))); // fresh sample after possible load/rewind
+      word=FzeroHostButtonsTake(word,&held,0,&pressed);
+      CHECK(!pressed && !(word&FZERO_HOST_BUTTON_MASK));
+      CHECK(FzeroShimConsumed(0,word,nullptr,0));
+      CHECK(FzeroShimInput(&word,scene,sizeof(scene)));
+      word=FzeroHostButtonsTake(word,&held,1,&pressed);
+      CHECK(!pressed && !(word&FZERO_HOST_BUTTON_MASK)); // holding cannot reopen the modal
+      CHECK(FzeroShimConsumed(1,word,nullptr,0));
+      CHECK(FzeroShimStop());
+      CHECK(read(run/"extras-tick.spy")=="1\n2\n3\n4\n");
+     } else {
+     CHECK(FzeroShimConsumed(0,word,nullptr,0));
+     _putenv_s("FZERO_FAKE_BAD_RECORD","1"); // ordinary must never call shared capture
+     CHECK(FzeroShimInput(&word,scene,sizeof(scene)));
+     FzeroShimNeutral(); // host overlay cancels this pending guest frame
+     CHECK(FzeroShimOverlayInput(&word) && word==(extras && mode!="extrasmissing"?0xe02u:0)); // pedal/steering never navigate host UI
+     CHECK(FzeroShimInput(&word,scene,sizeof(scene)));
+     uint32_t consumed=FzeroShimGuestWord(word | 0x400u | 0x40000000u);
+     CHECK(FzeroShimConsumed(1,consumed,nullptr,0));
+     // Same final Core + keyboard (SNES L here) word enters the actual .fzpt
+     // writer used after RtlRunFrame; no legacy wheel supplement participates.
+     FzeroPlaythrough tape{},replay{};uint8_t digest[32]={7},ram[8]={1};
+     auto path=(root/"ordinary.fzpt").string();
+     CHECK(FzeroPlaythroughRecordOpen(&tape,path.c_str(),digest));
+     CHECK(FzeroPlaythroughRecordFrame(&tape,consumed,ram,sizeof(ram)) && FzeroPlaythroughClose(&tape));
+     CHECK(FzeroPlaythroughPlaybackOpen(&replay,path.c_str(),digest));
+     CHECK(FzeroPlaythroughNextInput(&replay,&word) && word==consumed);
+     CHECK(FzeroPlaythroughVerifyFrame(&replay,ram,sizeof(ram)) && FzeroPlaythroughClose(&replay));
+     CHECK(FzeroShimStop());
+     if(extras) CHECK(read(run/"extras-tick.spy")=="1\n2\n3\n4\n"); // one combined tick per read
+     }
     }
+    CHECK(!std::filesystem::exists(run/"consumed.spy") && !std::filesystem::exists(run/"capture"));
    }
+   CHECK(read(run/"stop.spy")=="stopped");
   }
  }
+ if(mode=="launchersaved") {std::ofstream f(cfg,std::ios::binary);f<<original;}
+ CHECK(read(cfg)==original);
+ CHECK(std::filesystem::canonical(root).parent_path()==std::filesystem::canonical(temp));
  std::filesystem::remove_all(root);
- std::fprintf(stderr,"%s ok (%u checks)\n",mode.c_str(),checks);
- return 0;
+ std::printf("ordinary host %s: %u checks\n",mode.c_str(),checks);return 0;
 }

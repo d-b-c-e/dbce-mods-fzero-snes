@@ -1,0 +1,9 @@
+{
+  "schema": "dbce.fzero-optional-snapshot-source.v1",
+  "sourceCommit": "59486032871b9a8fc349399ed96bc2cb5451bbf4",
+  "sourcePath": "native/wheelffb/include/read_snapshot.h",
+  "file": "include/read_snapshot.h",
+  "sha256": "5002456d19a7c43e869343ae0ddfd761a89522334390c9c61013db2d5417ef9e",
+  "baselineNativePinChanged": false,
+  "qualification": "six native fake/device-free x64/x86 steps passed; game/physical adoption pending"
+}

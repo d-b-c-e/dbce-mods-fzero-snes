@@ -1,0 +1,13 @@
+{
+  "schema": "dbce.fzero-shared-input-pin",
+  "version": 1,
+  "abi": 2,
+  "sourceRevision": "ea568c258d2373de55efabf1b16b0776990fb2cd",
+  "extrasAbi": 1,
+  "distribution": "private-only",
+  "files": {
+    "dbce_shim.dll": "bf6455e63696a93b37c19dabf09b1e0606f26b0534bce828417b1df602dd8a7a",
+    "dbce_shim.h": "f590a9f77a81999cae8b4e7c6b8ecd83eade44724564bf35f3591d725ac0c0fa",
+    "dbce_shim_extras.h": "1c65f15097e61bb3175f9ed3721458b775a05091515bfce208c407fc9c261912"
+  }
+}

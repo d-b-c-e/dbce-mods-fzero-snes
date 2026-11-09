@@ -119,6 +119,16 @@ int FzeroShimMapOverlayFrame(FzeroShimMap *s, const dbce_shim_frame *f, uint32_t
   *word = digital_word(f);
   return 1;
 }
+uint32_t FzeroShimLegacyButtonMask(const dbce_shim_frame *f) {
+  if (!f || f->abi != DBCE_SHIM_ABI || f->struct_size != sizeof(*f)) return 0;
+  /* Y is also SNES brake, but ButtonY is an independent legacy digital binding,
+   * not a fallback pedal axis. Keep it with X/L/R and the two host-only actions. */
+  uint32_t mask = (1u<<1)|(1u<<9)|(1u<<10)|(1u<<11)|(1u<<24)|(1u<<25);
+  static const unsigned bits[] = {8,0,3,2,4,5,6,7};
+  for (int i=0;i<8;++i)
+    if (f->action[9+i].status == 0) mask |= 1u<<bits[i]; // exact ABI2 Unbound
+  return mask;
+}
 void FzeroShimConsumedValues(uint64_t frame, uint32_t input, double out[2]) {
   out[0] = (double)frame;
   out[1] = (double)input;

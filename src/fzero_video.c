@@ -77,6 +77,12 @@ static bool parse_bounded_unsigned(const char *text, unsigned low,
   return true;
 }
 
+/* How far the curved glass center sits behind the chord (the eye must be in front of it). */
+static double triple_sagitta(const FzeroVideoSettings *s) {
+  double h = s->triple_panel_width_mm / 2.0, r = s->triple_curve_radius_mm;
+  return h * h / (r + sqrt(r * r - h * h));
+}
+
 bool FzeroTripleValidLayout(const FzeroVideoSettings *s) {
   return s && s->triple_panel_width_mm >= 200 && s->triple_panel_width_mm <= 3000 &&
          s->triple_eye_distance_mm >= 200 && s->triple_eye_distance_mm <= 3000 &&
@@ -84,7 +90,8 @@ bool FzeroTripleValidLayout(const FzeroVideoSettings *s) {
          s->triple_bezel_gap_mm <= 100 && s->triple_eye_height_mm <= 1000 &&
          (s->triple_curve_radius_mm == 0 ||
           (s->triple_curve_radius_mm >= 300 && s->triple_curve_radius_mm <= 20000 &&
-           2 * s->triple_curve_radius_mm >= s->triple_panel_width_mm));
+           2 * s->triple_curve_radius_mm >= s->triple_panel_width_mm &&
+           s->triple_eye_distance_mm > triple_sagitta(s)));
 }
 
 bool FzeroTriplePanelSupported(int width, int height) {
@@ -197,26 +204,25 @@ bool FzeroVideoLoad(FzeroVideoSettings *s, const char *path) {
   if (!f) return errno == ENOENT;
   char line[256], key[64], value[64], tail;
   bool valid = true;
+  bool has_fps_toggle = false;
+  bool other_section = false; /* keys before any header (legacy files) count; other sections do not */
   while (fgets(line, sizeof(line), f)) {
     const char *t = line;
     while (*t == ' ' || *t == '\t') ++t;
-    if (*t != '[') continue;
-    if (strncmp(t, "[FZeroVideo]", 12) != 0) continue;
-    while (fgets(line, sizeof(line), f)) {
-      t = line;
-      while (*t == ' ' || *t == '\t') ++t;
-      if (*t == '[') break;
-      int fields = sscanf(line, " %63[^= \t] = %63s", key, value);
-      if (fields != 2) {
-        if (fields == 1 && !strcmp(key, "HDMode7Scale")) valid = false;
-        continue;
-      }
-      if (!strcmp(key, "EnhancedRenderer")) {
-        if (!strcmp(value, "0") || !strcmp(value, "1")) s->enhanced = value[0] == '1';
-        else valid = false;
-      } else if (!strcmp(key, "PresentationEnabled")) {
-        if (!strcmp(value, "0") || !strcmp(value, "1")) s->fps_enabled = value[0] == '1';
-        else valid = false;
+    if (*t == '[') { other_section = strncmp(t, "[FZeroVideo]", 12) != 0; continue; }
+    if (other_section) continue;
+    int fields = sscanf(line, " %63[^= \t] = %63s", key, value);
+    if (fields != 2) {
+      if (fields == 1 && !strcmp(key, "HDMode7Scale")) valid = false;
+      continue;
+    }
+    if (!strcmp(key, "EnhancedRenderer")) {
+      if (!strcmp(value, "0") || !strcmp(value, "1")) s->enhanced = value[0] == '1';
+      else valid = false;
+    } else if (!strcmp(key, "PresentationEnabled")) {
+      has_fps_toggle = true;
+      if (!strcmp(value, "0") || !strcmp(value, "1")) s->fps_enabled = value[0] == '1';
+      else valid = false;
     } else if (!strcmp(key, "ShowFPS")) {
       if (!strcmp(value, "0") || !strcmp(value, "1")) s->show_fps = value[0] == '1';
       else valid = false;
@@ -270,6 +276,7 @@ bool FzeroVideoLoad(FzeroVideoSettings *s, const char *path) {
   }
   if (ferror(f)) valid = false;
   fclose(f);
+  if (!has_fps_toggle) s->fps_enabled = s->enhanced; /* migrate combined checkpoint mod */
   return valid;
 }
 
@@ -440,7 +447,8 @@ bool FzeroVideoSaveChanges(const FzeroVideoSettings *before,
 #define CHANGE(field, key, ...) do { if (before->field != after->field) PUT(key, __VA_ARGS__); } while (0)
   CHANGE(enhanced, "EnhancedRenderer", "%d", after->enhanced);
   CHANGE(aspect, "Aspect", "%s", FzeroAspectName(after->aspect));
-  /* Preserve the separate FPS choice when changing the renderer. */
+  /* The old combined checkpoint derives an absent FPS flag from EnhancedRenderer.
+   * Preserve the separate FPS choice when changing that discriminator. */
   if (before->fps_enabled != after->fps_enabled || before->enhanced != after->enhanced)
     PUT("PresentationEnabled", "%d", after->fps_enabled);
   if (after->fps) { CHANGE(fps, "PresentationFPS", "%u", after->fps); }

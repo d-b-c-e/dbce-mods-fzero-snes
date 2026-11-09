@@ -1,0 +1,161 @@
+# Shared input and recording delivery checkpoint
+
+## Current private candidate, October 16
+
+The current source lane includes the earlier `fzero-shim-source` worktree's
+`e4c045c` ancestry. The latest qualified compiler input is game
+`19afaf25bab4608ff06e00e6913524ed5a70ce17`, paired UI
+`6d9b71526f82c0182f85ec47610eb559303a77b8` and helper
+`32bfd0bdbe8376a2d2fa81d5de54a3b68199c53e`. Its source successor `0d65d36`
+records the result without changing runtime code. Do not relabel the existing
+binary as a later documentation revision. The October 13 checkpoints below
+remain historical evidence, not the current package instructions.
+
+The private Deluxe launcher is SHA-256
+`2C78019E59B1D11802C3AFC4454B6A0ACF62E8657F8E220369783365745CDB8C`.
+Its 528-file helper manifest is SHA-256
+`5F7255C977337AAA59429FF7F8E9C1DFA9756E65975BF9943FE6AEA760AE2288`;
+helper ZIP is `B8D38B1244F030EDEB8E098D5B875942DDDD5FA90595ECE1EDC1904CE2241F60`.
+The existing BF6455E6 pin remains ABI 2/extras 1 and private-only.
+
+Original evidence is in hub commit `3d80f919`,
+`artifacts/fzero-report-trace-build-dine-20261016`: 16 Core passes, helper publish
+and report-window smoke, seven bundle cases, and five native/UI/no-bundle cases.
+`native-01/result.json` records the passing build; `native-01/cleanup.json`
+separately closes all 71 original identities and releases the lease. Initial
+publish and command-quoting failures remain intact. No game, rendered Help,
+owner install, browser submission or physical acceptance follows from this build.
+
+The source already connects the conditional Shared keyboard/mouse launcher,
+Configure exact-parent-exit helper, optional full helper install/rollback,
+first-Application Python resolver, report-only Help callback and opt-in mouse
+trace. No new adapter, recording format or ABI change is needed to compose them.
+See [report/build results](2026-10-16-help-report-route.md),
+[installer provenance](2026-10-16-private-installer-integration.md) and
+[trace interpretation](2026-10-16-launcher-mouse-trace.md).
+No owner-installed copy, default backend or force tune changed in this closeout.
+
+### Disposable private assembly complete (193417)
+
+The exact qualified image/helper are now assembled at
+`E:/fzero-research/private-candidate-nemo-20261016/candidate` (578 current files,
+excluding rollback backups). This is an embedded Deluxe **private** directory,
+not the stock/public ZIP. Original binary, UI and helper identities above are
+unchanged. No rebuild, owner installation or additional ROM/save/config copy.
+
+An exact clean detached 19afaf25 checkout ran the existing
+`Install-StreamDeck.ps1` with both private flags and the default Python resolver.
+All 537 owned file hashes and complete helper admission passed; existing rollback
+restored the entire bootstrap/unowned baseline. A final install leaves the
+candidate ready. Bootstrap assets/notices came only from allowlisted matching UI
+build/source files and source shaders, with fonts/images compared to the paired UI.
+
+The final import check exposed three missing CRT DLLs in this fresh folder.
+That original failure remains in `result.json`; successful install/rollback logs
+are retained. A narrow completion added unmodified `msvcp140.dll`,
+`vcruntime140.dll` and `vcruntime140_1.dll` from the installed VS x64 release
+redistributable directory, plus `licenses/vc-runtime.txt` identifying its origin
+and Microsoft documentation. These are additional candidate assets, outside the
+537-file updater inventory. Recursive native import closure and unchanged
+537-file/helper/launcher verification then passed, with no installer-test repeat.
+This closes local assembly, not public redistribution review or runtime loading.
+
+One concise result: `E:/fzero-research/private-candidate-nemo-20261016/assembly.json`,
+SHA-256 `015ED1B73BDBACD7ADD016098FC045F03DA048C94534E7EC0FB0D065B942C8A0`.
+`runtime-result.json` records PASS and actual lease release at
+20:14:58.2846158Z; the slot was handed back before documentation. Receipt SHA-256
+is `FF78EAFF1179C703A9BE9AC483AA22C2DF3A2069FAA67D5ECC14E3FB9ED380B5`.
+Activation/report rendering, physical controls and the deferred implementations
+below remain open; no game/helper UI or native device was opened.
+
+## Delivery implemented
+
+October 13 evidence update: clean source `51999e3` privately staged stock with the
+unchanged ABI2 native pin. Production Controls Apply has ordinary boot/idle
+admission and 900-frame replay proof. Reusing its exact profile, stock diagnostic
+Practice attempt04 consumed and freshly replayed 2,213 frames exactly; retained
+images show REC, active replay and REPLAY VERIFIED. The replay capture burst was
+partial/exit4, separate from successful game verification. See the
+[stock evidence and hashes](2026-10-12-shim-diagnostic.md#october-13-stock-applied-controls-diagnostic-practice-and-fresh-replay).
+No owner installation, public package, ordinary moving-input or Wheelkit Play
+With Recording qualification follows from this diagnostic.
+
+Later ordinary Deluxe evidence supersedes the moving-input gap for its narrow
+scope. Clean local `9604802` gated Shared analog steering outside gameplay.
+The installed private companion on a disposable copy recorded explicitly
+synthetic keyboard navigation and a moving Practice drive, sealing 1,838 frames.
+The original runner failed its all-zero/180-frame tail guard before replay;
+bit 30 is the input-port marker and continued Right PDM is valid recorded input.
+A separate replay-only run of the unchanged tape passed all 1,838 WRAM
+checkpoints with output muted and normal exit. The first replay-only admission
+failed before game launch on uppercase SHA text and is retained separately.
+An owned WGC frame shows active Practice replay, with status at 1,200 frames
+around capture and on-screen overlay at 1,242/1,838; it is not an exact scanout
+timestamp or owner visual acceptance. See the hub's
+`artifacts/fzero-ordinary-driving-20261013/replay08-outcome.json`. This did not
+exercise physical wheel axes, force, an owner installation, or Wheelkit's UI.
+
+- Existing direct-ROM `--record` and `--replay`, rendered REC/Saved/Error and
+  REPLAY/Verified, using `.fzpt` plus its initial-state sibling. The unchanged
+  2,351-frame private Practice original and fresh 900-frame ordinary Shared
+  recording have exact cold game-memory proof. See the [ordinary evidence](2026-10-12-ordinary-shared-input.md)
+  and [CLI evidence](2026-10-12-recording-cli.md).
+- `tools/Recording.ps1` supplies a readable package entry point without config
+  writes, filename overwrites or a new container. The public package includes
+  it and [the quickstart](RECORDING-QUICKSTART.md). Record uses normal force and
+  persistence settings; replay keeps its existing no-output/no-write behavior.
+- Native remains the default. `[Input] Backend=Shared` is explicit; bound
+  generic actions come only from the Core-owned reader. Missing/faulted Core
+  actions do not fall back to legacy SDL.
+- The stock stager's `--private-shared-input` option retains exact DLL/header
+  pins and provenance. The public ZIP refuses this private receipt and DLL.
+  It still refuses embedded Deluxe builds. Existing qualified private copies
+  are not repackaged or relabelled as stock/public evidence.
+
+## Narrow remaining integration work
+
+| Area | Current boundary | Next implementation/check |
+|---|---|---|
+| Wheelkit | Current Wheelkit has F-Zero capability/discovery and shared Play with recording/Play recording UI; its command omitted `-Rom` for a direct `fzero.sfc` copy with no `rom.cfg` | Local source now passes the current `rom.cfg` ROM for recording, direct `fzero.sfc` only when no selection exists, and the recorded descriptor ROM for replay. Missing/invalid selection refuses before launch. Focused tests passed 62/62; a receipt-staged disposable-copy command check resolved both actions against the unchanged 1,838-frame pair and rolled back. No game/UI launch or owner install. |
+| Controls Apply | Hash-bound Shared writer `09c9223` exists; the ordinary Deluxe Practice capture reused the retained schema-1 profile without retune | Preserve native routing/FFB refusal; physical binding/calibration and owner-driven behavior remain separate checks. |
+| Launcher | Matching helper admits the ordinary Shared keyboard/mouse launcher; native controller readers/preview remain suppressed. Configure exact-exit and report dispatch are implemented and offline-tested | Rendered Configure/report activation remains unproven. Preserve failed runtime05-07; any useful later combined observation uses the existing opt-in mouse trace to locate the failure, rather than repeating unchanged clicks. |
+| Wheel-only SNES extras | October 14 source adds opt-in declared X/Y/L/R through the existing Core extras API and one combined tick; archived BF6455 native candidate passes native/ABI checks, and private source pin/staging adopts both headers. Adoption fd52deb passes package/helper/36 consumer fixtures and actual five-file dependency-only staging. Existing installed 9B8A remains extras-off. Legacy wheel save/rewind remain unavailable; keyboard remains | Review the private pin/ownership source, then build a fresh graphical private candidate, stage explicit [Extras] bindings and qualify muted ordinary input plus fresh cold replay before attended controls. No second SDL open, legacy-index migration or unrelated action aliases. See [source handoff](2026-10-14-shared-extras.md). |
+| Shared physical FFB | Shared+enabled FFB is explicitly refused | Reuse the single-owner toolkit/provider bridge being developed for OutRun, then source and muted qualification before attended force checks. No new competing force lease. |
+| Actual owner controls | The moving ordinary Practice capture used explicitly synthetic keyboard input, not the owner's physical wheel | Fresh attended Shared drive once complete wheel-button/force delivery is ready; keep the private Practice tape as synthetic-input evidence. |
+| Ctrl+F11 | Production key routing and stop behavior tested offline; graphical runs used frame bounds/normal close | One attended stop-key check, no OS-key injection in the unattended wrapper. |
+| Installed delivery | Exact 19afaf25/report-helper candidate now passes default-resolver disposable install, 537-file verification, rollback restoration and final assembly; native import closure is complete | Owner path remains untouched. Preserve exact-source guards and private Deluxe identity; a later owner delivery must account for candidate assets/CRT in addition to the updater-owned inventory. Do not use the stock-only stager for embedded Deluxe. |
+| Public package | No new binary release; current DLL is private-only and Deluxe contains embedded cartridge data | Resolve shim source/notices and Deluxe distribution separately. Review the clean stock receipt and public first-launch preservation before promotion. |
+
+The current source/package work does not depend on rewriting accepted FFB or
+triple-screen settings. These are capability gaps, not new user approval steps.
+
+Exact-candidate local assembly/admission and disposable install/rollback are now
+qualified as recorded above. The broader authored installer suite remains unrun;
+it was not repeated as a substitute for the real candidate transaction.
+The launcher activation/report path needs a concrete observed
+result, followed by attended physical controls/stop-key checks. Shared physical
+FFB is a separate deferred implementation, not a runtime-only gate: Shared+FFB
+still refuses, and the single-owner bridge is deliberately outside this lane.
+Schema-2 calibration and dedicated host save/rewind also remain deferred.
+Preserve Native defaults, accepted replay results and original failed runs.
+Public redistribution and Deluxe asset licensing are separate from private
+readiness; no public push or owner installation follows from this document.
+
+## Offline delivery validation
+
+October 12 after the coordinated DRIVE capacity run exited:
+
+```powershell
+py -3 tests/test_unified_package.py
+py -3 tests/test_recording_helper.py
+```
+
+28 package checks pass, including deterministic ZIP/verify, pinned private
+DLL/header staging, missing/mutated bytes, public DLL/receipt refusal, and the
+private option still refusing embedded Deluxe before creating output. Four
+Windows PowerShell 5.1 helper fixtures pass against a harmless argv executable:
+external caller directory, special-character paths, package child working
+directory, native exit 17 preserved, fresh-path/pair refusals, and unchanged
+settings. No game, device or installed file was used by these checks. No actual
+stock binary ZIP was produced at that checkpoint. The October 13 private stage
+and runtime evidence above supersede the stock build/runtime gap for that scope.

@@ -252,9 +252,10 @@ static void dirty_key_tests(void) {
         !strstr(text, "BSDeluxe") && !strstr(text, "HDMode7"));
   CHECK(remove(path) == 0);
 
-  /* A widescreen-only edit must keep the separate FPS state after reload. */
+  /* The legacy absent FPS flag follows EnhancedRenderer. A widescreen-only edit
+   * must keep the separate FPS state after reload, without other defaults. */
   file = fopen(path, "wb");
-  CHECK(file && fputs("[FZeroVideo]\nEnhancedRenderer=0\nPresentationEnabled=0\nUnknown=7\n", file) >= 0 && !fclose(file));
+  CHECK(file && fputs("[FZeroVideo]\nEnhancedRenderer=0\nUnknown=7\n", file) >= 0 && !fclose(file));
   CHECK(FzeroVideoLoad(&before, path) && !before.enhanced && !before.fps_enabled);
   after = before; after.enhanced = true;
   CHECK(FzeroVideoSaveChanges(&before, &after, path));
@@ -355,9 +356,8 @@ static void config_tests(void) {
       {"[FZeroVideo]\nTripleCompareView=1\nTripleCompareView=1\n",
        "[FZeroVideo]\nTripleCompareView=1\nTripleCompareView=2\n",
        "[FZeroVideo]\nTripleCompareView=1\nTripleCompareView=3\n"},
-      /* Keys outside [FZeroVideo] are ignored; the section key wins. */
-      {"TripleCompareView=1\n[FZeroVideo]\nTripleCompareView=2\n",
-       "TripleCompareView=1\n[FZeroVideo]\nTripleCompareView=2\n",
+      /* A legacy sectionless key is read; the new line after it wins. */
+      {"TripleCompareView=1\n", "TripleCompareView=1\n[FZeroVideo]\nTripleCompareView=2\n",
        "TripleCompareView=1\n[FZeroVideo]\nTripleCompareView=3\n"},
     };
     for (unsigned i = 0; i < sizeof(cases) / sizeof(*cases); ++i) {
