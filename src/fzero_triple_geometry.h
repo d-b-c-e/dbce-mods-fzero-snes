@@ -8,8 +8,7 @@
  * panels' pixels lie on the arc through that chord, bowing away from the eye
  * (toolkit panel_point). The center keeps radius 0: it shows the game's own
  * planar picture, so its curve is a presentation warp, not part of this model.
- * eye_distance_mm is to the center CHORD plane; FzeroTripleChordEyeDistance
- * converts the measured eye-to-glass-center distance once, at rig build. */
+ * eye_distance_mm is measured to the plane through the panel edges. */
 typedef struct FzeroTripleVec3 { double x, y, z; } FzeroTripleVec3;
 typedef struct FzeroTripleSurface {
   FzeroTripleVec3 lower_left, right, up;
@@ -22,10 +21,7 @@ typedef struct FzeroTripleRig {
   double curve_radius_mm;
 } FzeroTripleRig;
 
-/* Toolkit chord_eye_distance (dbce-triple-screen-toolkit 09e6c4f): the eye to
- * the glass center less the panel's sagitta; radius 0 returns it unchanged. */
-bool FzeroTripleChordEyeDistance(double glass_eye_mm, double chord_mm,
-                                 double curve_radius_mm, double *out);
+
 bool FzeroTripleBuild(const FzeroTripleRig *rig, FzeroTripleSurface panels[3]);
 /* The physical point at panel coordinates u (0 left .. 1 right, along the arc
  * when curved) and v (0 bottom .. 1 top). */

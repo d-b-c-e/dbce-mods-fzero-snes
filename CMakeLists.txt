@@ -91,7 +91,6 @@ if(BUILD_TESTING)
         foreach(mode shared-owner shared-missing shared-core shared-core-extras injection-latch force-first checked-refusal checked-loss)
             add_test(NAME fzero_shared_ffb_${mode} COMMAND fzero_shared_ffb_tests --${mode})
         endforeach()
-        add_test(NAME fzero_shared_ffb_legacy COMMAND fzero_shared_ffb_tests)
         # Keep the fake DLL away from the game's real vendored runtime.
         add_library(fzero_shim_fake SHARED tests/fake_shim.cpp)
         set_target_properties(fzero_shim_fake PROPERTIES OUTPUT_NAME dbce_shim PREFIX ""
@@ -120,11 +119,11 @@ if(BUILD_TESTING)
         set_target_properties(fzero_shim_ordinary_tests PROPERTIES
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/shim-fixture")
         add_dependencies(fzero_shim_ordinary_tests fzero_shim_fake)
-        foreach(mode normal native replay force forcechanged unknown session profile profileinfo missing unexpected launcher
+        foreach(mode normal replay force forcechanged unknown session profile profileinfo missing unexpected launcher
             extras extrasmissing extrasseq extrascount extrasabi extrasinfo extrasnosection extrasduplicate extrasfirst extrasbom
             configlimit configoversize extrasconfiglimit extrasconfigoversize
-            launchersaved launcherempty launcherbackendchanged launcherbadextras launcherrecord
-            hosts hostsnoflag hostsrecord hostschanged)
+            launchersaved launcherempty launcherrecord
+            hosts hostsnoflag hostsrecord)
             add_test(NAME fzero_shim_ordinary_${mode} COMMAND fzero_shim_ordinary_tests ${mode})
         endforeach()
     endif()

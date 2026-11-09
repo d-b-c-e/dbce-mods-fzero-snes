@@ -316,16 +316,7 @@ int main(void) {
   rig.right_yaw_deg = 90;
   CHECK(!FzeroTripleBuild(&rig, panel));
 
-  /* Curved panels (toolkit 09e6c4f values for this 708.4 mm chord at 1500R):
-   * the glass-center eye 660 is the chord plane 617.58; radius 0 unchanged. */
-  double chord_eye;
-  CHECK(FzeroTripleChordEyeDistance(660, 708.4165965748336, 0, &chord_eye) &&
-        chord_eye == 660);
-  CHECK(FzeroTripleChordEyeDistance(660, 708.4165965748336, 1500, &chord_eye));
-  CHECK(fabs(chord_eye - 617.5789794808144) < 1e-9);
-  CHECK(!FzeroTripleChordEyeDistance(40, 708.4165965748336, 1500, &chord_eye));
-  CHECK(!FzeroTripleChordEyeDistance(660, 708.4165965748336, 350, &chord_eye));
-  FzeroTripleRig curved = {708.4165965748336, 398.4843355733439, 0,
+  FzeroTripleRig curved = {708.4165965748336, 398.4843355733439, 617.5789794808144,
                            0, 70, 70, 8, 512, 288, 1500};
   curved.eye_distance_mm = 617.5789794808144;
   FzeroTripleSurface flat[3], arc[3];

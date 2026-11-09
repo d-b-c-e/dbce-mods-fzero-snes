@@ -156,18 +156,6 @@ int main(void) {
   for (int i=0; i<31; ++i) f.action[i].value=INFINITY;
   f.seq++; CHECK(FzeroShimMapFrame(&map,&f,&word,1) && word == 0);
 
-  /* The ordinary compatibility path preserves digital extras and only
-   * explicitly unbound generic buttons. Every unavailable state stays owned
-   * by Core, with no legacy binding substituted after a device fault. */
-  f=frame();
-  const uint32_t extras=(1u<<1)|(1u<<9)|(1u<<10)|(1u<<11)|(1u<<24)|(1u<<25);
-  CHECK(FzeroShimLegacyButtonMask(&f)==extras);
-  for(int status=0;status<=13;++status) {
-    for(int i=9;i<=16;++i) f.action[i].status=(uint8_t)status;
-    CHECK(FzeroShimLegacyButtonMask(&f)==(status==0 ? extras|0x1fdu : extras));
-  }
-  CHECK(FzeroShimLegacyButtonMask(NULL)==0);
-  f.abi=1;CHECK(FzeroShimLegacyButtonMask(&f)==0);
   f=frame();FzeroShimMapInit(&map,100,50,.5f);
   f.action[0].value=.25f;f.action[1].value=f.action[2].value=1;
   CHECK(FzeroShimMapFrame(&map,&f,&word,1));
