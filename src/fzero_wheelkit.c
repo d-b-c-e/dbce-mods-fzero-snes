@@ -13,7 +13,7 @@
 /* This build's own version, by the wheelkit repository's scheme (docs/versioning.md
  * there); its games/f-zero/wheelkit-mod.json says the same. The program's own
  * version stays upstream's. */
-#define FZERO_WHEELKIT_VERSION "0.3.1-alpha"
+#define FZERO_WHEELKIT_VERSION "0.4.0-alpha"
 
 static struct {
 #define X(ret, name, args) ret (WK_CALL *name) args;
@@ -25,7 +25,7 @@ static bool s_on, s_panel, s_attached, s_driven;
 static float s_sensitivity = 1.0f;
 static uint32_t s_phase;
 static int s_direction;
-static struct { uint16_t x, y; bool have; float speed, distance; } s_car;
+static struct { uint16_t x, y; bool have, jumped; float speed, distance; } s_car;
 
 static const char kPages[] =
   "{\"settings\":{\"product\":\"F-Zero\",\"version\":\"%s\",\"keys\":\"F6 settings\",\"pages\":{"
@@ -33,7 +33,11 @@ static const char kPages[] =
   "{\"id\":\"controls.profile\",\"kind\":\"status\",\"label\":\"Wheel profile\",\"text\":\"No profile from Wheelkit\"},"
   "{\"id\":\"controls.sensitivity\",\"kind\":\"percent\",\"label\":\"Steering sensitivity\",\"min\":25,\"max\":300,"
   "\"default\":100,\"help\":\"How far the machine steers for a turn of the wheel.\"}],"
-  "\"ffb\":[{\"id\":\"ffb.status\",\"kind\":\"status\",\"label\":\"Force feedback\",\"text\":\"Not available for F-Zero yet\"}],"
+  "\"ffb\":[{\"id\":\"ffb.status\",\"kind\":\"status\",\"text\":\"Off\"},"
+  "{\"id\":\"ffb.enabled\",\"kind\":\"toggle\",\"label\":\"Force feedback\",\"default\":false,"
+  "\"help\":\"The wheel centers more firmly with speed. F8 turns it off.\"},"
+  "{\"id\":\"ffb.steering\",\"kind\":\"percent\",\"label\":\"Steering strength\",\"default\":50,"
+  "\"help\":\"50%% is the tuned strength; 100%% doubles it.\"}],"
   "\"display\":[{\"id\":\"display.status\",\"kind\":\"status\",\"label\":\"Screens\",\"text\":\"One screen. Three screens are not available yet\"}],"
   "\"telemetry\":[{\"id\":\"telemetry.enabled\",\"kind\":\"toggle\",\"label\":\"Telemetry\",\"default\":true,"
   "\"help\":\"Sends race data to SimHub and dashboards on this PC.\"}],"
@@ -145,9 +149,11 @@ static void telemetry(const uint8_t *ram, uint32_t input) {
   wk_car car = {sizeof(car)};
   bool racing = ram[0x54] == 2 && ram[0x55] >= 3;
   uint16_t x = read16(ram + 0x0b70) & 0x1fff, y = read16(ram + 0x0b90) & 0x0fff;
+  s_car.jumped = false;
   if (racing && s_car.have) {
     int dx = wrapped(x - s_car.x, 0x2000), dy = wrapped(y - s_car.y, 0x1000);
-    if (dx * dx + dy * dy <= 32 * 32) { /* further in one frame is a state load or rewind */
+    s_car.jumped = dx * dx + dy * dy > 32 * 32;
+    if (!s_car.jumped) { /* further in one frame is a state load or rewind */
       float step = sqrtf((float)(dx * dx + dy * dy)) * 0.25f;
       s_car.speed += (step * 60.098811862f - s_car.speed) * 0.25f;
       s_car.distance += step;
@@ -176,6 +182,31 @@ static void telemetry(const uint8_t *ram, uint32_t input) {
   wk.wk_telemetry_frame(&car);
 }
 
+/* The old fork's force model (its main branch, src/fzero_ffb.cpp) at the levels
+ * the owner drove (40% steering and effects, 20% impact), as Steering strength 50:
+ * a spring of 0.4 and a damper of 0.16 the wheel runs itself and a road texture
+ * of 0.16 (0.28 on rough ground, $C7) at 18 to 42 Hz, each growing with speed to
+ * full at 2 units a frame (30 m/s); a 120 ms knock of 0.2 when the machine loses
+ * 16 or more energy ($C9) in a frame without boosting (A). */
+static void force(const uint8_t *ram, uint32_t input) {
+  static uint16_t energy;
+  static bool had;
+  static int cooldown;
+  bool racing = ram[0x54] == 2 && ram[0x55] >= 3;
+  float scale = racing ? fminf(s_car.speed / 30.05f, 1.0f) : 0.0f;
+  uint16_t now = read16(ram + 0xc9);
+  if (cooldown > 0) --cooldown;
+  if (racing && had && !s_car.jumped && energy >= now + 16 && !(input & 0x100u) && !cooldown) {
+    wk.wk_ffb_cue(WK_CUE_IMPACT, 0.2f, 120);
+    cooldown = 8;
+  }
+  energy = now;
+  had = racing;
+  wk.wk_ffb_set_spring(0.4f * scale);
+  wk.wk_ffb_set_damper(0.16f * scale);
+  wk.wk_ffb_set_texture((ram[0xc7] ? 0.28f : 0.16f) * scale, 18.0f + 24.0f * scale);
+}
+
 uint32_t FzeroWheelkitFrame(uint32_t input, const uint8_t *ram) {
   if (!s_on) return input;
   if (s_panel) panel_events();
@@ -200,6 +231,11 @@ uint32_t FzeroWheelkitFrame(uint32_t input, const uint8_t *ram) {
     }
   }
   telemetry(ram, input);
+  force(ram, input);
+  static unsigned frames;
+  wk_ffb_status st = {sizeof(st)};
+  if (s_panel && ++frames % 30 == 0 && wk.wk_ffb_get_status(&st))
+    wk.wk_panel_set_text("ffb.status", st.text, st.state == WK_FFB_ON ? WK_TONE_GOOD : WK_TONE_NORMAL);
   return input;
 }
 

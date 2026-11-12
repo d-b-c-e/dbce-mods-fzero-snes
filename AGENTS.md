@@ -16,7 +16,7 @@ there (`AGENTS.md`, `docs/plan.md`, `games/f-zero/`). Nothing of the runtime is 
 
 | File | What |
 |---|---|
-| `src/fzero_wheelkit.c`, `src/fzero_wheelkit.h` | Loads `wheelkit.dll` beside the program at run time; the wheel as player 1's controller, the F6 panel on the OpenGL frame, telemetry from WRAM |
+| `src/fzero_wheelkit.c`, `src/fzero_wheelkit.h` | Loads `wheelkit.dll` beside the program at run time; the wheel as player 1's controller, the F6 panel on the OpenGL frame, telemetry from WRAM, force feedback (the old model's spring, damper and road texture, which the wheel runs itself, and its collision knock) |
 | `src/sdl_main.c` | Five call sites and the include (`FzeroWheelkit*`) |
 | `CMakeLists.txt` | The `WHEELKIT_SDK` block. Without `-DWHEELKIT_SDK` the build is upstream's, byte for byte in source |
 | `tools/build-wheelkit.ps1`, `AGENTS.md` | Build script and this page |
@@ -67,7 +67,8 @@ Launch check, from the wheelkit checkout: `pwsh tools/launch-check/Invoke-Launch
 ## Not carried over from the fork's `main`
 
 Deleted, because the runtime replaces them: the input shim and its host, the native wheel path, the old panel, the
-telemetry sender, the WheelFfb path, recording and replay, the launcher's wheel pages, the toolkit copies. Still to do
-here, each on the runtime: force feedback (the old model is a spring, a damper and a road texture on the wheel itself;
-the runtime takes one force and cues), the three-screen Mode 7 picture (upstream's renderer was rewritten since), and
-the BS Deluxe build (private generated sources; upstream's importer changed).
+telemetry sender, the WheelFfb path, recording and replay, the launcher's wheel pages, the toolkit copies. Force feedback is the old model's, through the
+runtime's spring, damper and texture entries; its fallback for a wheel without a spring (a pulsed constant force) and
+its separate strength settings were not carried. Still to do here, each on the runtime: the three-screen Mode 7 picture
+(upstream's renderer was rewritten since), and the BS Deluxe build (private generated sources; upstream's importer
+changed).
