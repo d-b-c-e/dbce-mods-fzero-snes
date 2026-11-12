@@ -10,6 +10,11 @@
 #include <string.h>
 #include <windows.h>
 
+/* This build's own version, by the wheelkit repository's scheme (docs/versioning.md
+ * there); its games/f-zero/wheelkit-mod.json says the same. The program's own
+ * version stays upstream's. */
+#define FZERO_WHEELKIT_VERSION "0.3.0-alpha"
+
 static struct {
 #define X(ret, name, args) ret (WK_CALL *name) args;
   WK_FUNCTIONS(X)
@@ -62,7 +67,8 @@ void FzeroWheelkitStart(const char *config_path, const char *version) {
   wk_identity id = {sizeof(id)};
   id.game_id = "f-zero";
   id.game_name = "F-Zero";
-  id.game_version = version;
+  (void)version;  /* upstream's, for the program; the runtime is told this build's */
+  id.game_version = FZERO_WHEELKIT_VERSION;
   id.settings_file = settings;
   id.log = log_line;
   if (!wk.wk_start(&id)) {
