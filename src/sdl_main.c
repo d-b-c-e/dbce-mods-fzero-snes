@@ -25,6 +25,7 @@
 #include "fzero_local_controls.h"
 #include "fzero_local_mode.h"
 #include "fzero_vs_menu.h"
+#include "fzero_wheelkit.h"
 
 #include "common_rtl.h"
 #include "host_paths.h"
@@ -1417,6 +1418,7 @@ static void present_frame(const FzeroPresenter *p, const uint32_t *panel,
       const char *path=getenv("FZERO_COMPARE_DUMP");
       if(path && *path && !dumped){dump_presenter(p,path);dumped=true;}
     }
+    FzeroWheelkitPresent(p->drawable_width, p->drawable_height);
     SDL_GL_SwapWindow(p->gl->window);
     FzeroDiagnosticsEnd(FZERO_DIAG_PRESENT, diagnostic_start);
     return;
@@ -2149,7 +2151,8 @@ static int run_game(int argc, char **argv) {
   const char *gpu_choice=getenv("FZERO_HD_GPU");
   bool cpu_hd=!g_compare_mode7 && g_video.hd_mode7 && gpu_choice && !strcmp(gpu_choice,"0"); /* developer reference */
   bool want_gpu=g_compare_mode7 || (g_video.hd_mode7 && !cpu_hd);
-  bool use_gl_renderer = launcher_settings.shader_path[0] != 0 || want_gpu;
+  FzeroWheelkitStart(g_config_path, kBuildVersion);
+  bool use_gl_renderer = launcher_settings.shader_path[0] != 0 || want_gpu || FzeroWheelkitWantsGl();
   if (use_gl_renderer) fzero_gl_prepare_window();
   if (want_gpu) { SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION,4); SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION,0); }
   /* Window scale is a real row on the Settings page, so it has to size the
@@ -2822,6 +2825,7 @@ static int run_game(int argc, char **argv) {
         input=seats[0]|((uint32_t)seats[1]<<12);
       }
       else if(sp_release) {if(!(input&4095))sp_release=false;input&=~4095u;}
+      if(!online)input=FzeroWheelkitFrame(input,g_ram);
       if (FzeroReplayHasInput() && !g_menu_pad_replay) input = FzeroReplayInput((unsigned)frames);
       /* Seat 0's word, before the guest sees it: the overlays are a player-1
        * facility, and the press that closed one must neither reach the game
@@ -3027,6 +3031,7 @@ static int run_game(int argc, char **argv) {
     SDL_DestroyTexture(g_osd_texture);
     g_osd_texture = NULL;
   }
+  FzeroWheelkitStop();
   if (use_gl_renderer) {
     fzero_gl_destroy(&gl_renderer);
   } else {

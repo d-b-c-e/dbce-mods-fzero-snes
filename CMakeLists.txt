@@ -350,6 +350,23 @@ snesrecomp_target_glsl_shader(FZeroSNESRecomp)
 snesrecomp_target_hd_gpu(FZeroSNESRecomp EXTERNAL_GL_LOADER)
 snesrecomp_target_sdl(FZeroSNESRecomp)
 
+# Wheelkit runtime (src/fzero_wheelkit.c through wheelkit.h): -DWHEELKIT_SDK names a
+# wheelkit checkout whose runtime/native/sdk is built. Its header is compiled against
+# and its wheelkit.dll is copied beside the program; nothing of the runtime is in this
+# repository. Without the option the build is unchanged.
+set(WHEELKIT_SDK "" CACHE PATH "A built wheelkit checkout (runtime/native/sdk)")
+if(WIN32 AND WHEELKIT_SDK)
+    set(WHEELKIT_SDK_DIR "${WHEELKIT_SDK}/runtime/native/sdk")
+    if(NOT EXISTS "${WHEELKIT_SDK_DIR}/build/x64/wheelkit.dll")
+        message(FATAL_ERROR "WHEELKIT_SDK is not a built wheelkit checkout: ${WHEELKIT_SDK_DIR}")
+    endif()
+    target_sources(FZeroSNESRecomp PRIVATE src/fzero_wheelkit.c)
+    target_include_directories(FZeroSNESRecomp PRIVATE "${WHEELKIT_SDK_DIR}")
+    target_compile_definitions(FZeroSNESRecomp PRIVATE FZERO_WHEELKIT=1)
+    add_custom_command(TARGET FZeroSNESRecomp POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${WHEELKIT_SDK_DIR}/build/x64/wheelkit.dll" "$<TARGET_FILE_DIR:FZeroSNESRecomp>/wheelkit.dll")
+endif()
+
 if(BUILD_TESTING AND SNESRECOMP_SDL_BACKEND STREQUAL "SDL3")
     add_executable(fzero_gamepad_tests tests/test_gamepad.c src/fzero_gamepad.c src/fzero_hotkeys.c)
     target_include_directories(fzero_gamepad_tests PRIVATE "${CMAKE_SOURCE_DIR}/src" "${RECOMP_UI_ROOT}/src" ${SNESRECOMP_RUNNER_INCLUDE_DIRS})
