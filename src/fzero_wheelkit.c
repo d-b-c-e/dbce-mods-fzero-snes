@@ -13,7 +13,7 @@
 /* This build's own version, by the wheelkit repository's scheme (docs/versioning.md
  * there); its games/f-zero/wheelkit-mod.json says the same. The program's own
  * version stays upstream's. */
-#define FZERO_WHEELKIT_VERSION "0.3.0-alpha"
+#define FZERO_WHEELKIT_VERSION "0.3.1-alpha"
 
 static struct {
 #define X(ret, name, args) ret (WK_CALL *name) args;
