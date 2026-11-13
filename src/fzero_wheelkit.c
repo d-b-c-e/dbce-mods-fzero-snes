@@ -2,6 +2,7 @@
  * call sites in sdl_main.c do. Everything not specific to F-Zero (devices, the
  * profile, the panel, the telemetry packet) is in wheelkit.dll. */
 #include "fzero_wheelkit.h"
+#include "fzero_wheelkit_steering.h"
 #include "wheelkit.h"
 
 #include <math.h>
@@ -13,7 +14,7 @@
 /* This build's own version, by the wheelkit repository's scheme (docs/versioning.md
  * there); its games/f-zero/wheelkit-mod.json says the same. The program's own
  * version stays upstream's. */
-#define FZERO_WHEELKIT_VERSION "0.4.0-alpha"
+#define FZERO_WHEELKIT_VERSION "0.4.1-alpha"
 
 static struct {
 #define X(ret, name, args) ret (WK_CALL *name) args;
@@ -22,9 +23,8 @@ static struct {
 } wk;
 
 static bool s_on, s_panel, s_attached, s_driven;
-static float s_sensitivity = 1.0f;
-static uint32_t s_phase;
-static int s_direction;
+static float s_sensitivity = 1.0f, s_dead_zone = FZERO_STEER_DEAD_ZONE;
+static FzeroSteer s_steer;
 static struct { uint16_t x, y; bool have, jumped; float speed, distance; } s_car;
 
 static const char kPages[] =
@@ -32,7 +32,9 @@ static const char kPages[] =
   "\"controls\":["
   "{\"id\":\"controls.profile\",\"kind\":\"status\",\"label\":\"Wheel profile\",\"text\":\"No profile from Wheelkit\"},"
   "{\"id\":\"controls.sensitivity\",\"kind\":\"percent\",\"label\":\"Steering sensitivity\",\"min\":25,\"max\":300,"
-  "\"default\":100,\"help\":\"How far the machine steers for a turn of the wheel.\"}],"
+  "\"default\":100,\"help\":\"How far the machine steers for a turn of the wheel. At 100%% full lock is full steering.\"},"
+  "{\"id\":\"controls.deadzone\",\"kind\":\"percent\",\"label\":\"Steering dead zone\",\"min\":0,\"max\":20,"
+  "\"default\":3,\"help\":\"How far the wheel turns from the center before the machine steers.\"}],"
   "\"ffb\":[{\"id\":\"ffb.status\",\"kind\":\"status\",\"text\":\"Off\"},"
   "{\"id\":\"ffb.enabled\",\"kind\":\"toggle\",\"label\":\"Force feedback\",\"default\":false,"
   "\"help\":\"The wheel centers more firmly with speed. F8 turns it off.\"},"
@@ -91,7 +93,17 @@ void FzeroWheelkitStart(const char *config_path, const char *version) {
     float saved = (float)atof(value);
     if (saved >= 0.25f && saved <= 3.0f) s_sensitivity = saved;
   }
+  if (wk.wk_settings_get("Wheel", "SteeringDeadZone", value, sizeof(value))) {
+    float saved = (float)atof(value);
+    if (saved >= 0.0f && saved <= 0.2f) s_dead_zone = saved;
+  }
   wk.wk_panel_set_number("controls.sensitivity", s_sensitivity * 100.0);
+  wk.wk_panel_set_number("controls.deadzone", s_dead_zone * 100.0);
+  char line[200];
+  snprintf(line, sizeof(line), "f-zero: steering: dead zone %.0f%%, sensitivity %.0f%%, square-root curve, "
+           "Left and Right held for that share of frames in a race (the old build's mapping)",
+           s_dead_zone * 100.0, s_sensitivity * 100.0);
+  wk.wk_log(line);
   const char *profile = wk.wk_input_profile();
   wk.wk_panel_set_text("controls.profile", *profile ? profile : "No profile from Wheelkit: keyboard and gamepad work",
                        *profile ? WK_TONE_GOOD : WK_TONE_WARNING);
@@ -109,26 +121,18 @@ static void panel_events(void) {
       snprintf(value, sizeof(value), "%g", s_sensitivity);
       if (!wk.wk_settings_set("Wheel", "SteeringSensitivity", value))
         wk.wk_panel_toast("Not saved", wk.wk_last_error(), 2500);
+    } else if (e.type == WK_PANEL_CHANGED && !strcmp(e.id, "controls.deadzone")) {
+      char value[32];
+      s_dead_zone = FzeroSteerClamp((float)(e.number / 100.0), 0.0f, 0.2f, FZERO_STEER_DEAD_ZONE);
+      snprintf(value, sizeof(value), "%g", s_dead_zone);
+      if (!wk.wk_settings_set("Wheel", "SteeringDeadZone", value))
+        wk.wk_panel_toast("Not saved", wk.wk_last_error(), 2500);
     }
     memset(&e, 0, sizeof(e));
     e.size = sizeof(e);
   }
 }
 
-/* A SNES pad has no steering axis: hold Left or Right for the share of frames
- * that matches the wheel's angle (full lock holds it every frame). */
-static uint32_t steering_pulses(float steer) {
-  float duty = fabsf(steer) * s_sensitivity;
-  int direction = steer < 0 ? -1 : steer > 0 ? 1 : 0;
-  uint32_t button = direction < 0 ? 0x40u : 0x80u;
-  if (!direction) { s_phase = 0; s_direction = 0; return 0; }
-  if (direction != s_direction) { s_phase = 0; s_direction = direction; }
-  if (duty >= 1.0f) { s_phase = 0; return button; }
-  s_phase += (uint32_t)(duty * 65536.0f + 0.5f);
-  if (s_phase < 65536u) return 0;
-  s_phase -= 65536u;
-  return button;
-}
 
 static uint16_t read16(const uint8_t *p) { return (uint16_t)(p[0] | (p[1] << 8)); }
 static int wrapped(int delta, int modulus) {
@@ -225,8 +229,10 @@ uint32_t FzeroWheelkitFrame(uint32_t input, const uint8_t *ram) {
         if (in.held[kButtons[i].action]) input |= kButtons[i].button;
       if (in.throttle > 0.5f) input |= 0x1u; /* B: accelerate */
       if (in.brake > 0.5f) input |= 0x2u;    /* Y: brake */
-      if (ram[0x54] == 2 && ram[0x55] >= 3) input |= steering_pulses(in.steer);
-      else { s_phase = 0; s_direction = 0; }
+      /* A SNES pad has no steering axis: in a race the wheel's angle is the share of frames Left or Right is held
+       * (fzero_wheelkit_steering.h); in the menus the wheel does not steer, as in the old build. */
+      if (ram[0x54] == 2 && ram[0x55] >= 3) input |= FzeroSteerPulse(&s_steer, in.steer, s_sensitivity, s_dead_zone);
+      else s_steer.phase = 0, s_steer.direction = 0;
       if (!s_driven && input != keyboard) { s_driven = true; wk.wk_log("f-zero: the profile's input reached player 1's controller"); }
     }
   }

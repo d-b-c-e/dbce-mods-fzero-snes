@@ -365,6 +365,10 @@ if(WIN32 AND WHEELKIT_SDK)
     target_compile_definitions(FZeroSNESRecomp PRIVATE FZERO_WHEELKIT=1)
     add_custom_command(TARGET FZeroSNESRecomp POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${WHEELKIT_SDK_DIR}/build/x64/wheelkit.dll" "$<TARGET_FILE_DIR:FZeroSNESRecomp>/wheelkit.dll")
+    if(BUILD_TESTING)
+        add_executable(fzero_wheelkit_steering_tests tests/fzero_wheelkit_steering_tests.c)
+        add_test(NAME fzero_wheelkit_steering COMMAND fzero_wheelkit_steering_tests)
+    endif()
 endif()
 
 if(BUILD_TESTING AND SNESRECOMP_SDL_BACKEND STREQUAL "SDL3")
