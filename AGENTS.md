@@ -17,8 +17,10 @@ there (`AGENTS.md`, `docs/plan.md`, `games/f-zero/`). Nothing of the runtime is 
 | File | What |
 |---|---|
 | `src/fzero_wheelkit.c`, `src/fzero_wheelkit.h` | Loads `wheelkit.dll` beside the program at run time; the wheel as player 1's controller, the F6 panel on the OpenGL frame, telemetry from WRAM, force feedback (the old model's spring, damper and road texture, which the wheel runs itself, and its collision knock) |
-| `src/sdl_main.c` | Five call sites and the include (`FzeroWheelkit*`) |
-| `CMakeLists.txt` | The `WHEELKIT_SDK` block. Without `-DWHEELKIT_SDK` the build is upstream's, byte for byte in source |
+| `src/fzero_wheelkit_steering.h`, `tests/fzero_wheelkit_steering_tests.c` | The wheel as pulsed Left/Right (the old build's dead zone, curve and sensitivity), tested against the old code's values |
+| `src/sdl_main.c` | Five call sites and the include (`FzeroWheelkit*`); three screens: the spanning window, the centre's viewport, the side pictures (`fzero_gl_draw_sides`) |
+| `src/fzero_renderer.c`, `.h` | Three screens: `FzeroRendererDrawSides`, the side screens' ground and skyline in a race (the old build's method on this renderer's helpers). Unused without the runtime |
+| `CMakeLists.txt` | The `WHEELKIT_SDK` block. Without `-DWHEELKIT_SDK` the program is upstream's (the renderer's added function is not called) |
 | `tools/build-wheelkit.ps1`, `AGENTS.md` | Build script and this page |
 
 The submodules are upstream's own (`.gitmodules` unchanged); nothing of ours is in them.
@@ -69,6 +71,6 @@ Launch check, from the wheelkit checkout: `pwsh tools/launch-check/Invoke-Launch
 Deleted, because the runtime replaces them: the input shim and its host, the native wheel path, the old panel, the
 telemetry sender, the WheelFfb path, recording and replay, the launcher's wheel pages, the toolkit copies. Force feedback is the old model's, through the
 runtime's spring, damper and texture entries; its fallback for a wheel without a spring (a pulsed constant force) and
-its separate strength settings were not carried. Still to do here, each on the runtime: the three-screen Mode 7 picture
-(upstream's renderer was rewritten since), and the BS Deluxe build (private generated sources; upstream's importer
-changed).
+its separate strength settings were not carried. The three-screen picture is carried for the ground and the skyline;
+still to do here: opponents on the side screens, the curve correction, and the BS Deluxe build (private generated
+sources; upstream's importer changed).
