@@ -14,7 +14,7 @@
 /* This build's own version, by the wheelkit repository's scheme (docs/versioning.md
  * there); its games/f-zero/wheelkit-mod.json says the same. The program's own
  * version stays upstream's. */
-#define FZERO_WHEELKIT_VERSION "0.4.1-alpha"
+#define FZERO_WHEELKIT_VERSION "0.4.2-alpha"
 
 static struct {
 #define X(ret, name, args) ret (WK_CALL *name) args;
@@ -36,7 +36,7 @@ static const char kPages[] =
   "{\"id\":\"controls.deadzone\",\"kind\":\"percent\",\"label\":\"Steering dead zone\",\"min\":0,\"max\":20,"
   "\"default\":3,\"help\":\"How far the wheel turns from the center before the machine steers.\"}],"
   "\"ffb\":[{\"id\":\"ffb.status\",\"kind\":\"status\",\"text\":\"Off\"},"
-  "{\"id\":\"ffb.enabled\",\"kind\":\"toggle\",\"label\":\"Force feedback\",\"default\":false,"
+  "{\"id\":\"ffb.enabled\",\"kind\":\"toggle\",\"label\":\"Force feedback\",\"default\":true,"
   "\"help\":\"The wheel centers more firmly with speed. F8 turns it off.\"},"
   "{\"id\":\"ffb.steering\",\"kind\":\"percent\",\"label\":\"Steering strength\",\"default\":50,"
   "\"help\":\"50%% is the tuned strength; 100%% doubles it.\"}],"
@@ -186,12 +186,14 @@ static void telemetry(const uint8_t *ram, uint32_t input) {
   wk.wk_telemetry_frame(&car);
 }
 
-/* The old fork's force model (its main branch, src/fzero_ffb.cpp) at the levels
- * the owner drove (40% steering and effects, 20% impact), as Steering strength 50:
- * a spring of 0.4 and a damper of 0.16 the wheel runs itself and a road texture
- * of 0.16 (0.28 on rough ground, $C7) at 18 to 42 Hz, each growing with speed to
- * full at 2 units a frame (30 m/s); a 120 ms knock of 0.2 when the machine loses
- * 16 or more energy ($C9) in a frame without boosting (A). */
+/* The old fork's force model (its main branch, src/fzero_ffb.cpp) at the levels the
+ * owner drove on the R12 (his config.ini [ForceFeedback]: SteeringStrength 50,
+ * Strength 12, ImpactStrength 50), as Steering strength 50: a spring of 0.5
+ * (SteeringStrength x 100 of 10000) and a damper of 0.048 (Strength x 40) the wheel
+ * runs itself and a road texture of 0.048 (0.084 on rough ground, $C7; Strength x 40
+ * and x 70) at 18 to 42 Hz, each growing with speed to full at 2 units a frame
+ * (30 m/s); a 120 ms knock of 0.5 (ImpactStrength x 100) when the machine loses 16 or
+ * more energy ($C9) in a frame without boosting (A). */
 static void force(const uint8_t *ram, uint32_t input) {
   static uint16_t energy;
   static bool had;
@@ -201,14 +203,14 @@ static void force(const uint8_t *ram, uint32_t input) {
   uint16_t now = read16(ram + 0xc9);
   if (cooldown > 0) --cooldown;
   if (racing && had && !s_car.jumped && energy >= now + 16 && !(input & 0x100u) && !cooldown) {
-    wk.wk_ffb_cue(WK_CUE_IMPACT, 0.2f, 120);
+    wk.wk_ffb_cue(WK_CUE_IMPACT, 0.5f, 120);
     cooldown = 8;
   }
   energy = now;
   had = racing;
-  wk.wk_ffb_set_spring(0.4f * scale);
-  wk.wk_ffb_set_damper(0.16f * scale);
-  wk.wk_ffb_set_texture((ram[0xc7] ? 0.28f : 0.16f) * scale, 18.0f + 24.0f * scale);
+  wk.wk_ffb_set_spring(0.5f * scale);
+  wk.wk_ffb_set_damper(0.048f * scale);
+  wk.wk_ffb_set_texture((ram[0xc7] ? 0.084f : 0.048f) * scale, 18.0f + 24.0f * scale);
 }
 
 /* Under test input only (inject.on): every 2 s of a race with the wheel off the centre, what the mapping did and
@@ -268,6 +270,13 @@ uint32_t FzeroWheelkitFrame(uint32_t input, const uint8_t *ram) {
   const bool racing = ram[0x54] == 2 && ram[0x55] >= 3;
   if (racing && !was_racing) wk.wk_log("f-zero: a race started");
   was_racing = racing;
+  static int scene = -1;
+  if ((wk.wk_switches() & WK_SWITCH_INJECT) && scene != (ram[0x54] << 8 | ram[0x55])) {
+    char line[64]; /* under test input, the game's scene ($54, $55), for writing a route */
+    scene = ram[0x54] << 8 | ram[0x55];
+    snprintf(line, sizeof(line), "f-zero: scene %u %u", ram[0x54], ram[0x55]);
+    wk.wk_log(line);
+  }
   telemetry(ram, input);
   force(ram, input);
   static unsigned frames;
