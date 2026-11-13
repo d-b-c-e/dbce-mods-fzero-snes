@@ -1085,3 +1085,243 @@ bool FzeroRendererDrawPresentation(uint32_t *native, uint32_t *out, size_t capac
 bool FzeroRendererHasFrame(void) { return FzeroRenderViewHasFrame(&single_player); }
 bool FzeroRendererLoadCapture(const char *path) { return FzeroRenderViewLoadCapture(&single_player, path); }
 const uint32_t *FzeroRendererStockFrame(void) { return FzeroRenderViewStockFrame(&single_player); }
+
+/* ---- Wheelkit three screens (the fork's wheelkit-runtime branch) -------------------------------------------------
+ * One side screen's picture in a race: the Mode 7 ground seen through that screen, from the same flat-ground camera
+ * the old fork fitted to the game's own lines (its main branch, src/fzero_triple_ground.c), and the skyline bands
+ * sampled by the ray's angle. The rig's geometry is the runtime's (wk_triples_views); the caller turns it into rays.
+ * Sprites, effects and the HUD stay on the centre screen. Pure in the frame: nothing of the guest is written. */
+typedef struct FzeroSideGround {
+  double camera_x, camera_y, right_x, right_y, forward_x, forward_y;
+  double height, forward_scale, pitch_sin, pitch_cos;
+} FzeroSideGround;
+
+static double side_scale(FzeroMode7Line l) { return hypot(l.step_x, l.step_y) / 256.0; }
+static double side_centre_x(FzeroMode7Line l) { return (l.origin_x + 128 * l.step_x) / 256.0; }
+static double side_centre_y(FzeroMode7Line l) { return (l.origin_y + 128 * l.step_y) / 256.0; }
+
+/* The old calibration in eye units (the eye 1 from the centre screen, whose picture spans 2 tan_x by 2 tan_y): a
+ * flat ground through a pinhole has its inverse Mode 7 scale affine in the scanline, which gives the pitch and the
+ * camera's height; the longitudinal scroll's own scale is measured from the two lines' centres. */
+static bool side_calibrate(const FzeroSideView *v, FzeroMode7Line far, double far_y, FzeroMode7Line near,
+                           double near_y, FzeroSideGround *g) {
+  double far_scale = side_scale(far), near_scale = side_scale(near);
+  if (!(far_scale > near_scale && near_scale > 0)) return false;
+  double width = 2.0 * v->tan_x, height = 2.0 * v->tan_y;
+  double slope = (1.0 / near_scale - 1.0 / far_scale) / (near_y - far_y);
+  double intercept = 1.0 / far_scale + slope * (112.0 - far_y);
+  double tangent = height * intercept / (224.0 * slope);
+  if (!(slope > 0 && tangent > 0.0524078 && tangent < 0.7002076)) return false; /* 3 to 35 degrees */
+  g->pitch_cos = 1.0 / sqrt(1.0 + tangent * tangent);
+  g->pitch_sin = tangent * g->pitch_cos;
+  g->height = v->logical_width * height * g->pitch_cos / (width * 224.0 * slope);
+  if (!(g->height > 0 && isfinite(g->height))) return false;
+  g->right_x = near.step_x / (256.0 * near_scale);
+  g->right_y = near.step_y / (256.0 * near_scale);
+  g->forward_x = -g->right_y; g->forward_y = g->right_x;
+  double distance[2];
+  const double ys[2] = {far_y, near_y};
+  for (int i = 0; i < 2; ++i) {
+    double sy = (112.0 - ys[i]) * height / 224.0;
+    double down = g->pitch_sin - sy * g->pitch_cos;
+    if (!(down > 0)) return false;
+    distance[i] = g->height * (g->pitch_cos + sy * g->pitch_sin) / down;
+  }
+  double raw_x = side_centre_x(far) - side_centre_x(near), raw_y = side_centre_y(far) - side_centre_y(near);
+  double projected = raw_x * g->forward_x + raw_y * g->forward_y;
+  double transverse = raw_x * g->right_x + raw_y * g->right_y;
+  if (projected < 0) { g->forward_x = -g->forward_x; g->forward_y = -g->forward_y; projected = -projected; }
+  g->forward_scale = projected / (distance[0] - distance[1]);
+  if (!(g->forward_scale > 0.05 && g->forward_scale < 10.0) || fabs(transverse) > 4.0) return false;
+  g->camera_x = side_centre_x(near) - g->forward_x * distance[1] * g->forward_scale;
+  g->camera_y = side_centre_y(near) - g->forward_y * distance[1] * g->forward_scale;
+  return true;
+}
+
+/* Where a ray (x right, y up, -z ahead) meets the ground, in Mode 7 texels; false above the horizon. */
+static bool side_locate(const FzeroSideGround *g, double rx, double ry, double rz, double *tx, double *ty) {
+  double down = -rz * g->pitch_sin - ry * g->pitch_cos;
+  if (!(down > 1e-9)) return false;
+  double distance = g->height / down, forward = (-rz * g->pitch_cos + ry * g->pitch_sin) * g->forward_scale;
+  *tx = g->camera_x + distance * (g->right_x * rx + g->forward_x * forward);
+  *ty = g->camera_y + distance * (g->right_y * rx + g->forward_y * forward);
+  return fabs(*tx) < 1e6 && fabs(*ty) < 1e6;
+}
+
+/* What every side row reads: the frame's calibrated ground and course, both screens' rays and outputs. */
+typedef struct FzeroSideBatch {
+  const FzeroSourceFrame *f;
+  const FzeroSideView *views;
+  uint32_t *const *out;
+  int width, height, sky_rows;
+  FzeroSideGround g;
+  FzeroCourse course;
+  double per_radian;
+  Ppu *scratch; /* two per participant: the ground line and the skyline line */
+  /* Per column of each screen (the screens are only turned, so a column's direction does not change with the
+   * row): the skyline column it shows and its horizon term. */
+  int *sky_column;
+  double *horizon_term;
+} FzeroSideBatch;
+
+static void side_rows(void *opaque, size_t begin, size_t end, unsigned slot) {
+  const FzeroSideBatch *b = opaque;
+  const FzeroSourceFrame *f = b->f;
+  const FzeroSideGround g = b->g;
+  Ppu *s = &b->scratch[slot * 2], *sky = &b->scratch[slot * 2 + 1];
+  const int width = b->width, height = b->height, sky_rows = b->sky_rows;
+  for (size_t i = begin; i < end; ++i) {
+    const FzeroSideView *v = &b->views[i / (size_t)height];
+    const int y = (int)(i % (size_t)height);
+    uint32_t *row = b->out[i / (size_t)height] + (size_t)y * width;
+    memset(row, 0, (size_t)width * sizeof(*row));
+    /* The game's row at this screen row's height (the screens are the same height, side by side). */
+    double up = (1.0 - 2.0 * (y + 0.5) / height) * v->panel_tan_y;
+    int source = (int)floor((1.0 - up / v->tan_y) * 112.0);
+    if (source < 0 || source > 223 || (f->lines[source].registers[offsetof(Ppu, inidisp)] & 128)) continue;
+    /* A turned screen sees ground beside rows the centre spends on the skyline: those use the first ground line. */
+    int ground_source = source < sky_rows ? sky_rows : source;
+    const FzeroRasterLine *raster = &f->lines[ground_source];
+    memcpy(s, raster->registers, PPU_SAVESTATE_REGS_SIZE);
+    bool ground_row = (s->bgmode & 7) == 7 && !(s->inidisp & 128);
+    FzeroMode7Line line = FzeroMode7Transform(s->m7matrix, s->m7sel, (unsigned)ground_source + 1);
+    FzeroCourseLine reference = course_line((int)b->course.camera_x, (int)b->course.camera_y,
+                                            course_centre(s->m7matrix, 4), course_centre(s->m7matrix, 5));
+    /* Align the fitted ground to this line's real texels at the centre (a similarity, as the old build did), so
+     * the seams continue the centre screen's own picture. */
+    double a = 1, bb = 0, cx = 0, cy = 0, rcx = 0, rcy = 0;
+    bool aligned = false;
+    if (ground_row) {
+      double ry = (1.0 - 2.0 * (ground_source + 0.5) / 224.0) * v->tan_y, half = v->tan_x / v->logical_width;
+      double lx, ly, hx, hy;
+      if (side_locate(&g, -half, ry, -1.0, &lx, &ly) && side_locate(&g, half, ry, -1.0, &hx, &hy)) {
+        double px = hx - lx, py = hy - ly, norm = px * px + py * py;
+        if (norm > 1e-12) {
+          double ox = line.step_x / 256.0, oy = line.step_y / 256.0;
+          a = (px * ox + py * oy) / norm; bb = (px * oy - py * ox) / norm;
+          cx = side_centre_x(line); cy = side_centre_y(line);
+          rcx = (lx + hx) * 0.5; rcy = (ly + hy) * 0.5;
+          aligned = true;
+        }
+      }
+    }
+    FzeroCourseCache cache = kCourseCacheEmpty;
+    int sky_loaded = -1, grid = 1;
+    const size_t side = i / (size_t)height;
+    for (int x = 0; x < width; ++x) {
+      double rx = v->origin[0] + (x + 0.5) * v->right[0] + (y + 0.5) * v->down[0];
+      double rv = v->origin[1] + (x + 0.5) * v->right[1] + (y + 0.5) * v->down[1];
+      double rz = v->origin[2] + (x + 0.5) * v->right[2] + (y + 0.5) * v->down[2];
+      double tx, ty;
+      if (ground_row && aligned && side_locate(&g, rx, rv, rz, &tx, &ty)) {
+        /* Far ground covers many texels per side pixel (the sides are drawn small and scaled up): there, average
+         * a 2x2 grid of samples inside the pixel instead of one, so the distance does not shimmer. */
+        double nx, ny;
+        if ((x & 7) == 0) /* the footprint changes slowly along a row: measured every 8th pixel */
+          grid = side_locate(&g, rx + v->right[0], rv + v->right[1], rz + v->right[2], &nx, &ny) &&
+                 hypot(nx - tx, ny - ty) > 1.5 ? 2 : 1;
+        unsigned sum[3] = {0, 0, 0}, samples = 0;
+        for (int sy = 0; sy < grid; ++sy)
+          for (int sx = 0; sx < grid; ++sx) {
+            double fx = (sx + 0.5) / grid - 0.5, fy = (sy + 0.5) / grid - 0.5;
+            if (grid > 1 && !side_locate(&g, rx + fx * v->right[0] + fy * v->down[0], rv + fx * v->right[1] + fy * v->down[1],
+                                         rz + fx * v->right[2] + fy * v->down[2], &tx, &ty)) continue;
+            double dx = tx - rcx, dy = ty - rcy;
+            FzeroMode7Texel texel = {floor(cx + a * dx - bb * dy), floor(cy + bb * dx + a * dy)};
+            unsigned index = FzeroMode7Fetch(&line, f->vram, texel, course_sample(&b->course, &reference, &cache, texel));
+            uint16_t pixel = index ? 0x5000 | index : 0, screens[2] = {0x500, 0x500};
+            for (int sub = 0; sub < 2; ++sub)
+              if ((s->screenEnabled[sub] & 1) && pixel > screens[sub]) screens[sub] = pixel;
+            uint32_t c = colour(s, raster->palette, screens[0], screens[1], false);
+            sum[0] += c & 255; sum[1] += (c >> 8) & 255; sum[2] += (c >> 16) & 255; ++samples;
+          }
+        if (samples)
+          row[x] = (sum[0] + samples / 2) / samples | ((sum[1] + samples / 2) / samples) << 8 |
+                   ((sum[2] + samples / 2) / samples) << 16;
+      } else if (sky_rows > 0) {
+        /* Above the ground: the skyline's panorama at the ray's angle, standing on this column's own horizon (where
+         * the ray runs level with the ground), as the old build drew it; above the panorama its top row. */
+        double dd = -v->down[2] * g.pitch_sin - v->down[1] * g.pitch_cos;
+        double horizon = fabs(dd) > 1e-12 ? -b->horizon_term[side * width + x] / dd - 0.5 : y;
+        double rows_up = (horizon - y) * 224.0 / height * v->panel_tan_y / v->tan_y;
+        int sky_source = sky_rows - 1 - (int)floor(rows_up > 0 ? rows_up : 0);
+        if (sky_source < 0) sky_source = 0;
+        if (sky_source != sky_loaded) {
+          memcpy(sky, f->lines[sky_source].registers, PPU_SAVESTATE_REGS_SIZE);
+          sky_loaded = sky_source;
+        }
+        int column = b->sky_column[side * width + x];
+        uint16_t screens[2] = {0x500, 0x500};
+        for (int sub = 0; sub < 2; ++sub)
+          for (int layer = 0; layer < 2; ++layer) {
+            if (!(sky->screenEnabled[sub] & (1u << layer))) continue;
+            uint16_t pixel = background_pixel(sky, f->vram, layer, column, sky_source + 1, true);
+            if (pixel > screens[sub]) screens[sub] = pixel;
+          }
+        row[x] = colour(sky, f->lines[sky_source].palette, screens[0], screens[1], false);
+      }
+    }
+  }
+}
+
+bool FzeroRendererDrawSides(const FzeroSideView views[2], uint32_t *out[2], int width, int height) {
+  if (!views || !out || !out[0] || !out[1] || width < 2 || height < 2 || views[0].logical_width < 256 ||
+      !(views[0].tan_x > 0 && views[0].tan_y > 0)) return false;
+  FzeroRenderView *view = &single_player;
+  const FzeroSourceFrame *f = &view->frames[view->current];
+  if (!f->valid || f->ram[0x54] != 2 || f->ram[0x55] < 2 || !f->ram[0x81]) return false; /* black outside a race */
+  /* A presenter may show one emulated frame more than once: draw the sides once per frame. */
+  static unsigned last_frame;
+  static const uint32_t *last_out;
+  static int last_width, last_height, last_logical;
+  if (last_out == out[0] && last_frame == f->frame && last_width == width && last_height == height &&
+      last_logical == views[0].logical_width) return true;
+  FzeroSideBatch b = {.f = f, .views = views, .out = out, .width = width, .height = height};
+  static Ppu line80;
+  memcpy(&line80, f->lines[80].registers, PPU_SAVESTATE_REGS_SIZE);
+  if ((line80.bgmode & 7) != 7) return false;
+  FzeroMode7Line far = FzeroMode7Transform(line80.m7matrix, line80.m7sel, 81);
+  memcpy(&line80, f->lines[180].registers, PPU_SAVESTATE_REGS_SIZE);
+  if ((line80.bgmode & 7) != 7) return false;
+  FzeroMode7Line near = FzeroMode7Transform(line80.m7matrix, line80.m7sel, 181);
+  if (!side_calibrate(&views[0], far, 80, near, 180, &b.g)) return false;
+  b.course = course_open(f, true);
+  while (b.sky_rows < 80 && (f->lines[b.sky_rows].registers[offsetof(Ppu, bgmode)] & 7) == 1 &&
+         !(f->lines[b.sky_rows].registers[offsetof(Ppu, inidisp)] & 128)) ++b.sky_rows;
+  b.per_radian = views[0].logical_width * 0.5 / atan(views[0].tan_x);
+  prepare_workers(view);
+  static Ppu *scratch;
+  static unsigned scratch_count;
+  unsigned participants = SnesRenderWorkersCount(view->render_workers);
+  if (participants < 1) participants = 1;
+  if (scratch_count < participants) {
+    free(scratch);
+    scratch = calloc((size_t)participants * 2, sizeof(*scratch));
+    scratch_count = scratch ? participants : 0;
+    if (!scratch) return false;
+  }
+  b.scratch = scratch;
+  static int *columns;
+  static double *terms;
+  static int columns_width;
+  if (columns_width != width) {
+    free(columns); free(terms);
+    columns = malloc((size_t)width * 2 * sizeof(*columns));
+    terms = malloc((size_t)width * 2 * sizeof(*terms));
+    columns_width = columns && terms ? width : 0;
+    if (!columns_width) return false;
+  }
+  for (int side = 0; side < 2; ++side)
+    for (int x = 0; x < width; ++x) {
+      const FzeroSideView *v = &views[side];
+      double rx = v->origin[0] + (x + 0.5) * v->right[0], rv = v->origin[1] + (x + 0.5) * v->right[1];
+      double rz = v->origin[2] + (x + 0.5) * v->right[2];
+      columns[side * width + x] = (int)lround(128.0 + atan2(rx, -rz) * b.per_radian);
+      terms[side * width + x] = -rz * b.g.pitch_sin - rv * b.g.pitch_cos;
+    }
+  b.sky_column = columns; b.horizon_term = terms;
+  if (!SnesRenderWorkersRun(view->render_workers, (size_t)height * 2, 8, side_rows, &b)) return false;
+  last_out = out[0]; last_frame = f->frame; last_width = width; last_height = height;
+  last_logical = views[0].logical_width;
+  return true;
+}

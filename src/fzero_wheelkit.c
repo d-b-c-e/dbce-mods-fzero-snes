@@ -2,6 +2,7 @@
  * call sites in sdl_main.c do. Everything not specific to F-Zero (devices, the
  * profile, the panel, the telemetry packet) is in wheelkit.dll. */
 #include "fzero_wheelkit.h"
+#include "fzero_renderer.h"
 #include "fzero_wheelkit_steering.h"
 #include "wheelkit.h"
 
@@ -14,7 +15,7 @@
 /* This build's own version, by the wheelkit repository's scheme (docs/versioning.md
  * there); its games/f-zero/wheelkit-mod.json says the same. The program's own
  * version stays upstream's. */
-#define FZERO_WHEELKIT_VERSION "0.4.2-alpha"
+#define FZERO_WHEELKIT_VERSION "0.9.0-alpha"
 
 static struct {
 #define X(ret, name, args) ret (WK_CALL *name) args;
@@ -25,6 +26,8 @@ static struct {
 static bool s_on, s_panel, s_attached, s_driven;
 static float s_sensitivity = 1.0f, s_dead_zone = FZERO_STEER_DEAD_ZONE;
 static FzeroSteer s_steer;
+static bool s_triples; /* three screens from the rig profile (at the end of this file) */
+static void triples_start(void);
 static struct { uint16_t x, y; bool have, jumped; float speed, distance; } s_car;
 
 static const char kPages[] =
@@ -32,15 +35,15 @@ static const char kPages[] =
   "\"controls\":["
   "{\"id\":\"controls.profile\",\"kind\":\"status\",\"label\":\"Wheel profile\",\"text\":\"No profile from Wheelkit\"},"
   "{\"id\":\"controls.sensitivity\",\"kind\":\"percent\",\"label\":\"Steering sensitivity\",\"min\":25,\"max\":300,"
-  "\"default\":100,\"help\":\"How far the machine steers for a turn of the wheel. At 100%% full lock is full steering.\"},"
+  "\"default\":100,\"help\":\"How far the machine steers for a turn of the wheel.\"},"
   "{\"id\":\"controls.deadzone\",\"kind\":\"percent\",\"label\":\"Steering dead zone\",\"min\":0,\"max\":20,"
-  "\"default\":3,\"help\":\"How far the wheel turns from the center before the machine steers.\"}],"
+  "\"default\":3,\"help\":\"How far the wheel turns before the machine steers.\"}],"
   "\"ffb\":[{\"id\":\"ffb.status\",\"kind\":\"status\",\"text\":\"Off\"},"
   "{\"id\":\"ffb.enabled\",\"kind\":\"toggle\",\"label\":\"Force feedback\",\"default\":true,"
   "\"help\":\"The wheel centers more firmly with speed. F8 turns it off.\"},"
   "{\"id\":\"ffb.steering\",\"kind\":\"percent\",\"label\":\"Steering strength\",\"default\":50,"
   "\"help\":\"50%% is the tuned strength; 100%% doubles it.\"}],"
-  "\"display\":[{\"id\":\"display.status\",\"kind\":\"status\",\"label\":\"Screens\",\"text\":\"One screen. Three screens are not available yet\"}],"
+  "\"display\":[{\"id\":\"display.status\",\"kind\":\"status\",\"label\":\"Screens\",\"text\":\"One screen\"}],"
   "\"telemetry\":[{\"id\":\"telemetry.enabled\",\"kind\":\"toggle\",\"label\":\"Telemetry\",\"default\":true,"
   "\"help\":\"Sends race data to SimHub and dashboards on this PC.\"}],"
   "\"help\":[{\"id\":\"help.runtime\",\"kind\":\"status\",\"label\":\"Wheelkit runtime\",\"text\":\"not loaded\"}]}}}";
@@ -82,13 +85,8 @@ void FzeroWheelkitStart(const char *config_path, const char *version) {
     return;
   }
   s_on = true;
+  triples_start(); /* before the window is created */
   char pages[sizeof(kPages) + 64], value[32];
-  int length = snprintf(pages, sizeof(pages), kPages, version);
-  if (!wk.wk_panel_configure(pages, (size_t)length)) {
-    fprintf(stderr, "[wheelkit] F6 pages refused: %s\n", wk.wk_last_error());
-    return;
-  }
-  s_panel = true;
   if (wk.wk_settings_get("Wheel", "SteeringSensitivity", value, sizeof(value))) {
     float saved = (float)atof(value);
     if (saved >= 0.25f && saved <= 3.0f) s_sensitivity = saved;
@@ -97,17 +95,26 @@ void FzeroWheelkitStart(const char *config_path, const char *version) {
     float saved = (float)atof(value);
     if (saved >= 0.0f && saved <= 0.2f) s_dead_zone = saved;
   }
-  wk.wk_panel_set_number("controls.sensitivity", s_sensitivity * 100.0);
-  wk.wk_panel_set_number("controls.deadzone", s_dead_zone * 100.0);
   char line[200];
   snprintf(line, sizeof(line), "f-zero: steering: dead zone %.0f%%, sensitivity %.0f%%, square-root curve, "
            "Left and Right held for that share of frames in a race (the old build's mapping)",
            s_dead_zone * 100.0, s_sensitivity * 100.0);
   wk.wk_log(line);
+  int length = snprintf(pages, sizeof(pages), kPages, version);
+  if (!wk.wk_panel_configure(pages, (size_t)length)) {
+    snprintf(line, sizeof(line), "f-zero: F6 pages refused: %s", wk.wk_last_error());
+    wk.wk_log(line); /* the launch check forbids this line */
+    return;
+  }
+  s_panel = true;
+  wk.wk_panel_set_number("controls.sensitivity", s_sensitivity * 100.0);
+  wk.wk_panel_set_number("controls.deadzone", s_dead_zone * 100.0);
   const char *profile = wk.wk_input_profile();
   wk.wk_panel_set_text("controls.profile", *profile ? profile : "No profile from Wheelkit: keyboard and gamepad work",
                        *profile ? WK_TONE_GOOD : WK_TONE_WARNING);
   wk.wk_panel_set_text("help.runtime", wk.wk_runtime_version(), WK_TONE_NORMAL);
+  wk.wk_panel_set_text("display.status", s_triples ? "Three screens, from your rig profile; the sides in a race" :
+                       "One screen", WK_TONE_NORMAL);
 }
 
 bool FzeroWheelkitWantsGl(void) { return s_panel; }
@@ -213,29 +220,40 @@ static void force(const uint8_t *ram, uint32_t input) {
   wk.wk_ffb_set_texture((ram[0xc7] ? 0.084f : 0.048f) * scale, 18.0f + 24.0f * scale);
 }
 
-/* Under test input only (inject.on): every 2 s of a race with the wheel off the centre, what the mapping did and
+/* Under test input only (inject.on): every second of a race with the wheel off the centre, what the mapping did and
  * what the game did with it ($0BE1, the heading, 192 steps a turn), so a check can see the machine turn in
  * proportion to the wheel. */
 static void steering_report(const uint8_t *ram, float steer, uint32_t input) {
-  static unsigned frames, held;
+  static unsigned frames, held, gas, brake;
   static double sum;
   static int heading, turned;
+  static float speed;
   const bool racing = ram[0x54] == 2 && ram[0x55] >= 3;
-  if (!racing || FzeroSteerDuty(steer, s_sensitivity, s_dead_zone) == 0.0) { frames = 0; return; }
+  static float first;
+  static uint32_t pedals;
+  if (!racing) { frames = 0; return; }
+  /* One report per steady wheel position and pedal state. */
+  if (frames && (fabsf(steer - first) > 0.02f || (input & 3u) != pedals)) frames = 0;
   const int now = ram[0x0be1];
-  if (frames == 0) { held = 0; sum = 0.0; turned = 0; heading = now; }
+  if (frames == 0) {
+    held = gas = brake = 0; sum = 0.0; turned = 0; heading = now; speed = s_car.speed; first = steer; pedals = input & 3u;
+  }
   int step = now - heading;
   if (step > 96) step -= 192;
   if (step < -96) step += 192;
   turned += step;
   heading = now;
   sum += steer;
-  if (input & (steer < 0 ? 0x40u : 0x80u)) ++held;
-  if (++frames < 120) return;
-  char line[200];
+  if (input & (sum < 0 ? 0x40u : 0x80u)) ++held;
+  if (input & 1u) ++gas;
+  if (input & 2u) ++brake;
+  if (++frames < 60) return; /* a second of a steady input */
+  const double mean = sum / frames;
+  char line[260];
   snprintf(line, sizeof(line), "f-zero: steering in a race (test input): wheel %+.3f, %s held in %u of %u frames "
-           "(the mapping's %.3f), heading moved %+d of 192", sum / frames, steer < 0 ? "Left" : "Right", held, frames,
-           FzeroSteerDuty((float)(sum / frames), s_sensitivity, s_dead_zone), turned);
+           "(the mapping's %.3f), heading moved %+d of 192; B %u Y %u frames; speed %.0f to %.0f km/h", mean,
+           mean < 0 ? "Left" : "Right", held, frames, FzeroSteerDuty((float)mean, s_sensitivity, s_dead_zone), turned,
+           gas, brake, speed * 3.6, s_car.speed * 3.6);
   wk.wk_log(line);
   frames = 0;
 }
@@ -303,4 +321,136 @@ void FzeroWheelkitStop(void) {
   wk.wk_panel_gl_detach();
   wk.wk_stop();
   s_on = s_panel = false;
+}
+
+/* ---- three screens -------------------------------------------------------------------------------------------- */
+/* From the rig profile (wk_triples_get): three screens spanned by one borderless window, the centre one drawn as the
+ * game always is (its picture, HUD and menus), and in a race each side screen drawn from the runtime's views at the
+ * rig's angles (wk_triples_views at the seat's true field of view): the Mode 7 ground and the skyline the centre's
+ * own lines describe (fzero_renderer.c, FzeroRendererDrawSide). No Screens setting: the profile says it. */
+static wk_triples s_tr;
+
+static void triples_start(void) {
+  s_tr.size = sizeof(s_tr);
+  if (!wk.wk_triples_get(&s_tr)) return;
+  s_triples = s_tr.span && s_tr.rig && s_tr.realistic_fov_y > 0 && s_tr.center_width > 0 && s_tr.width > s_tr.center_width &&
+              (s_tr.screens == WK_SCREENS_SEPARATE || s_tr.screens == WK_SCREENS_SURROUND);
+  char line[320];
+  if (s_triples)
+    snprintf(line, sizeof(line), "f-zero: three screens: one window %dx%d at %d,%d, the centre at %d (%d wide); sides at "
+             "%.0f and %.0f degrees, the seat's view %.1f degrees high; sides drawn in a race",
+             s_tr.width, s_tr.height, s_tr.x, s_tr.y, s_tr.center_x, s_tr.center_width, s_tr.left_degrees,
+             s_tr.right_degrees, s_tr.realistic_fov_y * 57.29577951308232);
+  else
+    snprintf(line, sizeof(line), "f-zero: one screen (%s)", s_tr.text);
+  wk.wk_log(line);
+}
+
+bool FzeroWheelkitSpan(int span[4]) {
+  if (!s_triples) return false;
+  span[0] = s_tr.x; span[1] = s_tr.y; span[2] = s_tr.width; span[3] = s_tr.height;
+  return true;
+}
+int FzeroWheelkitCentreWidth(int drawable_width) {
+  return s_triples ? (int)((long long)drawable_width * s_tr.center_width / s_tr.width) : drawable_width;
+}
+int FzeroWheelkitCentreX(int drawable_width) {
+  return s_triples ? (int)((long long)drawable_width * s_tr.center_x / s_tr.width) : 0;
+}
+
+/* The side screens' rays in the centre's eye frame: a pixel's direction in a screen's own view, from its off-axis
+ * projection (row vectors, row-major, z = -1 ahead), turned back into the centre's view by the transpose of that
+ * screen's rotation. */
+static void side_rays(const double rotation[16], const double projection[16], int width, int height, FzeroSideView *v) {
+  const double origin[3] = {(-1.0 + projection[8]) / projection[0], (1.0 + projection[9]) / projection[5], -1.0};
+  const double right[3] = {2.0 / (width * projection[0]), 0.0, 0.0};
+  const double down[3] = {0.0, -2.0 / (height * projection[5]), 0.0};
+  for (int j = 0; j < 3; ++j) {
+    v->origin[j] = v->right[j] = v->down[j] = 0.0;
+    for (int i = 0; i < 3; ++i) {
+      v->origin[j] += origin[i] * rotation[j * 4 + i];
+      v->right[j] += right[i] * rotation[j * 4 + i];
+      v->down[j] += down[i] * rotation[j * 4 + i];
+    }
+  }
+}
+
+bool FzeroWheelkitSides(int x, int y, int w, int h, int drawable_width, int drawable_height, int logical_width,
+                        const uint32_t *pixels[2], int *width, int *height, int rects[2][4]) {
+  (void)x; (void)y;
+  if (!s_triples || w < 2 || h < 2 || drawable_height < 2) return false;
+  static uint32_t *buffers[2];
+  static FzeroSideView views[2];
+  static int built_w, built_h, built_dw, built_dh, sw, sh;
+  static bool ok, noted;
+  const int cx = FzeroWheelkitCentreX(drawable_width), cw = FzeroWheelkitCentreWidth(drawable_width);
+  const int lw = cx, rw = drawable_width - cx - cw;
+  if (lw < 2 || rw < 2) return false;
+  if (built_w != w || built_h != h || built_dw != drawable_width || built_dh != drawable_height) {
+    built_w = w; built_h = h; built_dw = drawable_width; built_dh = drawable_height; ok = false;
+    /* The side pictures are drawn on the CPU, so at a fixed 288 rows (as the old build's) and scaled up. */
+    sh = 288; sw = (int)((long long)sh * (lw > rw ? lw : rw) / drawable_height);
+    if (sw < 2 || sw > 4096) return false;
+    for (int i = 0; i < 2; ++i) {
+      free(buffers[i]);
+      buffers[i] = malloc((size_t)sw * sh * sizeof(uint32_t));
+      if (!buffers[i]) return false;
+    }
+    /* The centre's projection at the seat's true view (a centred D3DXMatrixPerspectiveFovRH, row-major). */
+    const double n = 0.1, f = 1000.0, ty = tan(s_tr.realistic_fov_y * 0.5), tx = ty * cw / drawable_height;
+    const double centre[16] = {1.0 / tx, 0, 0, 0, 0, 1.0 / ty, 0, 0, 0, 0, f / (n - f), -1, 0, 0, n * f / (n - f), 0};
+    wk_triple_views tv = {sizeof(tv)};
+    if (!wk.wk_triples_views(centre, &tv)) { wk.wk_log("f-zero: three screens: the runtime gave no views; sides black"); return false; }
+    for (int i = 0; i < 2; ++i) {
+      side_rays(tv.rotation[i ? 2 : 0], tv.projection[i ? 2 : 0], sw, sh, &views[i]);
+      /* The game's picture within the centre screen (Fit fills it at the screen's shape). */
+      views[i].tan_x = tx * w / cw;
+      views[i].tan_y = ty * h / drawable_height;
+      views[i].panel_tan_y = ty;
+      views[i].logical_width = logical_width;
+    }
+    /* What is drawn, in the proof line's terms: each view's yaw (its screen's facing, from the rotation) and its
+     * horizontal field of view (from its projection's edges), to compare with the rig profile. */
+    double yaw[3], hfov[3];
+    for (int i = 0; i < 3; ++i) {
+      const double *r = tv.rotation[i], *p = tv.projection[i];
+      yaw[i] = atan2(-r[2], r[10]) * 57.29577951308232; /* the screen's forward, -(column 2), against -z */
+      hfov[i] = (atan((p[8] + 1.0) / p[0]) - atan((p[8] - 1.0) / p[0])) * 57.29577951308232;
+    }
+    char line[200];
+    snprintf(line, sizeof(line), "f-zero: three screens: views=3 angles=%.1f,%.1f,%.1f hfov=%.1f,%.1f,%.1f (the rig profile: "
+             "sides %.1f and %.1f degrees)", yaw[0], yaw[1], yaw[2], hfov[0], hfov[1], hfov[2], s_tr.left_degrees,
+             s_tr.right_degrees);
+    wk.wk_log(line);
+    ok = true;
+  }
+  if (!ok) return false;
+  for (int i = 0; i < 2; ++i) views[i].logical_width = logical_width;
+  LARGE_INTEGER t0, t1, hz;
+  QueryPerformanceCounter(&t0);
+  if (!FzeroRendererDrawSides(views, buffers, sw, sh)) return false;
+  QueryPerformanceCounter(&t1);
+  static double spent;
+  static unsigned draws;
+  spent += (double)(t1.QuadPart - t0.QuadPart);
+  if (++draws == 600) { /* what the side screens cost, for a slow frame rate's report */
+    QueryPerformanceFrequency(&hz);
+    char cost[120];
+    snprintf(cost, sizeof(cost), "f-zero: three screens: the side screens took %.1f ms a presented frame (average of 600)",
+             spent * 1000.0 / (double)hz.QuadPart / draws);
+    wk.wk_log(cost);
+    spent = 0.0; draws = 0;
+  }
+  if (!noted) {
+    noted = true;
+    char line[200];
+    snprintf(line, sizeof(line), "f-zero: three screens: side screens drawn in a race (the ground and the skyline, %dx%d "
+             "each, scaled to %dx%d and %dx%d)", sw, sh, lw, drawable_height, rw, drawable_height);
+    wk.wk_log(line);
+  }
+  pixels[0] = buffers[0]; pixels[1] = buffers[1];
+  *width = sw; *height = sh;
+  rects[0][0] = 0; rects[0][1] = 0; rects[0][2] = lw; rects[0][3] = drawable_height;
+  rects[1][0] = cx + cw; rects[1][1] = 0; rects[1][2] = rw; rects[1][3] = drawable_height;
+  return true;
 }

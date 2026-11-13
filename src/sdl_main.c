@@ -446,12 +446,31 @@ static bool fzero_gl_hd_grid(FzeroGlRenderer *glr,unsigned logical_width,
   *output=glr->hd_grid;return true;
 }
 
+/* Wheelkit three screens: the side screens' pictures (fzero_wheelkit.c), in a race only; black otherwise. */
+static void fzero_gl_draw_sides(FzeroGlRenderer *glr,FzeroRect centre,int logical_width,int drawable_width,int drawable_height) {
+  static GLuint textures[2];
+  const uint32_t *pixels[2];int w,h,rects[2][4];
+  if(!FzeroWheelkitSides(centre.x,centre.y,centre.w,centre.h,drawable_width,drawable_height,logical_width,pixels,&w,&h,rects))return;
+  glActiveTexture(GL_TEXTURE0);
+  for(int i=0;i<2;++i) {
+    if(!textures[i])glGenTextures(1,&textures[i]);
+    glBindTexture(GL_TEXTURE_2D,textures[i]);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,w,h,0,GL_BGRA,GL_UNSIGNED_INT_8_8_8_8_REV,pixels[i]);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    glViewport(rects[i][0],drawable_height-rects[i][1]-rects[i][3],rects[i][2],rects[i][3]);
+    glUseProgram(glr->program);glUniform1i(glGetUniformLocation(glr->program,"texture1"),0);
+    glUniform1i(glGetUniformLocation(glr->program,"exactNearest"),0);
+    glBindVertexArray(glr->vao);glDrawArrays(GL_TRIANGLE_STRIP,0,4);glBindVertexArray(0);glUseProgram(0);
+  }
+}
+
 static void fzero_gl_render(FzeroGlRenderer *glr, const uint8_t *pixels,
                             int logical_width, int logical_height, FzeroViewport viewport,
                             int drawable_width, int drawable_height) {
   uint64_t diagnostic_start = FzeroDiagnosticsBegin();
   GlTextureWithSize image=glr->texture;
-  int pane_width=g_compare_mode7?drawable_width/2:drawable_width;
+  int pane_width=g_compare_mode7?drawable_width/2:FzeroWheelkitCentreWidth(drawable_width);
   FzeroRect rect = fzero_game_destination(viewport, pane_width, drawable_height);
   const SnesHdFrame *jobs=FzeroGpuHdFrame();SnesHdView job_view;
   bool hd=FzeroGpuHdGridCount() && fzero_gl_hd_grid(glr,(unsigned)logical_width,rect.w,rect.h,&image);
@@ -485,6 +504,7 @@ static void fzero_gl_render(FzeroGlRenderer *glr, const uint8_t *pixels,
   glClear(GL_COLOR_BUFFER_BIT);
   int viewport_y = drawable_height - rect.y - rect.h;
   if(g_compare_mode7)rect.x+=pane_width;
+  else rect.x+=FzeroWheelkitCentreX(drawable_width);
   glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D,image.gl_texture);
   if (glr->shader) {
     glBindVertexArray(glr->vao);
@@ -507,6 +527,7 @@ static void fzero_gl_render(FzeroGlRenderer *glr, const uint8_t *pixels,
     glBindVertexArray(0);
     glUseProgram(0);
   }
+  if(!g_compare_mode7)fzero_gl_draw_sides(glr,rect,viewport.width,drawable_width,drawable_height);
   if(g_compare_mode7) {
     glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,glr->texture.gl_texture);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
@@ -1267,6 +1288,7 @@ static int hotkey_matches(const FzeroHotkey *hk, SDL_Keycode key, Uint16 mod) {
  * in time. */
 static FzeroViewport local_viewport(const FzeroVideoSettings *s,int w,int h,bool local) {
   if(g_compare_mode7)w/=2;
+  else w=FzeroWheelkitCentreWidth(w); /* three screens: the game's picture is the centre one's */
   unsigned columns=local && g_local_players>2?2:1;
   FzeroViewport v=FzeroNetplayViewport(s,w/(int)columns,local?h/2:h);
   if(columns==2) {v.width*=2;v.extra=(v.width-256)/2;}
@@ -2168,7 +2190,13 @@ static int run_game(int argc, char **argv) {
           (use_gl_renderer ? SDL_WINDOW_OPENGL : 0) |
           (getenv("FZERO_TEST_LOCAL_UI_HIDDEN")?SDL_WINDOW_HIDDEN:0));
   if (!window) Die("Unable to create the game window");
-  if (launcher_settings.fullscreen && !g_compare_mode7)
+  int span[4];
+  if (!g_compare_mode7 && !online && FzeroWheelkitSpan(span)) {
+    /* Three screens from the rig profile: one borderless window over the three, in place of fullscreen. */
+    SDL_SetWindowBordered(window, false);
+    SDL_SetWindowPosition(window, span[0], span[1]);
+    SDL_SetWindowSize(window, span[2], span[3]);
+  } else if (launcher_settings.fullscreen && !g_compare_mode7)
     snesrecomp_sdl_set_fullscreen(window, true);
   FzeroGlRenderer gl_renderer;
   SDL_Renderer *renderer = NULL;

@@ -61,5 +61,17 @@ bool FzeroRendererDrawHd(uint32_t *output, size_t capacity,
 bool FzeroRendererDrawPresentation(uint32_t *native, uint32_t *hd, size_t hd_capacity,
                                    FzeroViewport viewport, double alpha, unsigned scale);
 bool FzeroRendererHasFrame(void);
+/* Wheelkit three screens (this fork's wheelkit-runtime branch): the two side screens in a race (on the render
+ * workers, once per emulated frame), each in the eye's frame of
+ * the centre screen (x right, y up, -z ahead, the eye at 1 from the centre). The ray through pixel (x, y) is
+ * origin + (x + 0.5) right + (y + 0.5) down. tan_x and tan_y are the game picture's half-width and half-height on
+ * the centre screen over the eye distance, panel_tan_y the screens' own half-height; logical_width the picture's
+ * width in game pixels. Black outside a race (returns false). */
+typedef struct FzeroSideView {
+  double origin[3], right[3], down[3];
+  double tan_x, tan_y, panel_tan_y;
+  int logical_width;
+} FzeroSideView;
+bool FzeroRendererDrawSides(const FzeroSideView views[2], uint32_t *out[2], int width, int height);
 bool FzeroRendererLoadCapture(const char *path);
 const uint32_t *FzeroRendererStockFrame(void);
