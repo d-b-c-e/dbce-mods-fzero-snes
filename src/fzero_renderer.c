@@ -544,7 +544,7 @@ static int object_x(const FzeroSourceFrame *f, int raw_x, FzeroViewport viewport
 static void sprites(const Ppu *p, const FzeroSourceFrame *frame,
                     const FzeroSourceFrame *previous, double alpha,
                     int y, FzeroViewport viewport, bool race_hud, bool results,
-                    uint16_t *pixels) {
+                    uint16_t *pixels, int only_owner) {
   const FzeroRasterLine *line = &frame->lines[y];
   const uint16_t *vram = frame->vram;
   /* The completed-league recap runs inside the live race ($C3=$11).
@@ -570,6 +570,7 @@ static void sprites(const Ppu *p, const FzeroSourceFrame *frame,
     /* Results reuse the former car reservations for text and numbers. The
      * frozen race's actor/DMA tables no longer describe those sprites. */
     int owner = intro_counter || results ? -1 : object_owner(frame, slot);
+    if (only_owner >= 0 && owner != only_owner) continue; /* one car's sprite (the side screens) */
     /* The screen-locked player and unowned effects use offscreen X as a
      * hiding mechanism, sometimes retaining Y and stale tile attributes.
      * Only verified opponent reservations can reveal those signed positions. */
@@ -776,7 +777,7 @@ static void render_lines(void *opaque, size_t begin, size_t end, unsigned slot) 
     }
     if (world || results)
       sprites(scanout, f, interpolate ? previous : NULL, alpha, y, viewport,
-              race_hud, results, object_pixels);
+              race_hud, results, object_pixels, -1);
     else
       memset(object_pixels, 0, (size_t)viewport.width * sizeof(*object_pixels));
     /* Successful results retain the frozen course. Its spatial sampling
@@ -1264,6 +1265,94 @@ static void side_rows(void *opaque, size_t begin, size_t end, unsigned slot) {
   }
 }
 
+/* Opponents on the side screens, as the old build drew them: each live rival's own sprite, exactly as the game drew
+ * it for the centre (its OAM, at the game's screen anchor $0C50/$0C60), stood up as a billboard at its place on the
+ * ground ($0B70/$0B90) and seen through the side screen's rays. A rival the game does not draw (behind the camera,
+ * or too far to the side for its OAM) is not drawn. */
+static void side_project(const FzeroSideView *v, double x, double y, double z, double *px, double *py, bool *ok) {
+  const double *o = v->origin, *r = v->right, *d = v->down;
+  double n[3] = {r[1] * d[2] - r[2] * d[1], r[2] * d[0] - r[0] * d[2], r[0] * d[1] - r[1] * d[0]};
+  double den = n[0] * x + n[1] * y + n[2] * z, t = den != 0 ? (n[0] * o[0] + n[1] * o[1] + n[2] * o[2]) / den : -1;
+  if (!(t > 0)) { *ok = false; return; }
+  double q[3] = {t * x - o[0], t * y - o[1], t * z - o[2]};
+  *px = (q[0] * r[0] + q[1] * r[1] + q[2] * r[2]) / (r[0] * r[0] + r[1] * r[1] + r[2] * r[2]) - 0.5;
+  *py = (q[0] * d[0] + q[1] * d[1] + q[2] * d[2]) / (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) - 0.5;
+}
+
+static unsigned side_opponents(const FzeroSourceFrame *f, const FzeroSideBatch *b) {
+  enum { W = FZERO_MAX_WIDTH };
+  static uint16_t raster[224][W];
+  static uint32_t colours[224][W];
+  static Ppu p;
+  const FzeroViewport viewport = {W, (W - 256) / 2, 0, true};
+  const FzeroSideGround *g = &b->g;
+  const FzeroSideView *v0 = &b->views[0];
+  memcpy(&p, f->lines[180].registers, PPU_SAVESTATE_REGS_SIZE);
+  const double centre_x = course_centre(p.m7matrix, 4), centre_y = course_centre(p.m7matrix, 5);
+  const int camera_x = read_i16(f->ram + 0xb70), camera_y = read_i16(f->ram + 0xb90);
+  unsigned drawn = 0;
+  for (int car = 1; car < 6; ++car) {
+    if ((f->ram[0xb00 + car * 2] & 0x88) != 0x88) continue;
+    int left = W, right = -1, top = 224, bottom = -1;
+    for (int y = 0; y < 224; ++y) {
+      memcpy(&p, f->lines[y].registers, PPU_SAVESTATE_REGS_SIZE);
+      if (p.inidisp & 128) { memset(raster[y], 0, sizeof(raster[y])); continue; }
+      sprites(&p, f, NULL, 1.0, y, viewport, true, false, raster[y], car);
+      for (int x = 0; x < W; ++x) {
+        if (!raster[y][x]) continue;
+        colours[y][x] = colour(&p, f->lines[y].palette, raster[y][x], 0x500, false);
+        if (x < left) left = x;
+        if (x > right) right = x;
+        if (y < top) top = y;
+        if (y > bottom) bottom = y;
+      }
+    }
+    if (right < 0) continue;
+    /* The rival's anchor in the eye's frame, from the same fitted ground camera as the side screens' ground. */
+    double tx = centre_x + remainder((double)read_i16(f->ram + 0xb70 + car * 2) - camera_x, 8192.0);
+    double ty = centre_y + remainder((double)read_i16(f->ram + 0xb90 + car * 2) - camera_y, 4096.0);
+    double dx = tx - g->camera_x, dy = ty - g->camera_y;
+    double lateral = dx * g->right_x + dy * g->right_y, forward = (dx * g->forward_x + dy * g->forward_y) / g->forward_scale;
+    double ax = lateral, ay = -g->height * g->pitch_cos + forward * g->pitch_sin;
+    double az = -g->height * g->pitch_sin - forward * g->pitch_cos;
+    if (!(az < -0.002) || !isfinite(ax) || !isfinite(ay)) continue;
+    /* One game pixel at the anchor's distance; the sprite's own pixels keep their place around the game's anchor. */
+    double sx = 2.0 * v0->tan_x / v0->logical_width * -az, sy = 2.0 * v0->tan_y / 224.0 * -az;
+    int gx = read_i16(f->ram + 0xc50 + car * 2) + viewport.extra, gy = read_i16(f->ram + 0xc60 + car * 2);
+    for (int side = 0; side < 2; ++side) {
+      const FzeroSideView *v = &b->views[side];
+      double x0 = INFINITY, y0 = INFINITY, x1 = -INFINITY, y1 = -INFINITY;
+      bool ok = true;
+      for (int corner = 0; corner < 4 && ok; ++corner) {
+        double cx = corner & 1 ? right + 1 : left, cy = corner & 2 ? bottom + 1 : top, px, py;
+        side_project(v, ax + (cx - gx) * sx, ay - (cy - gy) * sy, az, &px, &py, &ok);
+        if (!ok) break;
+        x0 = fmin(x0, px); x1 = fmax(x1, px); y0 = fmin(y0, py); y1 = fmax(y1, py);
+      }
+      if (!ok || x1 < 0 || y1 < 0 || x0 >= b->width || y0 >= b->height) continue;
+      int px0 = (int)fmax(0, floor(x0) - 1), px1 = (int)fmin(b->width - 1, ceil(x1) + 1);
+      int py0 = (int)fmax(0, floor(y0) - 1), py1 = (int)fmin(b->height - 1, ceil(y1) + 1);
+      for (int py = py0; py <= py1; ++py)
+        for (int px = px0; px <= px1; ++px) {
+          double rx = v->origin[0] + (px + 0.5) * v->right[0] + (py + 0.5) * v->down[0];
+          double ry = v->origin[1] + (px + 0.5) * v->right[1] + (py + 0.5) * v->down[1];
+          double rz = v->origin[2] + (px + 0.5) * v->right[2] + (py + 0.5) * v->down[2];
+          if (fabs(rz) < 1e-9) continue;
+          double distance = az / rz;
+          if (!(distance > 0)) continue;
+          int ix = (int)lround(gx + (distance * rx - ax) / sx), iy = (int)lround(gy - (distance * ry - ay) / sy);
+          if (ix < left || ix > right || iy < top || iy > bottom || !raster[iy][ix]) continue;
+          b->out[side][(size_t)py * b->width + px] = colours[iy][ix];
+          ++drawn;
+        }
+    }
+  }
+  return drawn;
+}
+
+static unsigned long long side_opponent_pixels;
+unsigned long long FzeroRendererSideOpponentPixels(void) { return side_opponent_pixels; }
+
 bool FzeroRendererDrawSides(const FzeroSideView views[2], uint32_t *out[2], int width, int height) {
   if (!views || !out || !out[0] || !out[1] || width < 2 || height < 2 || views[0].logical_width < 256 ||
       !(views[0].tan_x > 0 && views[0].tan_y > 0)) return false;
@@ -1321,6 +1410,7 @@ bool FzeroRendererDrawSides(const FzeroSideView views[2], uint32_t *out[2], int 
     }
   b.sky_column = columns; b.horizon_term = terms;
   if (!SnesRenderWorkersRun(view->render_workers, (size_t)height * 2, 8, side_rows, &b)) return false;
+  side_opponent_pixels += side_opponents(f, &b);
   last_out = out[0]; last_frame = f->frame; last_width = width; last_height = height;
   last_logical = views[0].logical_width;
   return true;

@@ -73,5 +73,7 @@ typedef struct FzeroSideView {
   int logical_width;
 } FzeroSideView;
 bool FzeroRendererDrawSides(const FzeroSideView views[2], uint32_t *out[2], int width, int height);
+/* Rival pixels drawn on the side screens so far (each rival's own sprite, as a billboard at its place). */
+unsigned long long FzeroRendererSideOpponentPixels(void);
 bool FzeroRendererLoadCapture(const char *path);
 const uint32_t *FzeroRendererStockFrame(void);

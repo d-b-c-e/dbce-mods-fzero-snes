@@ -432,6 +432,11 @@ bool FzeroWheelkitSides(int x, int y, int w, int h, int drawable_width, int draw
   QueryPerformanceCounter(&t0);
   if (!FzeroRendererDrawSides(views, buffers, sw, sh)) return false;
   QueryPerformanceCounter(&t1);
+  static bool rival_noted;
+  if (!rival_noted && FzeroRendererSideOpponentPixels()) {
+    rival_noted = true;
+    wk.wk_log("f-zero: three screens: a rival drawn on a side screen (its own sprite, standing at its place)");
+  }
   static double spent;
   static unsigned draws;
   spent += (double)(t1.QuadPart - t0.QuadPart);
@@ -454,5 +459,24 @@ bool FzeroWheelkitSides(int x, int y, int w, int h, int drawable_width, int draw
   *width = sw; *height = sh;
   rects[0][0] = 0; rects[0][1] = 0; rects[0][2] = lw; rects[0][3] = drawable_height;
   rects[1][0] = cx + cw; rects[1][1] = 0; rects[1][2] = rw; rects[1][3] = drawable_height;
+  return true;
+}
+
+/* The old build's Reduce crash flashes (on in the owner's fzero-video.ini): in a race, a frame whose picture is near
+ * white on average (the flash after a hard impact) is not presented, so the previous picture stays, for at most 6
+ * frames running. The game, the force and telemetry carry on. */
+bool FzeroWheelkitHoldFlash(const uint32_t *pixels, int width, int height, const uint8_t *ram) {
+  static unsigned held, total;
+  if (!s_on || !pixels || width < 64 || height < 32 || !(ram[0x54] == 2 && ram[0x55] >= 3)) { held = 0; return false; }
+  unsigned sum = 0, samples = 0;
+  for (int y = height / 32; y < height; y += height / 16)
+    for (int x = width / 64; x < width; x += width / 32) {
+      uint32_t c = pixels[(size_t)y * width + x];
+      sum += ((c >> 16) & 255) + ((c >> 8) & 255) + (c & 255);
+      ++samples;
+    }
+  if (!samples || sum / (3 * samples) < 225 || held >= 6) { held = 0; return false; }
+  ++held;
+  if (++total == 1) wk.wk_log("f-zero: a crash flash held (the previous picture kept, as the old build's Reduce crash flashes)");
   return true;
 }

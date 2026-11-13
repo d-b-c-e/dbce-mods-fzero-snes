@@ -23,6 +23,9 @@ void FzeroWheelkitStop(void);
 /* Three screens, from the rig profile (wk_triples_get): the borderless window over the three (x, y, width, height in
  * desktop pixels), or false for one screen. */
 bool FzeroWheelkitSpan(int span[4]);
+/* True when this race frame is one of the near-white flashes after a hard impact (the old build's Reduce crash
+ * flashes, which the owner had on): the presenter keeps the previous picture instead, at most 6 frames running. */
+bool FzeroWheelkitHoldFlash(const uint32_t *pixels, int width, int height, const uint8_t *ram);
 /* The centre screen within a drawable that many pixels wide: its width and left edge (the drawable and 0 on one
  * screen). The game's picture, its HUD and the menus are drawn there. */
 int FzeroWheelkitCentreWidth(int drawable_width);
@@ -39,6 +42,7 @@ static inline uint32_t FzeroWheelkitFrame(uint32_t input, const uint8_t *ram) { 
 static inline void FzeroWheelkitPresent(int w, int h) { (void)w; (void)h; }
 static inline void FzeroWheelkitStop(void) {}
 static inline bool FzeroWheelkitSpan(int s[4]) { (void)s; return false; }
+static inline bool FzeroWheelkitHoldFlash(const uint32_t *p, int w, int h, const uint8_t *r) { (void)p; (void)w; (void)h; (void)r; return false; }
 static inline int FzeroWheelkitCentreWidth(int w) { return w; }
 static inline int FzeroWheelkitCentreX(int w) { (void)w; return 0; }
 static inline bool FzeroWheelkitSides(int x, int y, int w, int h, int dw, int dh, int lw, const uint32_t *p[2],

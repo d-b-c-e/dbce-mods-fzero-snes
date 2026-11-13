@@ -2963,7 +2963,8 @@ static int run_game(int argc, char **argv) {
       FzeroPresent(benchmark ? 1.0 : FzeroClockAlpha(&clock, now));
       FzeroDiagnosticsEnd(FZERO_DIAG_COMPOSITION, diagnostic_start);
       if(online && snes_savestate_menu_is_open())present_overlay(&presenter,1);
-      else present_frame(&presenter, NULL, 0, 0, 0);
+      else if (!FzeroWheelkitHoldFlash((const uint32_t *)pixels, logical_width, FzeroFrameHeight(), g_ram))
+        present_frame(&presenter, NULL, 0, 0, 0);
       /* Setup draws native picker artwork through present_frame too. Only
        * the completed gameplay presentation establishes effective HD detail. */
       hd_presentation_feedback(use_gl_renderer && gl_renderer.hd_presented?
