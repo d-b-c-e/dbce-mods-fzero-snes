@@ -15,7 +15,7 @@
 /* This build's own version, by the wheelkit repository's scheme (docs/versioning.md
  * there); its games/f-zero/wheelkit-mod.json says the same. The program's own
  * version stays upstream's. */
-#define FZERO_WHEELKIT_VERSION "0.9.0-alpha"
+#define FZERO_WHEELKIT_VERSION "0.9.1-alpha"
 
 static struct {
 #define X(ret, name, args) ret (WK_CALL *name) args;
@@ -154,8 +154,10 @@ static float bcd_seconds(const uint8_t *t) {
 }
 
 /* WRAM: $54/$55 scene (2 and 3 or more: racing), $0B70/$0B90 the machine's
- * position (8192 x 4096 units, a quarter metre each), $0BE1 heading (192
- * steps), $C0 the race clock, $0F53 laps timed, $0DC8 rank. */
+ * position (8192 x 4096 units, a quarter metre each), $0BD1 the way the machine
+ * faces (192 steps a turn; upstream's fzero_actor.c: held Right adds to it, Left
+ * subtracts, so it grows clockwise; $0BE1 is the way it travels), $C0 the race
+ * clock, $0F53 laps timed, $0DC8 rank. */
 static void telemetry(const uint8_t *ram, uint32_t input) {
   wk_car car = {sizeof(car)};
   bool racing = ram[0x54] == 2 && ram[0x55] >= 3;
@@ -183,7 +185,7 @@ static void telemetry(const uint8_t *ram, uint32_t input) {
   car.throttle = (input & 1u) ? 1.0f : 0.0f;
   car.brake = (input & 2u) ? 1.0f : 0.0f;
   car.steer = (input & 0x40u) ? -1.0f : (input & 0x80u) ? 1.0f : 0.0f;
-  car.yaw = (float)ram[0x0be1] * (6.28318530718f / 192.0f);
+  car.yaw = (float)ram[0x0bd1] * (6.28318530718f / 192.0f);
   car.position[0] = (float)x * 0.25f;
   car.position[2] = (float)y * 0.25f;
   car.distance = s_car.distance;
@@ -220,9 +222,9 @@ static void force(const uint8_t *ram, uint32_t input) {
   wk.wk_ffb_set_texture((ram[0xc7] ? 0.084f : 0.048f) * scale, 18.0f + 24.0f * scale);
 }
 
-/* Under test input only (inject.on): every second of a race with the wheel off the centre, what the mapping did and
- * what the game did with it ($0BE1, the heading, 192 steps a turn), so a check can see the machine turn in
- * proportion to the wheel. */
+/* Under test input only (inject.on): every half second of a race with steady test input, what the mapping did and
+ * what the game did with it ($0BD1, the way the machine faces: Right turns it up, Left down, 192 steps a turn), the
+ * pedals and the speed, so a check can see the machine answer the wheel and the pedals. */
 static void steering_report(const uint8_t *ram, float steer, uint32_t input) {
   static unsigned frames, held, gas, brake;
   static double sum;
@@ -234,7 +236,7 @@ static void steering_report(const uint8_t *ram, float steer, uint32_t input) {
   if (!racing) { frames = 0; return; }
   /* One report per steady wheel position and pedal state. */
   if (frames && (fabsf(steer - first) > 0.02f || (input & 3u) != pedals)) frames = 0;
-  const int now = ram[0x0be1];
+  const int now = ram[0x0bd1];
   if (frames == 0) {
     held = gas = brake = 0; sum = 0.0; turned = 0; heading = now; speed = s_car.speed; first = steer; pedals = input & 3u;
   }
@@ -247,11 +249,11 @@ static void steering_report(const uint8_t *ram, float steer, uint32_t input) {
   if (input & (sum < 0 ? 0x40u : 0x80u)) ++held;
   if (input & 1u) ++gas;
   if (input & 2u) ++brake;
-  if (++frames < 60) return; /* a second of a steady input */
+  if (++frames < 30) return; /* half a second of a steady input */
   const double mean = sum / frames;
   char line[260];
   snprintf(line, sizeof(line), "f-zero: steering in a race (test input): wheel %+.3f, %s held in %u of %u frames "
-           "(the mapping's %.3f), heading moved %+d of 192; B %u Y %u frames; speed %.0f to %.0f km/h", mean,
+           "(the mapping's %.3f), facing moved %+d of 192; B %u Y %u frames; speed %.0f to %.0f km/h", mean,
            mean < 0 ? "Left" : "Right", held, frames, FzeroSteerDuty((float)mean, s_sensitivity, s_dead_zone), turned,
            gas, brake, speed * 3.6, s_car.speed * 3.6);
   wk.wk_log(line);
