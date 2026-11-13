@@ -6,6 +6,8 @@
 [CmdletBinding()]
 param(
     [string]$WheelkitSdk = '',
+    # The private generated BS Deluxe sources (tools/regen_bs_deluxe.py's captures/bs-deluxe/gen), to build it in.
+    [string]$DeluxeGen = '',
     [string]$Build = 'E:\Source\temp\f-zero\build-wheelkit-runtime',
     [string]$Msys = 'E:\Source\temp\f-zero\msys64',
     [string]$CMake = 'C:\Program Files\CMake\bin\cmake.exe'
@@ -19,6 +21,7 @@ $env:PATH = "$mingw\bin;$env:PATH"
 $options = @('-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', "-DCMAKE_PREFIX_PATH=$($mingw -replace '\\', '/')",
     '-DCMAKE_C_COMPILER=gcc', '-DCMAKE_CXX_COMPILER=g++', "-DCMAKE_MAKE_PROGRAM=$($mingw -replace '\\', '/')/bin/ninja.exe")
 if ($WheelkitSdk) { $options += "-DWHEELKIT_SDK=$($WheelkitSdk -replace '\\', '/')" }
+if ($DeluxeGen) { $options += "-DFZERO_DELUXE_GEN_DIR=$($DeluxeGen -replace '\\', '/')" }
 & $CMake -S $root -B $Build @options
 if ($LASTEXITCODE) { throw 'configure failed' }
 & $CMake --build $Build

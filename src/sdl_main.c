@@ -175,6 +175,9 @@ typedef struct FzeroGlRenderer {
   unsigned hd_effective_scale;
   GlTextureWithSize hd_grid;
   GLuint hd_grid_draw,hd_grid_read;
+  GlslShader *side_shader[2]; /* Wheelkit three screens: the display shader on each side screen */
+  GLuint screen_fbo[3],screen_tex[3],mesh_vao,mesh_vbo; /* each screen's flat picture, bent for curved glass */
+  int screen_w[3],screen_h[3];
 } FzeroGlRenderer;
 
 static void fzero_gl_prepare_window(void) {
@@ -291,6 +294,15 @@ static bool fzero_gl_init(FzeroGlRenderer *glr, SDL_Window *window,
     if (!glr->shader) {
       fprintf(stderr, "[fzero-gl] Unable to load shader preset: %s; using unfiltered output\n", shader_path);
     }
+  }
+  /* Wheelkit three screens: the same display shader on each side screen, an instance of its own (its history and
+   * frame count are per screen). */
+  int span[4];
+  if(glr->shader && FzeroWheelkitSpan(span)){
+    for(int i=0;i<2;++i)glr->side_shader[i]=GlslShader_CreateFromFile(shader_path);
+    char note[400];snprintf(note,sizeof(note),"f-zero: three screens: the display shader on each screen (%s)%s",shader_path,
+        glr->side_shader[0] && glr->side_shader[1]?"":"; the side screens' copies did not load");
+    FzeroWheelkitNote(note);
   }
   return true;
 }
@@ -446,25 +458,87 @@ static bool fzero_gl_hd_grid(FzeroGlRenderer *glr,unsigned logical_width,
   *output=glr->hd_grid;return true;
 }
 
-/* Wheelkit three screens: the side screens' pictures (fzero_wheelkit.c), in a race only; black otherwise. */
+/* Wheelkit three screens on curved glass: a screen's flat picture is drawn into a texture of its own, then through
+ * the runtime's grid (FzeroWheelkitCurveGrid) onto the screen. */
+static bool fzero_gl_screen_target(FzeroGlRenderer *glr,int s,int w,int h) {
+  if(!glr->screen_tex[s])glGenTextures(1,&glr->screen_tex[s]);
+  if(!glr->screen_fbo[s])glGenFramebuffers(1,&glr->screen_fbo[s]);
+  glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,glr->screen_tex[s]);
+  if(glr->screen_w[s]!=w || glr->screen_h[s]!=h) {
+    glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,w,h,0,GL_RGBA,GL_UNSIGNED_BYTE,NULL);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    glr->screen_w[s]=w;glr->screen_h[s]=h;
+  }
+  glBindFramebuffer(GL_FRAMEBUFFER,glr->screen_fbo[s]);
+  glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,glr->screen_tex[s],0);
+  if(glCheckFramebufferStatus(GL_FRAMEBUFFER)!=GL_FRAMEBUFFER_COMPLETE){glBindFramebuffer(GL_FRAMEBUFFER,0);return false;}
+  glViewport(0,0,w,h);glClearColor(0,0,0,1);glClear(GL_COLOR_BUFFER_BIT);
+  return true;
+}
+static void fzero_gl_screen_warp(FzeroGlRenderer *glr,int s,int x,int y,int w,int h,int columns,int rows,const float *uv) {
+  static float *v;static size_t capacity;
+  size_t n=(size_t)columns*rows*6;
+  if(n*5>capacity){free(v);v=malloc(n*5*sizeof(float));capacity=v?n*5:0;if(!v)return;}
+  size_t k=0;
+  for(int j=0;j<rows;++j)for(int i=0;i<columns;++i) {
+    static const int corner[6][2]={{0,0},{0,1},{1,0},{1,0},{0,1},{1,1}};
+    for(int c=0;c<6;++c) {
+      int ci=i+corner[c][0],cj=j+corner[c][1];const float *g=uv+((size_t)cj*(columns+1)+ci)*2;
+      v[k++]=-1.0f+2.0f*ci/columns;v[k++]=1.0f-2.0f*cj/rows;v[k++]=0.0f;
+      v[k++]=g[0];v[k++]=1.0f-g[1]; /* the texture was drawn bottom-up */
+    }
+  }
+  if(!glr->mesh_vao) {
+    glGenVertexArrays(1,&glr->mesh_vao);glGenBuffers(1,&glr->mesh_vbo);
+    glBindVertexArray(glr->mesh_vao);glBindBuffer(GL_ARRAY_BUFFER,glr->mesh_vbo);
+    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,5*sizeof(float),(void *)0);glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1,2,GL_FLOAT,GL_FALSE,5*sizeof(float),(void *)(3*sizeof(float)));glEnableVertexAttribArray(1);
+    glBindVertexArray(0);
+  }
+  glBindFramebuffer(GL_FRAMEBUFFER,0);glViewport(x,y,w,h);
+  glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,glr->screen_tex[s]);
+  glUseProgram(glr->program);glUniform1i(glGetUniformLocation(glr->program,"texture1"),0);
+  glUniform1i(glGetUniformLocation(glr->program,"exactNearest"),0);
+  glBindVertexArray(glr->mesh_vao);glBindBuffer(GL_ARRAY_BUFFER,glr->mesh_vbo);
+  glBufferData(GL_ARRAY_BUFFER,(GLsizeiptr)(k*sizeof(float)),v,GL_STREAM_DRAW);
+  glDrawArrays(GL_TRIANGLES,0,(GLsizei)n);
+  glBindBuffer(GL_ARRAY_BUFFER,0);glBindVertexArray(0);glUseProgram(0);
+}
+
+/* Wheelkit three screens: the side screens' pictures (fzero_wheelkit.c), in a race only; black otherwise. Through
+ * the display shader when one is set (an instance per side), and bent for curved glass. */
 static void fzero_gl_draw_sides(FzeroGlRenderer *glr,FzeroRect centre,int logical_width,int drawable_width,int drawable_height) {
   static GLuint textures[2];
   const uint32_t *pixels[2];int w,h,rects[2][4];
   if(!FzeroWheelkitSides(centre.x,centre.y,centre.w,centre.h,drawable_width,drawable_height,logical_width,pixels,&w,&h,rects))return;
-  glActiveTexture(GL_TEXTURE0);
   for(int i=0;i<2;++i) {
+    glActiveTexture(GL_TEXTURE0);
     if(!textures[i])glGenTextures(1,&textures[i]);
     glBindTexture(GL_TEXTURE_2D,textures[i]);
     glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,w,h,0,GL_BGRA,GL_UNSIGNED_INT_8_8_8_8_REV,pixels[i]);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
-    glViewport(rects[i][0],drawable_height-rects[i][1]-rects[i][3],rects[i][2],rects[i][3]);
-    glUseProgram(glr->program);glUniform1i(glGetUniformLocation(glr->program,"texture1"),0);
-    glUniform1i(glGetUniformLocation(glr->program,"exactNearest"),0);
-    glBindVertexArray(glr->vao);glDrawArrays(GL_TRIANGLE_STRIP,0,4);glBindVertexArray(0);glUseProgram(0);
+    int x=rects[i][0],y=drawable_height-rects[i][1]-rects[i][3],sw=rects[i][2],sh=rects[i][3];
+    int columns,rows;const float *uv;
+    bool curved=FzeroWheelkitCurveGrid(i?2:0,drawable_width,drawable_height,&columns,&rows,&uv) &&
+                fzero_gl_screen_target(glr,i?2:0,sw,sh);
+    int vx=curved?0:x,vy=curved?0:y;
+    if(glr->side_shader[i]) {
+      GlTextureWithSize side={textures[i],(uint16)w,(uint16)h};
+      glBindVertexArray(glr->vao); /* as the centre's: the preset draws with the bound vertex array */
+      GlslShader_Render(glr->side_shader[i],&side,vx,vy,sw,sh);
+      glBindVertexArray(0);
+    } else {
+      glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,textures[i]);
+      glViewport(vx,vy,sw,sh);
+      glUseProgram(glr->program);glUniform1i(glGetUniformLocation(glr->program,"texture1"),0);
+      glUniform1i(glGetUniformLocation(glr->program,"exactNearest"),0);
+      glBindVertexArray(glr->vao);glDrawArrays(GL_TRIANGLE_STRIP,0,4);glBindVertexArray(0);glUseProgram(0);
+    }
+    if(curved)fzero_gl_screen_warp(glr,i?2:0,x,y,sw,sh,columns,rows,uv);
   }
 }
-
 static void fzero_gl_render(FzeroGlRenderer *glr, const uint8_t *pixels,
                             int logical_width, int logical_height, FzeroViewport viewport,
                             int drawable_width, int drawable_height) {
@@ -505,6 +579,12 @@ static void fzero_gl_render(FzeroGlRenderer *glr, const uint8_t *pixels,
   int viewport_y = drawable_height - rect.y - rect.h;
   if(g_compare_mode7)rect.x+=pane_width;
   else rect.x+=FzeroWheelkitCentreX(drawable_width);
+  /* Curved glass: the centre's flat picture into a texture of its own, then bent onto the screen (below). */
+  int curve_columns=0,curve_rows=0;const float *curve_uv=NULL;
+  const int centre_x=FzeroWheelkitCentreX(drawable_width);
+  bool curved=!g_compare_mode7 && FzeroWheelkitCurveGrid(1,drawable_width,drawable_height,&curve_columns,&curve_rows,&curve_uv) &&
+      fzero_gl_screen_target(glr,1,pane_width,drawable_height);
+  if(curved)rect.x-=centre_x;
   glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D,image.gl_texture);
   if (glr->shader) {
     glBindVertexArray(glr->vao);
@@ -527,6 +607,7 @@ static void fzero_gl_render(FzeroGlRenderer *glr, const uint8_t *pixels,
     glBindVertexArray(0);
     glUseProgram(0);
   }
+  if(curved){fzero_gl_screen_warp(glr,1,centre_x,0,pane_width,drawable_height,curve_columns,curve_rows,curve_uv);rect.x+=centre_x;}
   if(!g_compare_mode7)fzero_gl_draw_sides(glr,rect,viewport.width,drawable_width,drawable_height);
   if(g_compare_mode7) {
     glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,glr->texture.gl_texture);
@@ -589,6 +670,9 @@ static void fzero_gl_destroy(FzeroGlRenderer *glr) {
   SnesHdGpuDestroy(glr->hd_gpu);
   free(glr->hd_portable);
   if (glr->shader) GlslShader_Destroy(glr->shader);
+  for(int i=0;i<2;++i)if(glr->side_shader[i])GlslShader_Destroy(glr->side_shader[i]);
+  for(int i=0;i<3;++i){if(glr->screen_fbo[i])glDeleteFramebuffers(1,&glr->screen_fbo[i]);if(glr->screen_tex[i])glDeleteTextures(1,&glr->screen_tex[i]);}
+  if(glr->mesh_vbo)glDeleteBuffers(1,&glr->mesh_vbo);if(glr->mesh_vao)glDeleteVertexArrays(1,&glr->mesh_vao);
   if (glr->overlay.gl_texture) glDeleteTextures(1, &glr->overlay.gl_texture);
   glDeleteTextures(1, &glr->texture.gl_texture);
   glDeleteProgram(glr->program);

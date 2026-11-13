@@ -3,6 +3,7 @@
  * profile, the panel, the telemetry packet) is in wheelkit.dll. */
 #include "fzero_wheelkit.h"
 #include "fzero_renderer.h"
+#include "fzero_deluxe.h"
 #include "fzero_wheelkit_steering.h"
 #include "wheelkit.h"
 
@@ -15,7 +16,7 @@
 /* This build's own version, by the wheelkit repository's scheme (docs/versioning.md
  * there); its games/f-zero/wheelkit-mod.json says the same. The program's own
  * version stays upstream's. */
-#define FZERO_WHEELKIT_VERSION "0.9.2-alpha"
+#define FZERO_WHEELKIT_VERSION "0.9.4-alpha"
 
 static struct {
 #define X(ret, name, args) ret (WK_CALL *name) args;
@@ -293,7 +294,14 @@ uint32_t FzeroWheelkitFrame(uint32_t input, const uint8_t *ram) {
   }
   static bool was_racing;
   const bool racing = ram[0x54] == 2 && ram[0x55] >= 3;
-  if (racing && !was_racing) wk.wk_log("f-zero: a race started");
+  if (racing && !was_racing) {
+#ifdef FZERO_HAS_DELUXE
+    wk.wk_log(FzeroDeluxeActive() ? "f-zero: a race started (BS F-Zero Deluxe built in, its cartridge running)"
+                                  : "f-zero: a race started (BS F-Zero Deluxe built in, the stock cartridge running)");
+#else
+    wk.wk_log("f-zero: a race started (no BS F-Zero Deluxe in this build)");
+#endif
+  }
   was_racing = racing;
   static int scene = -1;
   if ((wk.wk_switches() & WK_SWITCH_INJECT) && scene != (ram[0x54] << 8 | ram[0x55])) {
@@ -490,4 +498,34 @@ bool FzeroWheelkitHoldFlash(const uint32_t *pixels, int width, int height, const
   ++held;
   if (++total == 1) wk.wk_log("f-zero: a crash flash held (the previous picture kept, as the old build's Reduce crash flashes)");
   return true;
+}
+/* Curved screens: the runtime's warp (wk_triples_curve_grid) for each screen's flat picture, at the same centre
+ * projection the side screens are drawn from; kept until the drawable changes. */
+bool FzeroWheelkitCurveGrid(int screen, int drawable_width, int drawable_height, int *columns, int *rows, const float **uv) {
+  enum { C = 32, R = 18 };
+  static float grids[3][(C + 1) * (R + 1) * 2];
+  static int built_w, built_h;
+  static bool ok[3], noted;
+  if (!s_triples || screen < 0 || screen > 2 || !(s_tr.curve_radius_mm > 0) || drawable_height < 2) return false;
+  if (built_w != drawable_width || built_h != drawable_height) {
+    built_w = drawable_width; built_h = drawable_height;
+    const int cw = FzeroWheelkitCentreWidth(drawable_width);
+    const double n = 0.1, f = 1000.0, ty = tan(s_tr.realistic_fov_y * 0.5), tx = ty * cw / drawable_height;
+    const double centre[16] = {1.0 / tx, 0, 0, 0, 0, 1.0 / ty, 0, 0, 0, 0, f / (n - f), -1, 0, 0, n * f / (n - f), 0};
+    for (int i = 0; i < 3; ++i) ok[i] = wk.wk_triples_curve_grid(centre, i, C, R, grids[i]) == 1;
+    if (!noted) {
+      noted = true;
+      char line[160];
+      snprintf(line, sizeof(line), "f-zero: three screens: curved %.0fR, each screen's picture bent through the runtime's "
+               "warp (%s)", s_tr.curve_radius_mm, ok[0] && ok[1] && ok[2] ? "all three" : "refused: flat pictures");
+      wk.wk_log(line);
+    }
+  }
+  if (!ok[screen]) return false;
+  *columns = C; *rows = R; *uv = grids[screen];
+  return true;
+}
+/* A line of the host's into the runtime's log (the presenter's notes about three screens). */
+void FzeroWheelkitNote(const char *line) {
+  if (s_on && line) wk.wk_log(line);
 }
