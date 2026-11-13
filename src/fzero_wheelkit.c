@@ -15,7 +15,7 @@
 /* This build's own version, by the wheelkit repository's scheme (docs/versioning.md
  * there); its games/f-zero/wheelkit-mod.json says the same. The program's own
  * version stays upstream's. */
-#define FZERO_WHEELKIT_VERSION "0.9.1-alpha"
+#define FZERO_WHEELKIT_VERSION "0.9.2-alpha"
 
 static struct {
 #define X(ret, name, args) ret (WK_CALL *name) args;
@@ -184,7 +184,12 @@ static void telemetry(const uint8_t *ram, uint32_t input) {
   car.gear = 1;
   car.throttle = (input & 1u) ? 1.0f : 0.0f;
   car.brake = (input & 2u) ? 1.0f : 0.0f;
-  car.steer = (input & 0x40u) ? -1.0f : (input & 0x80u) ? 1.0f : 0.0f;
+  /* The game's own steering, as it applies it: a SNES pad steers by the share of frames Left or Right is held, so
+   * this is that share, signed, over about the last quarter second (the proof shows it beside the wheel's angle). */
+  static float pad_share;
+  pad_share += (((input & 0x40u) ? -1.0f : (input & 0x80u) ? 1.0f : 0.0f) - pad_share) * (1.0f / 15.0f);
+  if (!racing) pad_share = 0.0f;
+  car.steer = pad_share;
   car.yaw = (float)ram[0x0bd1] * (6.28318530718f / 192.0f);
   car.position[0] = (float)x * 0.25f;
   car.position[2] = (float)y * 0.25f;
@@ -431,6 +436,12 @@ bool FzeroWheelkitSides(int x, int y, int w, int h, int drawable_width, int draw
   LARGE_INTEGER t0, t1, hz;
   QueryPerformanceCounter(&t0);
   if (!FzeroRendererDrawSides(views, buffers, sw, sh)) return false;
+  { /* Asked again while the sides are drawn, so the runtime knows three views are on the screens now (its proof). */
+    const double n = 0.1, f = 1000.0, ty = tan(s_tr.realistic_fov_y * 0.5), tx = ty * cw / drawable_height;
+    const double centre[16] = {1.0 / tx, 0, 0, 0, 0, 1.0 / ty, 0, 0, 0, 0, f / (n - f), -1, 0, 0, n * f / (n - f), 0};
+    wk_triple_views tv = {sizeof(tv)};
+    wk.wk_triples_views(centre, &tv);
+  }
   QueryPerformanceCounter(&t1);
   static bool rival_noted;
   if (!rival_noted && FzeroRendererSideOpponentPixels()) {
