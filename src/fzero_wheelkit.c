@@ -211,6 +211,33 @@ static void force(const uint8_t *ram, uint32_t input) {
   wk.wk_ffb_set_texture((ram[0xc7] ? 0.28f : 0.16f) * scale, 18.0f + 24.0f * scale);
 }
 
+/* Under test input only (inject.on): every 2 s of a race with the wheel off the centre, what the mapping did and
+ * what the game did with it ($0BE1, the heading, 192 steps a turn), so a check can see the machine turn in
+ * proportion to the wheel. */
+static void steering_report(const uint8_t *ram, float steer, uint32_t input) {
+  static unsigned frames, held;
+  static double sum;
+  static int heading, turned;
+  const bool racing = ram[0x54] == 2 && ram[0x55] >= 3;
+  if (!racing || FzeroSteerDuty(steer, s_sensitivity, s_dead_zone) == 0.0) { frames = 0; return; }
+  const int now = ram[0x0be1];
+  if (frames == 0) { held = 0; sum = 0.0; turned = 0; heading = now; }
+  int step = now - heading;
+  if (step > 96) step -= 192;
+  if (step < -96) step += 192;
+  turned += step;
+  heading = now;
+  sum += steer;
+  if (input & (steer < 0 ? 0x40u : 0x80u)) ++held;
+  if (++frames < 120) return;
+  char line[200];
+  snprintf(line, sizeof(line), "f-zero: steering in a race (test input): wheel %+.3f, %s held in %u of %u frames "
+           "(the mapping's %.3f), heading moved %+d of 192", sum / frames, steer < 0 ? "Left" : "Right", held, frames,
+           FzeroSteerDuty((float)(sum / frames), s_sensitivity, s_dead_zone), turned);
+  wk.wk_log(line);
+  frames = 0;
+}
+
 uint32_t FzeroWheelkitFrame(uint32_t input, const uint8_t *ram) {
   if (!s_on) return input;
   if (s_panel) panel_events();
@@ -234,8 +261,13 @@ uint32_t FzeroWheelkitFrame(uint32_t input, const uint8_t *ram) {
       if (ram[0x54] == 2 && ram[0x55] >= 3) input |= FzeroSteerPulse(&s_steer, in.steer, s_sensitivity, s_dead_zone);
       else s_steer.phase = 0, s_steer.direction = 0;
       if (!s_driven && input != keyboard) { s_driven = true; wk.wk_log("f-zero: the profile's input reached player 1's controller"); }
+      if (in.flags & WK_INPUT_INJECTED) steering_report(ram, in.steer, input);
     }
   }
+  static bool was_racing;
+  const bool racing = ram[0x54] == 2 && ram[0x55] >= 3;
+  if (racing && !was_racing) wk.wk_log("f-zero: a race started");
+  was_racing = racing;
   telemetry(ram, input);
   force(ram, input);
   static unsigned frames;
