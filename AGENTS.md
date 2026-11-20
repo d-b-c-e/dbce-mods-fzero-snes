@@ -28,7 +28,7 @@ The submodules are upstream's own (`.gitmodules` unchanged); nothing of ours is 
 ## Toolchain (what upstream's releases are built with)
 
 MSYS2, MINGW64 environment (msvcrt), GCC 15.2.0, Ninja, SDL3 as a DLL. On this PC it is a private MSYS2 in
-`E:\Source\temp\f-zero\msys64` (not on PATH, not `C:\msys64`):
+`E:\Games\Recomps\f-zero\wheelkit\msys64` (not on PATH, not `C:\msys64`):
 
 - `mingw-w64-x86_64-gcc 15.2.0-9` and `mingw-w64-x86_64-gcc-libs 15.2.0-9`, from
   `https://repo.msys2.org/mingw/mingw64/` (MSYS2's current GCC is 16.2, so these two are installed with
@@ -52,7 +52,7 @@ Copy-Item <your F-Zero (USA) ROM> fzero.sfc   # git-ignored; never committed, ne
 pwsh tools/build-wheelkit.ps1 -WheelkitSdk <a wheelkit checkout after `pwsh build.ps1 -Only runtime/native/sdk`>
 ```
 
-The script runs `cmake -S . -B E:\Source\temp\f-zero\build-wheelkit-runtime -G Ninja -DCMAKE_BUILD_TYPE=Release
+The script runs `cmake -S . -B E:\Games\Recomps\f-zero\wheelkit\build-wheelkit-runtime -G Ninja -DCMAKE_BUILD_TYPE=Release
 -DCMAKE_PREFIX_PATH=<msys64>/mingw64 -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DWHEELKIT_SDK=<checkout>`, builds,
 and copies the MinGW DLLs the program imports beside it. Without `-WheelkitSdk` (and with `-Build`) it builds the stock
 upstream program the same way. Tests without a ROM: `ctest --test-dir <build folder>` with `<msys64>\mingw64\bin` on PATH

@@ -8,8 +8,8 @@ param(
     [string]$WheelkitSdk = '',
     # The private generated BS Deluxe sources (tools/regen_bs_deluxe.py's captures/bs-deluxe/gen), to build it in.
     [string]$DeluxeGen = '',
-    [string]$Build = 'E:\Source\temp\f-zero\build-wheelkit-runtime',
-    [string]$Msys = 'E:\Source\temp\f-zero\msys64',
+    [string]$Build = 'E:\Games\Recomps\f-zero\wheelkit\build-wheelkit-runtime',
+    [string]$Msys = 'E:\Games\Recomps\f-zero\wheelkit\msys64',
     [string]$CMake = 'C:\Program Files\CMake\bin\cmake.exe'
 )
 $ErrorActionPreference = 'Stop'
